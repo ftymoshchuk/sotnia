@@ -150,22 +150,22 @@ const TRANSPORT = {
 const QUESTS = [
   { id: 'salt', title: 'Salt for the Leipzig fair', who: "On the company's own account", kind: 'venture', transport: 'oxcart',
     from: 'syvash', to: 'leipzig', start: dayOf(6, 9), deadline: dayOf(10, 23), until: 'the Michaelmas fair closes',
-    cargo: { n: 24, one: 'cart of salt', many: 'carts of salt', unit: 'carts' }, price: 60, thalers: 180, bread: 100, men: ['pike', 'shot', 'sabre', 'sabre', 'shot'],
+    cargo: { n: 24, one: 'cart of salt', many: 'carts of salt', unit: 'carts' }, play: '25–35 minutes', price: 60, thalers: 180, bread: 100, men: ['pike', 'shot', 'sabre', 'sabre', 'shot'],
     text: 'Twenty-four ox-carts of salt, loaded at the lakes of the Syvash on the Sea of Azov. Take them past Perekop, across the Wild Fields and west through the Commonwealth to the Michaelmas fair at Leipzig, where salt sells dear.',
     opening: 'Twenty-four carts of salt stand loaded by the lakes of the Syvash. The road to Leipzig starts at Perekop.' },
   { id: 'oxen', title: 'Oxen for the Breslau market', who: "On the company's own account", kind: 'venture', transport: 'herd',
     from: 'kamianets', to: 'breslau', start: dayOf(9, 4), deadline: dayOf(11, 11), until: "St Martin's Day",
-    cargo: { n: 60, one: 'ox', many: 'oxen', unit: 'head' }, price: 12, thalers: 140, bread: 50, men: ['pike', 'shot', 'sabre', 'sabre'],
+    cargo: { n: 60, one: 'ox', many: 'oxen', unit: 'head' }, play: '10–15 minutes', price: 12, thalers: 140, bread: 50, men: ['pike', 'shot', 'sabre', 'sabre'],
     text: "Sixty head of grey Podolian oxen, bought at Kamianets. Drive them west to the cattle market at Breslau before St Martin's Day. Drive them hard and they lose flesh, and some will not get up again.",
     opening: 'Sixty head of oxen low in the pens at Kamianets. Breslau is a long way west.' },
   { id: 'grain', title: 'Rye down the Vistula', who: "On the company's own account", kind: 'venture', transport: 'raft',
     from: 'sandomierz', to: 'danzig', start: dayOf(5, 28), deadline: dayOf(6, 24), until: "St John's Day",
-    cargo: { n: 30, one: 'last of rye', many: 'lasts of rye', unit: 'lasts' }, price: 20, thalers: 70, bread: 30, men: ['pike', 'shot', 'sabre'],
+    cargo: { n: 30, one: 'last of rye', many: 'lasts of rye', unit: 'lasts' }, play: '5–10 minutes', price: 20, thalers: 70, bread: 30, men: ['pike', 'shot', 'sabre'],
     text: "Thirty lasts of rye on rafts at Sandomierz. Float them down the Vistula to Danzig and sell them to the Dutch before St John's Day, while the spring water is high. Rafts go only where the river goes, and rain rots wet grain.",
     opening: 'The rafts are lashed and loaded at Sandomierz, and the Vistula is running high.' },
   { id: 'payroll', title: 'The payroll for Smolensk', who: 'The Crown Treasurer', kind: 'commission', transport: 'chest',
     from: 'warsaw', to: 'smolensk', start: dayOf(8, 12), deadline: dayOf(9, 29), until: 'Michaelmas, when their pay falls due',
-    cargo: { n: 600, one: 'thaler', many: 'thalers', unit: 'thalers' }, fee: 340, thalers: 100, bread: 40, men: ['pike', 'shot', 'sabre', 'shot'],
+    cargo: { n: 600, one: 'thaler', many: 'thalers', unit: 'thalers' }, play: '10–15 minutes', fee: 340, thalers: 100, bread: 40, men: ['pike', 'shot', 'sabre', 'shot'],
     text: 'Six hundred thalers in an iron-bound chest, for the regiments King Władysław has led to the relief of Smolensk. Bring it to the camp by Michaelmas, when their pay falls due. The fee is yours on delivery, less anything missing from the chest.',
     opening: "The Crown's chest is chained to the wagon bed in Warsaw. Smolensk is a long way east." }
 ];
@@ -195,22 +195,37 @@ function roadsFrom(st) {
   const goal = PLACES[questOf(st).to];
   return out.sort((x, y) => kmBetween(PLACES[x.to], goal) - kmBetween(PLACES[y.to], goal));
 }
-// Fewest steady days from here to the destination, for the ledger and for planning.
-function daysToGo(st, from) {
-  const T = transportOf(st), goal = questOf(st).to, best = { [from || st.at]: 0 }, open = [from || st.at];
+// The quickest steady routes from a place to every other the cargo can reach: the days to each,
+// and the road each is reached by (Dijkstra; the map is small enough for a plain list).
+function searchRoutes(st, from) {
+  const T = transportOf(st), start = from || st.at, best = { [start]: 0 }, prev = {}, open = [start];
   while (open.length) {
     open.sort((a, b) => best[a] - best[b]);
     const at = open.shift();
-    if (at === goal) return best[at];
-    for (const r of ROADS) {
-      if (r.river !== !!T.river) continue;
+    ROADS.forEach((r, i) => {
+      if (r.river !== !!T.river) return;
       const to = r.a === at ? r.b : !T.river && r.b === at ? r.a : null;
-      if (!to) continue;
+      if (!to) return;
       const d = best[at] + legDays(r.km, T.steady);
-      if (best[to] == null || d < best[to]) { best[to] = d; if (!open.includes(to)) open.push(to); }
-    }
+      if (best[to] == null || d < best[to]) { best[to] = d; prev[to] = { at, i }; if (!open.includes(to)) open.push(to); }
+    });
   }
-  return Infinity;
+  return { best, prev };
+}
+// Fewest steady days from here, or from another place, to the destination.
+function daysToGo(st, from) {
+  const d = searchRoutes(st, from).best[questOf(st).to];
+  return d == null ? Infinity : d;
+}
+// The legs of the quickest steady route from here to a place, as roadsFrom lists them; null if there is none.
+function routeTo(st, target) {
+  const { prev } = searchRoutes(st), T = transportOf(st), legs = [];
+  if (!PLACES[target] || target === st.at || !prev[target]) return null;
+  for (let to = target; to !== st.at; to = prev[to].at) {
+    const r = ROADS[prev[to].i];
+    legs.unshift({ i: prev[to].i, from: prev[to].at, to, km: r.km, days: legDays(r.km, T.steady), forced: legDays(r.km, T.forced), danger: r.danger, land: r.land });
+  }
+  return legs;
 }
 // Steady days to the nearest market if the company takes road r: what the bread has to last.
 function marketDays(st, r) {
@@ -388,6 +403,51 @@ function march(st, roadIndex, forced) {
   if (!ambush && st.roster.length && chance(0.35)) event = rollEvent(st);
   st.ambush = ambush; st.odds = {};
   return { lines: L, event, ambush };
+}
+/* ---------- setting a course ---------- */
+// Days along a course until it reaches a market: what the bread has to last.
+function courseMarketDays(legs, forced) {
+  let d = 0;
+  for (const r of legs) {
+    d += forced ? r.forced : r.days;
+    if ((SERVICES[PLACES[r.to].kind] || {}).market) break;
+  }
+  return d;
+}
+// March leg after leg towards a place. The company stops for anything that needs the player: an
+// encounter, the quest's destination on the way, or a market it should not leave because the bread
+// or the pay would not last to the next one. `stop` says why it stopped.
+function followCourse(st, target, forced) {
+  const L = [];
+  let legs = 0, stop = null, event = null, ambush = null;
+  while (!stop && legs < 60) {
+    if (st.over) stop = 'over';
+    else if (st.at === target) stop = 'arrived';
+    else if (legs && atEnd(st)) stop = 'destination';
+    if (stop) break;
+    const route = routeTo(st, target);
+    if (!route) { stop = 'noroad'; break; }
+    if (!st.roster.length) { stop = 'nobody'; break; }
+    if (has(st, 'market')) {
+      const md = courseMarketDays(route, forced), name = here(st).name;
+      if (st.bread < breadDue(st) * md) {
+        stop = 'bread';
+        note(st, L, 'The bread will not last the ' + md + ' days to the next market on the way, so the company halts at ' + name + '.');
+        break;
+      }
+      if (st.thalers < wagesDue(st) && st.payDue - st.date <= md) {
+        stop = 'pay';
+        note(st, L, 'Pay falls due before the next market on the way, and the chest is short, so the company halts at ' + name + '.');
+        break;
+      }
+    }
+    const res = march(st, route[0].i, forced);
+    if (!res) { stop = 'nobody'; break; }
+    legs++; L.push(...res.lines);
+    if (res.ambush) { ambush = res.ambush; stop = 'ambush'; }
+    else if (res.event) { event = res.event; stop = 'event'; }
+  }
+  return { lines: L, event, ambush, stop, legs };
 }
 // Stay a day where the company is: day orders apply. After paid work the day was spent fighting.
 function campDay(st) {

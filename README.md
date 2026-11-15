@@ -66,6 +66,7 @@ node --test tests/*.test.js
 - Every change lands through a pull request. No approvals are required, because a single maintainer can't approve their own pull requests.
 - The one required check is `ci-passed`, the last CI job, so adding a job never means editing the rules. A branch has to be up to date with `main` before it merges.
 - The repository admin can merge past a broken check, but only through a pull request.
+- A branch is deleted once its pull request merges. That is a repository setting rather than part of the ruleset.
 
 The only difference from the Sigrix ruleset is the bypass: this repository belongs to a person, not the org, so it goes to the repository admin role rather than a team. The rules live in repository settings, where nothing reviews them, so the JSON in `docs/` is the reviewed copy. With the GitHub CLI signed in as the owner, run from the repository root:
 
@@ -73,7 +74,7 @@ The only difference from the Sigrix ruleset is the bypass: this repository belon
 scripts/apply-ruleset.sh
 ```
 
-It refuses to create a second ruleset if one exists, since rulesets stack. `scripts/apply-ruleset.sh --verify` prints what is in force.
+It also turns on the branch deletion. It never creates a second ruleset, since rulesets stack: if one exists, it leaves it alone. `scripts/apply-ruleset.sh --verify` prints what is in force.
 
 ## Data
 
