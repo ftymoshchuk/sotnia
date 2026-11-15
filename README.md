@@ -29,6 +29,10 @@ python3 -m http.server 8000
 | `js/audio.js` | Sound effects and music, synthesised with Web Audio (there are no recordings) |
 | `js/screens.js` | Shared state (`G` is the campaign, `ui` is the interface), saving, and the HTML for every screen |
 | `js/main.js` | Click and key handling, the frame loop and boot |
+| `tests/` | Headless tests of the rules, and the guard that keeps every workflow action pinned |
+| `.github/` | CI, which ends in the `ci-passed` check, and Dependabot for the action pins |
+| `docs/default-branch.ruleset.json` | The branch rules for `main` |
+| `scripts/apply-ruleset.sh` | Puts those rules on the repository, and checks them |
 
 The scripts are plain `<script>` tags, not ES modules. They share one global scope and must load in the order `index.html` lists them, which keeps the game runnable straight from `file://` with no tooling. Top-level code in a file can only use what earlier files declare; functions can call anything, since they run after every file has loaded.
 
@@ -44,6 +48,34 @@ Keep `js/core.js` and `js/journey.js` free of DOM access. The scouts' odds come 
 - **Camp events:** add entries to `EVENTS` in `js/core.js`.
 - **Music:** `CUES` in `js/audio.js`.
 - **Saves:** the state built by `newGame()` carries `v: 2`, and `loadSave()` ignores any other version. Bump it when the shape of the state changes, so old saves are dropped instead of loading broken.
+
+## Checks and branch rules
+
+CI checks that every script parses and runs the tests, with Node 22 and no npm install. Run the same thing locally:
+
+```bash
+for f in js/*.js; do node --check "$f"; done
+node --test tests/*.test.js
+```
+
+`tests/journey.test.js` loads `js/core.js` and `js/journey.js` into a VM with a seeded random, checks that the map's places, roads and quests fit together, and plays every quest through to delivery with a simple player. A change that breaks the rules or leaves a quest impossible fails there before anyone has to play it.
+
+`main` carries the same branch ruleset as the Sigrix public repositories (see `docs/new-repository.md` in `sigrix-io/actions`):
+
+- `main` cannot be deleted or force-pushed.
+- Every change lands through a pull request. No approvals are required, because a single maintainer can't approve their own pull requests.
+- The one required check is `ci-passed`, the last CI job, so adding a job never means editing the rules. A branch has to be up to date with `main` before it merges.
+- The repository admin can merge past a broken check, but only through a pull request.
+
+The only difference from the Sigrix ruleset is the bypass: this repository belongs to a person, not the org, so it goes to the repository admin role rather than a team. The rules live in repository settings, where nothing reviews them, so the JSON in `docs/` is the reviewed copy. With the GitHub CLI signed in as the owner, run from the repository root:
+
+```bash
+scripts/apply-ruleset.sh
+```
+
+It refuses to create a second ruleset if one exists, since rulesets stack. `scripts/apply-ruleset.sh --verify` prints what is in force.
+
+## Data
 
 Coastlines come from Natural Earth's 1:50m land, which is in the public domain. Dates are shown in both calendars of the time: Gregorian, kept in Catholic Poland, and Julian, ten days behind, kept in Saxony and Orthodox Ukraine.
 

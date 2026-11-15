@@ -1,0 +1,25 @@
+# Keeps the commit pins in .github/workflows current. A pin only stays correct
+# if something bumps it, and Dependabot reads the `# vX.Y.Z` comment beside each
+# SHA to know what it is bumping from (tests/workflow-pins.test.js checks both).
+# The game has no package dependencies, so GitHub Actions is the only ecosystem.
+#
+# Two GitHub behaviours worth knowing: this file is read from the default
+# branch, so editing it on a branch changes nothing until it merges; and
+# Dependabot needs the dependency graph enabled on the repository.
+#
+# One pull request for every action at once, not one per action. The branch
+# ruleset only merges a pull request that is up to date with main, so each
+# merge would put every other open update behind, needing `@dependabot rebase`
+# and a fresh CI run before it could follow.
+#
+# Deliberately no auto-merge.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
