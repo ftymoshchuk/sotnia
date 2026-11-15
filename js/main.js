@@ -43,16 +43,16 @@ function setStance(s) {
 function act(a, d) {
   wake();
   switch (a) {
-    case 'new': G = newGame(d.q); ui.screen = 'camp'; ui.tab = 'market'; ui.course = null; ui.open = null; ui.news = null; ui.modal = null; break;
+    case 'new': G = newGame(d.q); ui.screen = 'camp'; ui.tab = 'market'; ui.course = null; ui.open = null; ui.news = null; ui.modal = null; ui.campPos = {}; break;
     case 'title': ui.screen = 'title'; ui.modal = null; break;
     case 'continue': {
       const s = loadSave(); if (!s) break;
-      G = s; ui.screen = 'camp'; ui.tab = 'market'; ui.course = null; ui.news = null;
+      G = s; ui.screen = 'camp'; ui.tab = 'market'; ui.course = null; ui.news = null; ui.open = null; ui.campPos = {};
       ui.modal = G.ambush ? { type: 'ambush' } : G.pending && G.pending.id ? { type: 'event' } : null;
       break;
     }
     case 'tab': ui.tab = d.k; break;
-    case 'open': ui.open = ui.open === +d.id ? null : +d.id; break;
+    case 'sel': ui.open = +d.id; break;
     case 'order': { const s = man(+d.id); if (s) s.order = d.o; break; }
     case 'promo': promote(G, +d.id, d.k); G.odds = {}; break;
     case 'up': if (has(G, 'market')) upgrade(G, +d.id, d.k); break;
@@ -95,12 +95,12 @@ function act(a, d) {
     case 'help': if (ui.modal && ui.modal.type === 'help') return; ui.modal = { type: 'help', prev: ui.modal }; renderModal(); return;
     case 'sound': {
       ui.sound = !ui.sound; try { localStorage.setItem('sotnia-sound', ui.sound ? 'on' : 'off'); } catch (e) { /* fine */ }
-      document.querySelectorAll('[data-act="sound"]').forEach(el => { el.textContent = 'Sound ' + (ui.sound ? 'on' : 'off'); });
+      document.querySelectorAll('[data-act="sound"]').forEach(el => { el.setAttribute('aria-pressed', String(ui.sound)); el.classList.toggle('off', !ui.sound); });
       if (ui.sound) wake(); return;
     }
     case 'music': {
       ui.music = !ui.music; try { localStorage.setItem('sotnia-music', ui.music ? 'on' : 'off'); } catch (e) { /* fine */ }
-      document.querySelectorAll('[data-act="music"]').forEach(el => { el.textContent = 'Music ' + (ui.music ? 'on' : 'off'); });
+      document.querySelectorAll('[data-act="music"]').forEach(el => { el.setAttribute('aria-pressed', String(ui.music)); el.classList.toggle('off', !ui.music); });
       if (ui.music) { wake(); setCue(cueForScreen()); } else setCue(null);
       return;
     }
@@ -121,7 +121,10 @@ document.addEventListener('keydown', e => {
   if (k && !(ui.c.duel && k === 'hold')) setStance(k);
   else if (e.key === ' ' && !(e.target.closest && e.target.closest('button'))) { e.preventDefault(); ui.speed = ui.speed ? 0 : 1; paintHud(); }
 });
-window.addEventListener('resize', () => { if (ui.view) fitView(ui.view); if (ui.screen === 'camp' && G) drawMap($('#map'), G); });
+window.addEventListener('resize', () => {
+  if (ui.view) fitView(ui.view);
+  if (ui.screen === 'camp' && G) { if (ui.camp) { fitCamp(ui.camp); drawCamp(ui.camp, G, ui.open, 0, calm); } drawMap($('#map'), G, !atEnd(G) && ui.course ? routeTo(G, ui.course) : null); }
+});
 document.addEventListener('visibilitychange', () => { if (AC) setCue(document.hidden ? null : cueForScreen()); });
 
 /* ---------- the loop ---------- */
@@ -130,6 +133,8 @@ const calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: re
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - last) / 1000 || 0); last = now;
+  // the camp: the fire burns and the men walk to where their orders put them
+  if (ui.screen === 'camp' && ui.camp && G && !calm) { drawCamp(ui.camp, G, ui.open, dt, false); return; }
   const v = ui.view; if (!v) return;
   if (ui.screen === 'battle' && ui.b) {
     const b = ui.b, sp = ui.modal ? 0 : ui.speed;

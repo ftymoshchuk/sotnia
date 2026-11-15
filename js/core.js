@@ -644,6 +644,7 @@ function resolveBattle(st, c, b) {
 }
 
 /* ---------- events ---------- */
+// Each choice: label, hint (its effects in words), fx (the same as [icon, amount, what] chips; none means nothing changes) and fn.
 const all = (st, fn) => st.roster.forEach(fn);
 const bump = (s, k, v) => { s[k] = clamp(s[k] + v, k === 'hp' ? 1 : 0, k === 'hp' ? s.vig : 100); };
 const EVENTS = [
@@ -651,9 +652,9 @@ const EVENTS = [
     text: () => 'A Swedish musketeer, half starved, offers his matchlock and his oath for a place by the fire.',
     ok: st => st.roster.length < ROSTER_MAX,
     choices: [
-      { label: 'Give him bread and a place', hint: 'A free musketeer. He eats and draws pay like the rest.',
+      { label: 'Give him bread and a place', hint: 'A free musketeer. He eats and draws pay like the rest.', fx: [['men', '+1', 'musketeer'], ['coin', '+7', 'wages a month']],
         fn: st => { const s = makeSoldier(st, 'shot', 2, ORIGINS.find(o => o.id === 'swede')); s.morale = 45; st.roster.push(s); return s.name + ' makes his mark on the roll.'; } },
-      { label: 'Sell him back to his colonel', hint: '+25 thalers. The men will not like it.',
+      { label: 'Sell him back to his colonel', hint: '+25 thalers. The men will not like it.', fx: [['coin', '+25', 'thalers'], ['flame', '−6', 'spirit, every man']],
         fn: st => { st.thalers += 25; all(st, s => bump(s, 'morale', -6)); return 'The provost counts out 25 thalers. The fire is quiet tonight.'; } },
       { label: 'Send him on his way', hint: 'Nothing gained, nothing lost.', fn: () => 'He walks east and does not look back.' }
     ] },
@@ -661,26 +662,26 @@ const EVENTS = [
     text: () => 'A sutler-woman has a barrel of gorzałka and names a soldier’s price for it.',
     ok: st => st.thalers >= 12 && st.roster.length > 0,
     choices: [
-      { label: 'Buy the barrel for the company', hint: '−12 thalers. Spirits rise. Fists may follow.',
+      { label: 'Buy the barrel for the company', hint: '−12 thalers. Spirits rise. Fists may follow.', fx: [['coin', '−12', 'thalers'], ['flame', '+14', 'spirit, every man'], ['dice', '1 in 4', 'a brawl']],
         fn: st => { st.thalers -= 12; all(st, s => bump(s, 'morale', 14)); if (chance(0.25)) { const s = pick(st.roster); bump(s, 'hp', -10); return 'A fine night, until ' + s.name + ' takes a stool to the face.'; } return 'Songs in four languages until the watch changes.'; } },
-      { label: 'Send her on', hint: 'The men grumble.', fn: st => { all(st, s => bump(s, 'morale', -3)); return 'The cart rolls on. So does the grumbling.'; } }
+      { label: 'Send her on', hint: 'The men grumble.', fx: [['flame', '−3', 'spirit, every man']], fn: st => { all(st, s => bump(s, 'morale', -3)); return 'The cart rolls on. So does the grumbling.'; } }
     ] },
   { id: 'fever', title: 'Camp fever',
     text: st => st.staff.surgeon ? 'Two men wake shivering. Your barber-surgeon is already boiling something foul.' : 'Two men wake shivering and cannot keep their bread down. The next village has an apothecary.',
     ok: st => st.roster.length >= 2,
     choices: [
-      { label: 'Pay for physic', hint: '−15 thalers. Free if you keep a barber-surgeon.',
+      { label: 'Pay for physic', hint: '−15 thalers. Free if you keep a barber-surgeon.', fx: [['coin', '−15', 'thalers'], ['surgeon', '0', 'with a barber-surgeon']],
         fn: st => { if (st.staff.surgeon) return 'Purged, bled and back in the line by evening.'; if (st.thalers < 15) { st.roster.slice(0, 2).forEach(s => bump(s, 'hp', -14)); return 'The purse is too light. The fever runs its course.'; } st.thalers -= 15; return 'The apothecary is paid and the fever breaks.'; } },
-      { label: 'Let it burn out', hint: 'Two men lose strength.',
+      { label: 'Let it burn out', hint: 'Two men lose strength.', fx: [['drop', '−14', 'blood, two men'], ['flame', '−5', 'spirit, two men']],
         fn: st => { const a = st.roster.slice().sort(() => Math.random() - 0.5).slice(0, 2); a.forEach(s => { bump(s, 'hp', -14); bump(s, 'morale', -5); }); return a.map(s => s.name).join(' and ') + ' sweat it out, and are the weaker for it.'; } }
     ] },
   { id: 'village', title: "A village asks for a night's guard",
     text: () => 'The elders of a hamlet stand in the road with their caps in their hands. Foragers are near, and they have bread to offer.',
     ok: st => st.roster.length > 0,
     choices: [
-      { label: 'Stand watch for them', hint: '+12 bread, +3 renown. A sleepless night.',
+      { label: 'Stand watch for them', hint: '+12 bread, +3 renown. A sleepless night.', fx: [['loaf', '+12', 'bread'], ['mace', '+3', 'renown'], ['flame', '−4', 'spirit, every man']],
         fn: st => { st.bread += 12; st.renown += 3; all(st, s => bump(s, 'morale', -4)); return 'Nobody comes. The bread is still warm in the morning.'; } },
-      { label: 'Take what they have', hint: '+22 bread, −6 renown.',
+      { label: 'Take what they have', hint: '+22 bread, −6 renown.', fx: [['loaf', '+22', 'bread'], ['mace', '−6', 'renown']],
         fn: st => { st.bread += 22; st.renown = Math.max(0, st.renown - 6); return 'The ovens are emptied. Word of it will travel faster than you do.'; } },
       { label: 'March on', hint: 'Nothing gained, nothing lost.', fn: () => 'The company marches past without a word.' }
     ] },
@@ -689,23 +690,23 @@ const EVENTS = [
     ok: st => st.roster.length >= 2,
     prep: st => { const a = st.roster.slice().sort(() => Math.random() - 0.5); return { a: a[0].name, b: a[1].name, ia: a[0].id, ib: a[1].id }; },
     choices: [
-      { label: 'Let them settle it, to first blood', hint: 'One is cut. The company enjoys the show.',
+      { label: 'Let them settle it, to first blood', hint: 'One is cut. The company enjoys the show.', fx: [['drop', '−14', 'blood, the loser'], ['star', '+15', 'experience, the winner'], ['flame', '+4', 'spirit, every man']],
         fn: st => { const a = st.roster.find(s => s.id === st.pending.ia), b2 = st.roster.find(s => s.id === st.pending.ib); if (!a || !b2) return 'It blows over.'; const w = chance(0.5) ? a : b2, l = w === a ? b2 : a; bump(l, 'hp', -14); w.xp += 15; all(st, s => bump(s, 'morale', 4)); return w.name + ' draws first blood. ' + l.name + ' pays the debt and keeps the scar.'; } },
-      { label: 'Fine them both', hint: '+8 thalers. Both sulk.',
+      { label: 'Fine them both', hint: '+8 thalers. Both sulk.', fx: [['coin', '+8', 'thalers'], ['flame', '−8', 'spirit, the two']],
         fn: st => { st.thalers += 8; [st.pending.ia, st.pending.ib].forEach(id => { const s = st.roster.find(r => r.id === id); if (s) bump(s, 'morale', -8); }); return 'Four thalers each into the chest. Neither speaks to you for a day.'; } }
     ] },
   { id: 'cart', title: 'An overturned cart',
     text: () => "A powder cart lies in the ditch, its driver gone. The barrels carry the Crown's mark.",
     ok: () => true,
     choices: [
-      { label: 'Take the powder', hint: '+10 powder, −2 renown.', fn: st => { st.powder += 10; st.renown = Math.max(0, st.renown - 2); return 'Ten charges richer, and nobody saw. Probably.'; } },
-      { label: 'Return it to the Crown artillery', hint: '+5 renown, +10 thalers.', fn: st => { st.renown += 5; st.thalers += 10; return 'The artillery captain pays a finder’s fee and remembers your banner.'; } }
+      { label: 'Take the powder', hint: '+10 powder, −2 renown.', fx: [['horn', '+10', 'powder'], ['mace', '−2', 'renown']], fn: st => { st.powder += 10; st.renown = Math.max(0, st.renown - 2); return 'Ten charges richer, and nobody saw. Probably.'; } },
+      { label: 'Return it to the Crown artillery', hint: '+5 renown, +10 thalers.', fx: [['mace', '+5', 'renown'], ['coin', '+10', 'thalers']], fn: st => { st.renown += 5; st.thalers += 10; return 'The artillery captain pays a finder’s fee and remembers your banner.'; } }
     ] },
   { id: 'pedlar', title: "The pedlar's bundle",
     text: () => 'A pedlar unrolls an oilcloth: a weapon far better than anything on your roll, and no questions asked about where it came from.',
     ok: st => st.thalers >= 30 && st.roster.some(s => s.wpn < 3),
     choices: [
-      { label: 'Buy it', hint: '−30 thalers. Your worst-armed man gets better arms.',
+      { label: 'Buy it', hint: '−30 thalers. Your worst-armed man gets better arms.', fx: [['coin', '−30', 'thalers'], ['up', '+1', 'arms, worst-armed man']],
         fn: st => { const s = st.roster.filter(r => r.wpn < 3).sort((a, b2) => a.wpn - b2.wpn || b2.level - a.level)[0]; st.thalers -= 30; s.wpn++; return s.name + ' now carries a ' + WPN[s.cls][s.wpn].toLowerCase() + '.'; } },
       { label: 'Wave him off', hint: 'Nothing gained, nothing lost.', fn: () => 'He rolls it up again, unbothered.' }
     ] },
@@ -713,9 +714,9 @@ const EVENTS = [
     text: st => st.staff.qm ? 'Your quartermaster caught the spoiled sacks before they were loaded.' : 'Half a sack of biscuit is alive with weevils.',
     ok: st => st.bread >= 8,
     choices: [
-      { label: 'Throw it out', hint: 'Lose 6 bread, unless you keep a quartermaster.',
+      { label: 'Throw it out', hint: 'Lose 6 bread, unless you keep a quartermaster.', fx: [['loaf', '−6', 'bread'], ['qm', '0', 'with a quartermaster']],
         fn: st => { if (st.staff.qm) return 'Nothing lost.'; st.bread = Math.max(0, st.bread - 6); return 'Six loaves’ worth goes to the crows.'; } },
-      { label: 'Bread is bread', hint: 'Keep it. Someone may sicken.',
+      { label: 'Bread is bread', hint: 'Keep it. Someone may sicken.', fx: [['dice', '2 in 5', 'one man sickens'], ['drop', '−12', 'blood']],
         fn: st => { if (st.staff.qm) return 'Nothing lost.'; if (chance(0.4) && st.roster.length) { const s = pick(st.roster); bump(s, 'hp', -12); return s.name + ' spends the night behind the hedge.'; } return 'Nobody complains. Nobody looks closely.'; } }
     ] }
 ];

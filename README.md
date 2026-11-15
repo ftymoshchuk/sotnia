@@ -21,15 +21,16 @@ python3 -m http.server 8000
 | File | Contents |
 | --- | --- |
 | `index.html` | Page shell: fonts, stylesheet, the `#view` and `#modal` mount points, and the scripts in load order |
-| `css/sotnia.css` | All styles, with the colour and type tokens on `:root` |
+| `css/sotnia.css` | All styles, with the colour and type tokens on `:root`: walnut and gilt for the game's bars, parchment cards on a dark table |
 | `js/core.js` | The rules of the company, with no DOM: troop classes, origins, traits, soldiers, economy, contracts, the battle simulation, scouting odds, aftermath and camp events |
 | `js/journey.js` | The rules of the road, with no DOM: the calendar, the lands, places and roads of 1633, quests, travel days, cargo, ambushes, selling and delivery |
 | `js/geo.js` | Coastlines and rivers for the map (drawing data only) |
-| `js/art.js` | Palette, pixel sprites, the woodcut backdrop, the battlefield and its particles, and the map |
+| `js/art.js` | Palette, pixel sprites (standing, sitting, lying, foraging, and the baggage train's people), the woodcut backdrop, the battlefield and its particles, the camp at night, the pictures on the cards, and the map |
 | `js/music.js` | The music engine, which knows nothing of the game: it reads a score, composes as it plays and synthesises every note with Web Audio (there are no recordings) |
 | `js/score.js` | The game's music, written out: the journey's pieces, the muster, the fight and the flourishes after it |
 | `js/audio.js` | Sound effects, and starting the right music for each screen |
-| `js/screens.js` | Shared state (`G` is the campaign, `ui` is the interface), saving, and the HTML for every screen |
+| `js/icons.js` | The icon set (`ICON`, drawn on a 24-unit square) and `ic()`, which writes one as markup |
+| `js/screens.js` | Shared state (`G` is the campaign, `ui` is the interface), saving, the card component, and the HTML for every screen |
 | `js/main.js` | Click and key handling, the frame loop and boot |
 | `tests/` | Headless tests of the rules, and the guard that keeps every workflow action pinned |
 | `.github/` | CI, which ends in the `ci-passed` check, and Dependabot for the action pins |
@@ -47,7 +48,9 @@ Keep `js/core.js` and `js/journey.js` free of DOM access. The scouts' odds come 
 - **The road:** march speeds and cargo losses in `TRANSPORT`, ambush rates in `AMBUSH_RATE`, and who you meet in each land in `LANDS` and `AMBUSHES` (all in `js/journey.js`).
 - **Balance:** unit stats in `CLS`, contract templates in `TEMPLATES` with difficulty in `makeContract`, and prices and wages in the economy section of `js/core.js`. Contracts and ambushes grow harder as the company nears its goal (`threat()` in `js/journey.js`).
 - **Battle behaviour:** `stepBattle`, `strike`, `fire` and `moraleTick` in `js/core.js`.
-- **Camp events:** add entries to `EVENTS` in `js/core.js`.
+- **Camp events:** add entries to `EVENTS` in `js/core.js`. Give each choice an `fx` list of `[icon, amount, what]` as well as its `hint`: the dialog shows those as chips, and falls back to the hint where there are none.
+- **The look:** every man, recruit, supply, job, member of the baggage train, opening order and fallen man is a card, built by `cardHTML()` in `js/screens.js`: a name banner, a picture, the body, and a type bar coloured by kind, with the price or wage on a coin at its left. Icons stand in for words wherever a number says enough; the word stays for screen readers and on hover.
+- **The camp:** `campPlan()` in `js/art.js` puts each man where his order sends him (by the fire to rest, the drill yard, out foraging, or abed by the tent), and `drawCamp()` draws the night, the fire and the men walking between places. The slots are in `CAMP`.
 - **Music:** what plays is in `js/score.js`: each piece's ground, tunes and figures, and the cues that say which pieces play on which screen and how loud each cue is against the others. `MUSIC_LEVEL` in `js/audio.js` sets the loudness of all of it, and the instruments are `SOUNDS` in `js/music.js`. See [Music](#music).
 - **Saves:** the state built by `newGame()` carries `v: 2`, and `loadSave()` ignores any other version. Bump it when the shape of the state changes, so old saves are dropped instead of loading broken.
 
