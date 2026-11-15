@@ -94,3 +94,62 @@ test('a careful company completes every quest', () => {
     assert.ok(arrived.length >= 3, `${q}: only ${arrived.length} of 5 runs arrived: ${JSON.stringify(runs)}`);
   }
 });
+
+test('the quickest route joins up leg by leg, and agrees with the days to go', () => {
+  const r = rules(1);
+  for (const q of plain(r, 'QUESTS.map(q => q.id)')) {
+    const check = plain(r, `(() => {
+      const st = newGame(${JSON.stringify(q)}), legs = routeTo(st, questOf(st).to);
+      let at = st.at, joined = true;
+      for (const l of legs) {
+        const road = ROADS[l.i];
+        joined = joined && l.from === at && ((road.a === at && road.b === l.to) || (road.b === at && road.a === l.to));
+        at = l.to;
+      }
+      return { joined, end: at, to: questOf(st).to, days: legs.reduce((n, l) => n + l.days, 0), togo: daysToGo(st) };
+    })()`);
+    assert.ok(check.joined, `${q}: the legs of the route do not join up`);
+    assert.equal(check.end, check.to);
+    assert.equal(check.days, check.togo);
+  }
+});
+
+test('a course halts at the last market when the bread will not last to the next', () => {
+  const out = plain(rules(3), `(() => {
+    const st = newGame('salt');
+    march(st, roadsFrom(st).find(x => x.to === 'perekop').i, false);
+    st.ambush = null; st.pending = null;
+    st.bread = 5;
+    const first = followCourse(st, 'uman', false), at = st.at;
+    st.bread = 1000; st.thalers = 1000;
+    const second = followCourse(st, 'uman', false);
+    return { first: first.stop, firstLegs: first.legs, at, second: second.stop, secondLegs: second.legs };
+  })()`);
+  assert.deepEqual([out.first, out.firstLegs, out.at], ['bread', 0, 'perekop']);
+  assert.ok(out.secondLegs > 0, 'with bread enough, the course moves on');
+  assert.ok(['arrived', 'ambush', 'event'].includes(out.second), `unexpected stop: ${out.second}`);
+});
+
+test('a course halts at a market when pay falls due before the next and the chest is short', () => {
+  const out = plain(rules(4), `(() => {
+    const st = newGame('payroll');
+    st.bread = 1000; st.thalers = 0; st.payDue = st.date + 1;
+    return followCourse(st, 'smolensk', false);
+  })()`);
+  assert.equal(out.stop, 'pay');
+  assert.equal(out.legs, 0);
+});
+
+test('following courses, a careful company completes every quest', () => {
+  // The same player, setting a course for the destination instead of choosing each leg. When a
+  // course will not leave a market it cannot fix, the player marches the leg anyway, as a person would.
+  const COURSE_PLAYER = PLAYER.replace('    march(st, best.i, false);',
+    "    { const c = followCourse(st, questOf(st).to, false); if (!c.legs && (c.stop === 'bread' || c.stop === 'pay')) march(st, best.i, false); }");
+  assert.notEqual(COURSE_PLAYER, PLAYER);
+  for (const q of plain(rules(1), 'QUESTS.map(q => q.id)')) {
+    const runs = [21, 22, 23, 24, 25].map(seed => plain(rules(seed), COURSE_PLAYER + '(' + JSON.stringify(q) + ')'));
+    for (const run of runs) assert.ok(run.over, `${q}: a run never ended`);
+    const arrived = runs.filter(run => run.over === 'arrived');
+    assert.ok(arrived.length >= 3, `${q}: only ${arrived.length} of 5 runs arrived: ${JSON.stringify(runs)}`);
+  }
+});

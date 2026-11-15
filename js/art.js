@@ -231,7 +231,14 @@ function drawField(v, b, t) {
 const MAP_K = Math.cos(50 * Math.PI / 180);
 const MAP_ASPECT = (MAP_BOX.e - MAP_BOX.w) * MAP_K / (MAP_BOX.n - MAP_BOX.s);
 const MAP_SEAS = [['The Black Sea', 31.4, 45.2], ['The Sea of Azov', 36.9, 46.2], ['The Baltic Sea', 16.6, 55.35]];
-function drawMap(cv, st) {
+// The place nearest a point on the map, within a finger's width; drawMap leaves where each place sits.
+function placeAt(cv, x, y) {
+  let best = null, bd = 16;
+  for (const p of cv.hits || []) { const d = Math.hypot(p.x - x, p.y - y); if (d < bd) { bd = d; best = p.id; } }
+  return best;
+}
+// plan: the legs of a course to show, as routeTo lists them, or null.
+function drawMap(cv, st, plan) {
   if (!cv || !st) return;
   cv.style.aspectRatio = String(MAP_ASPECT);
   const w = cv.clientWidth || 900, h = w / MAP_ASPECT, dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -260,8 +267,16 @@ function drawMap(cv, st) {
   for (const r of out) { const b = at(r.to); g.beginPath(); g.moveTo(here0[0], here0[1]); g.lineTo(b[0], b[1]); g.stroke(); }
   g.strokeStyle = PAL.red; g.lineWidth = 3;
   g.beginPath(); st.path.forEach((id, i) => { const p = at(id); if (i) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]); }); g.stroke();
+  // a course set from here, dashed in weld
+  const target = plan && plan.length ? plan[plan.length - 1].to : null;
+  if (target) {
+    g.setLineDash([7, 5]); g.strokeStyle = PAL.ochre; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(here0[0], here0[1]); for (const l of plan) { const p = at(l.to); g.lineTo(p[0], p[1]); } g.stroke();
+    g.setLineDash([]);
+  }
   // places: a filled dot where there is a market, an open one where there is none
-  const q = questOf(st), named = new Set([st.at, q.to].concat(out.map(r => r.to), [q.from]));
+  const q = questOf(st), named = new Set([st.at, q.to].concat(target ? [target] : [], out.map(r => r.to), [q.from]));
+  cv.hits = Object.keys(PLACES).map(id => { const xy = at(id); return { id, x: xy[0], y: xy[1] }; });
   for (const id in PLACES) {
     const p = PLACES[id], xy = at(id), shop = (SERVICES[p.kind] || {}).market;
     g.beginPath(); g.arc(xy[0], xy[1], 2.6, 0, Math.PI * 2);
@@ -270,6 +285,7 @@ function drawMap(cv, st) {
   }
   const dest = at(q.to);
   g.strokeStyle = PAL.ochre; g.lineWidth = 3; g.beginPath(); g.arc(dest[0], dest[1], 7.5, 0, Math.PI * 2); g.stroke();
+  if (target && target !== q.to) { const t = at(target); g.lineWidth = 2; g.beginPath(); g.arc(t[0], t[1], 5.5, 0, Math.PI * 2); g.stroke(); }
   g.fillStyle = PAL.ink; g.fillRect(here0[0] - 1, here0[1] - 19, 2, 19);
   g.fillStyle = PAL.red; g.beginPath(); g.moveTo(here0[0] + 1, here0[1] - 19); g.lineTo(here0[0] + 13, here0[1] - 15); g.lineTo(here0[0] + 1, here0[1] - 11); g.closePath(); g.fill();
   // names, with a paper halo so they read over roads and rivers

@@ -43,11 +43,11 @@ function setStance(s) {
 function act(a, d) {
   wake();
   switch (a) {
-    case 'new': G = newGame(d.q); ui.screen = 'camp'; ui.tab = 'market'; ui.open = null; ui.news = null; ui.modal = null; break;
+    case 'new': G = newGame(d.q); ui.screen = 'camp'; ui.tab = 'market'; ui.course = null; ui.open = null; ui.news = null; ui.modal = null; break;
     case 'title': ui.screen = 'title'; ui.modal = null; break;
     case 'continue': {
       const s = loadSave(); if (!s) break;
-      G = s; ui.screen = 'camp'; ui.tab = 'market'; ui.news = null;
+      G = s; ui.screen = 'camp'; ui.tab = 'market'; ui.course = null; ui.news = null;
       ui.modal = G.ambush ? { type: 'ambush' } : G.pending && G.pending.id ? { type: 'event' } : null;
       break;
     }
@@ -63,6 +63,8 @@ function act(a, d) {
     case 'sell': sellCargo(G, +d.n); break;
     case 'march': { const r = march(G, +d.r, d.f === '1'); if (!r) return; dayDone(r); break; }
     case 'halt': dayDone(campDay(G)); break;
+    case 'course-pick': if (!routeTo(G, d.v)) return; ui.course = d.v; break;
+    case 'course': { if (!ui.course) return; const r = followCourse(G, ui.course, d.f === '1'); if (!r.legs && !r.lines.length) return; dayDone(r); break; }
     case 'deliver': if (!deliver(G)) return; ui.screen = 'end'; ui.modal = null; break;
     case 'payoff': if (!payOff(G, d.k)) return; ui.modal = null; break;
     case 'fightambush': {
@@ -106,7 +108,12 @@ function act(a, d) {
   }
   render();
 }
-document.addEventListener('click', e => { const el = e.target.closest('[data-act]'); if (el && !el.disabled) act(el.dataset.act, el.dataset); });
+document.addEventListener('click', e => {
+  // A click on the map picks the place nearest it as the course.
+  if (e.target.id === 'map' && G && ui.screen === 'camp' && !ui.modal) { const id = placeAt(e.target, e.offsetX, e.offsetY); if (id) act('course-pick', { v: id }); return; }
+  const el = e.target.closest('[data-act]'); if (el && !el.disabled) act(el.dataset.act, el.dataset);
+});
+document.addEventListener('change', e => { const el = e.target; if (el.dataset && el.dataset.act === 'course-pick') act('course-pick', { v: el.value }); });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && ui.modal && ui.modal.type === 'help') { act('close', {}); return; }
   if (ui.screen !== 'battle' || ui.modal || !ui.b) return;

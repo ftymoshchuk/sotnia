@@ -11,7 +11,7 @@ const STANCE = {
 };
 
 let G = null;
-const ui = { screen: 'title', tab: 'market', open: null, c: null, pick: [], stance: null, odds: null, b: null, speed: 1, rep: null, modal: null, news: null, sound: true, music: true, view: null, demo: null, overT: 0, verdict: false };
+const ui = { screen: 'title', tab: 'market', course: null, open: null, c: null, pick: [], stance: null, odds: null, b: null, speed: 1, rep: null, modal: null, news: null, sound: true, music: true, view: null, demo: null, overT: 0, verdict: false };
 
 /* ---------- saving ---------- */
 const SAVE = 'sotnia-save-2';
@@ -98,6 +98,25 @@ function contractHTML(c) {
     '<span class="muted">' + (c.cap === 1 ? 'one man' : 'up to ' + c.cap + ' men') + '</span>' +
     '<button class="btn go" data-act="muster" data-id="' + c.id + '"' + (o.none ? ' disabled' : '') + '>Muster for this</button></div></article>';
 }
+// Pick a place several legs away; the company marches there leg by leg until something needs the player.
+function courseHTML(off) {
+  const q = questOf(G), days = searchRoutes(G).best;
+  const places = Object.keys(PLACES).filter(id => id !== G.at && days[id] != null).sort((a, b) => (a === q.to ? -1 : b === q.to ? 1 : days[a] - days[b]));
+  if (!places.length) return '';
+  if (!places.includes(ui.course)) ui.course = places[0];
+  const route = routeTo(G, ui.course), steady = route.reduce((n, r) => n + r.days, 0), forced = route.reduce((n, r) => n + r.forced, 0);
+  const via = route.slice(0, -1).map(r => PLACES[r.to].name), need = breadDue(G), fed = need ? Math.floor(G.bread / need) : 99, md = courseMarketDays(route, false);
+  const by = via.length > 4 ? via.slice(0, 3).join(', ') + ' and ' + plural(via.length - 3, 'more place', 'more places') : via.length > 1 ? via.slice(0, -1).join(', ') + ' and ' + via[via.length - 1] : via.join('');
+  return '<div class="course"><label class="lab" for="course-to">Set a course</label>' +
+    '<select id="course-to" data-act="course-pick">' + places.map(id => '<option value="' + id + '"' + (id === ui.course ? ' selected' : '') + '>' +
+      esc(cap1(PLACES[id].name)) + (id === q.to ? ', the destination' : '') + ' &middot; ' + plural(days[id], 'day', 'days') + '</option>').join('') + '</select>' +
+    '<p>In by ' + dateText(G.date + steady, true) + ', ' + plural(route.length, 'leg', 'legs') + (by ? ' by ' + esc(by) : '') + '.' +
+    (need ? ' The whole course eats ' + plural(need * steady, 'loaf', 'loaves') + ', and the company has ' + G.bread + '.' : '') +
+    ' It stops for any encounter, and at a market when the bread or the pay will not last to the next one. You can also pick a place on the map.</p>' +
+    (need && fed < md ? '<p class="warn">Bread for only ' + plural(fed, 'day', 'days') + ', and the first market on this course is ' + md + ' days on.</p>' : '') +
+    '<div class="go2 row"><button class="btn sm" data-act="course"' + off + '>March the course &middot; ' + plural(steady, 'day', 'days') + '</button>' +
+    (forced < steady ? '<button class="btn sm ghost" data-act="course" data-f="1"' + off + '>Forced &middot; ' + plural(forced, 'day', 'days') + '</button>' : '') + '</div></div>';
+}
 function roadHTML() {
   const q = questOf(G), T = transportOf(G), need = breadDue(G), fed = need ? Math.floor(G.bread / need) : 99, to = PLACES[q.to];
   let h = '<div class="head">' + (atEnd(G) ? 'The end of the road' : 'Roads from ' + esc(here(G).name)) + '<span>' + esc(T.name) + (need ? ' &middot; bread for ' + plural(fed, 'day', 'days') : '') + '</span></div>';
@@ -110,6 +129,7 @@ function roadHTML() {
   if (nobody) h += '<p class="warn endroad">Nobody stands under the banner to drive the train. Hire men at the market before marching.</p>';
   else if (G.thalers < wagesDue(G)) h += '<p class="warn endroad">The pay chest is short: ' + wagesDue(G) + ' thalers fall due on ' + dateText(G.payDue, true) + ' and the company has ' + G.thalers + '. ' +
     (q.kind === 'commission' ? 'Take from the Crown’s chest at a market, or take paid work,' : 'Sell some ' + esc(q.cargo.many) + ' at a market, or take paid work,') + ' or the men go unpaid.</p>';
+  h += courseHTML(off) + '<div class="sub">Or one leg at a time</div>';
   h += '<ul>' + roads.map(r => {
     const P2 = PLACES[r.to], rest = daysToGo(G, r.to), shop = (SERVICES[P2.kind] || {}).market || r.to === q.to, md = shop ? r.days : marketDays(G, r);
     return '<li class="offer road"><div class="what"><b>To ' + esc(P2.name) + '</b>' +
@@ -290,7 +310,7 @@ function endHTML() {
 }
 function questHTML(q) {
   const days = daysToGo({ quest: q.id, at: q.from }), worth = q.kind === 'commission' ? q.fee : q.cargo.n * q.price;
-  return '<article class="notice quest"><div class="rowline"><span class="tag ink">' + (q.kind === 'commission' ? 'Commission' : 'Venture') + '</span><span class="tag">' + esc(TRANSPORT[q.transport].name) + '</span>' +
+  return '<article class="notice quest"><div class="rowline"><span class="tag ink">' + (q.kind === 'commission' ? 'Commission' : 'Venture') + '</span><span class="tag">' + esc(TRANSPORT[q.transport].name) + '</span><span class="tag gold">plays in about ' + esc(q.play) + '</span>' +
     '<span class="muted">about ' + days + ' days on the road, ' + (q.deadline - q.start) + ' to spare them</span></div>' +
     '<h3>' + esc(q.title) + '</h3><div class="who">' + esc(q.who) + ' &middot; ' + esc(cap1(PLACES[q.from].name)) + ' to ' + esc(PLACES[q.to].name) + '</div><p>' + esc(q.text) + '</p>' +
     '<div class="terms"><span class="pay">' + (q.kind === 'commission' ? worth + ' thalers fee' : worth + ' thalers') + '</span><span>' + (q.kind === 'commission' ? 'for ' + q.cargo.n + ' ' + esc(q.cargo.unit) : q.cargo.n + ' ' + esc(q.cargo.unit) + ' at ' + q.price) + '</span>' +
@@ -325,7 +345,7 @@ function modalHTML() {
       '<button class="choice" data-act="payoff" data-k="coin"' + (short ? ' disabled' : '') + '><b>Pay them ' + c.payoff.coin + ' thalers of your own</b><span>' + (short ? 'More than the company has.' : 'The cargo stays whole.') + '</span></button>';
   } else {
     inner = '<h2 id="mt">Standing orders</h2><div class="rules">' +
-      '<p><b>The road.</b> A commission names a cargo, a destination and a day. Each road takes as many days as the distance really needs at the pace of the cargo. A forced march gets there sooner, but costs cargo and wears the men down. Arriving late is never the end of it, but the price falls every day.</p>' +
+      '<p><b>The road.</b> A commission names a cargo, a destination and a day. Each road takes as many days as the distance really needs at the pace of the cargo. A forced march gets there sooner, but costs cargo and wears the men down. Arriving late is never the end of it, but the price falls every day. Set a course to march several legs at once: the company keeps going until something needs you.</p>' +
       '<p><b>The company.</b> Every man eats a loaf a day, and wages fall due once a month. Unpaid or hungry men lose spirit, and men without spirit desert. Buy bread before empty country: there are no markets in the Wild Fields. Making camp for a day lets each man drill, rest or forage.</p>' +
       '<p><b>Trouble on the road.</b> Raiders fall on the train. Fight them, or pay them off in cargo or coin. Beaten, or sounding the retreat, costs cargo. Towns post paid work; a fight there takes the day.</p>' +
       '<p><b>The three arms.</b> Pikemen hold a line and keep sabres off. Musketeers kill from afar, burn powder, and die quickly in a brawl. Sabreurs are fast and hunt musketeers. Pike beats sabre, sabre beats shot, shot beats pike.</p>' +
@@ -353,7 +373,7 @@ function render() {
   ui.view = null;
   if (ui.screen === 'battle') { ui.view = newView($('#field'), ui.c.id * 7919 + G.day * 31, ui.c.weather, true); paintHud(); }
   else if (ui.screen === 'title') { newDemo(); }
-  else if (ui.screen === 'camp') drawMap($('#map'), G);
+  else if (ui.screen === 'camp') drawMap($('#map'), G, !atEnd(G) && ui.course ? routeTo(G, ui.course) : null);
   if (ui.screen === 'camp' || ui.screen === 'end') save();
   renderModal();
   if (AC) setCue(cueForScreen());

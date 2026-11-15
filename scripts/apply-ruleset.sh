@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Puts the default-branch ruleset on this repository, then prints what is in
-# force on main. The rules are the ones every Sigrix public repository carries
-# (sigrix-io/actions, docs/new-repository.md), kept in
-# docs/default-branch.ruleset.json so a change to them goes through a pull
-# request like everything else.
+# Puts the repository rules in place, then prints what is in force:
+#
+#  - the default-branch ruleset on main, the one every Sigrix public repository
+#    carries (sigrix-io/actions, docs/new-repository.md), kept in
+#    docs/default-branch.ruleset.json so a change to it goes through a pull
+#    request like everything else;
+#  - the repository setting that deletes a branch once its pull request merges.
 #
 # Run it from the repository root, with the GitHub CLI signed in as the owner:
 #
-#   scripts/apply-ruleset.sh            create the ruleset, then verify
+#   scripts/apply-ruleset.sh            apply, then verify
 #   scripts/apply-ruleset.sh --verify   only show what is in force
 #
 # It never creates a second ruleset. Rulesets stack and the stricter rule from
@@ -32,17 +34,21 @@ verify() {
   for id in $(gh api "repos/$REPO/rulesets" --jq '.[].id'); do
     gh api "repos/$REPO/rulesets/$id" --jq '{name, enforcement, bypass: [.bypass_actors[]? | "\(.actor_type) \(.actor_id) \(.bypass_mode)"]}'
   done
+  echo "== repository settings =="
+  gh api "repos/$REPO" --jq '{delete_branch_on_merge}'
 }
 
 if [ "${1:-}" != "--verify" ]; then
   [ -f "$RULESET" ] || { echo "Run this from the repository root: $RULESET not found." >&2; exit 1; }
+  # Finished work does not pile up as stale branches: each goes once its pull request merges.
+  gh api -X PATCH "repos/$REPO" -F delete_branch_on_merge=true --jq '"delete_branch_on_merge: \(.delete_branch_on_merge)"'
   existing=$(gh api "repos/$REPO/rulesets" --jq '.[] | "\(.id)  \(.name)  \(.target)"')
   if [ -n "$existing" ]; then
-    echo "$REPO already has a ruleset, so nothing was created:" >&2
-    echo "$existing" >&2
-    echo "Run with --verify to see it, or change it in place (see the note at the top of this script)." >&2
-    exit 1
+    echo "$REPO already has a ruleset, so no second one was created:"
+    echo "$existing"
+    echo "To change it, see the note at the top of this script."
+  else
+    gh api -X POST "repos/$REPO/rulesets" --input "$RULESET" --jq '"Created ruleset \(.id): \(.name), \(.enforcement)"'
   fi
-  gh api -X POST "repos/$REPO/rulesets" --input "$RULESET" --jq '"Created ruleset \(.id): \(.name), \(.enforcement)"'
 fi
 verify
