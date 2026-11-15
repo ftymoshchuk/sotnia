@@ -26,7 +26,9 @@ python3 -m http.server 8000
 | `js/journey.js` | The rules of the road, with no DOM: the calendar, the lands, places and roads of 1633, quests, travel days, cargo, ambushes, selling and delivery |
 | `js/geo.js` | Coastlines and rivers for the map (drawing data only) |
 | `js/art.js` | Palette, pixel sprites, the woodcut backdrop, the battlefield and its particles, and the map |
-| `js/audio.js` | Sound effects and music, synthesised with Web Audio (there are no recordings) |
+| `js/music.js` | The music engine, which knows nothing of the game: it reads a score, composes as it plays and synthesises every note with Web Audio (there are no recordings) |
+| `js/score.js` | The game's music, written out: the journey's pieces, the muster, the fight and the flourishes after it |
+| `js/audio.js` | Sound effects, and starting the right music for each screen |
 | `js/screens.js` | Shared state (`G` is the campaign, `ui` is the interface), saving, and the HTML for every screen |
 | `js/main.js` | Click and key handling, the frame loop and boot |
 | `tests/` | Headless tests of the rules, and the guard that keeps every workflow action pinned |
@@ -36,7 +38,7 @@ python3 -m http.server 8000
 
 The scripts are plain `<script>` tags, not ES modules. They share one global scope and must load in the order `index.html` lists them, which keeps the game runnable straight from `file://` with no tooling. Top-level code in a file can only use what earlier files declare; functions can call anything, since they run after every file has loaded.
 
-Keep `js/core.js` and `js/journey.js` free of DOM access. The scouts' odds come from running the battle simulation headless, dozens of times per estimate, and the same separation lets whole journeys be simulated outside a browser to check the balance.
+Keep `js/core.js` and `js/journey.js` free of DOM access. The scouts' odds come from running the battle simulation headless, dozens of times per estimate, and the same separation lets whole journeys be simulated outside a browser to check the balance. `js/music.js` and `js/score.js` likewise touch nothing until they are asked to play, so the composing is tested the same way.
 
 ### Where things live
 
@@ -46,7 +48,7 @@ Keep `js/core.js` and `js/journey.js` free of DOM access. The scouts' odds come 
 - **Balance:** unit stats in `CLS`, contract templates in `TEMPLATES` with difficulty in `makeContract`, and prices and wages in the economy section of `js/core.js`. Contracts and ambushes grow harder as the company nears its goal (`threat()` in `js/journey.js`).
 - **Battle behaviour:** `stepBattle`, `strike`, `fire` and `moraleTick` in `js/core.js`.
 - **Camp events:** add entries to `EVENTS` in `js/core.js`.
-- **Music:** `CUES` in `js/audio.js`.
+- **Music:** what plays is in `js/score.js`: each piece's ground, tunes and figures, and the cues that say which pieces play on which screen and how loud each cue is against the others. `MUSIC_LEVEL` in `js/audio.js` sets the loudness of all of it, and the instruments are `SOUNDS` in `js/music.js`. See [Music](#music).
 - **Saves:** the state built by `newGame()` carries `v: 2`, and `loadSave()` ignores any other version. Bump it when the shape of the state changes, so old saves are dropped instead of loading broken.
 
 ## Checks and branch rules
@@ -59,6 +61,15 @@ node --test tests/*.test.js
 ```
 
 `tests/journey.test.js` loads `js/core.js` and `js/journey.js` into a VM with a seeded random, checks that the map's places, roads and quests fit together, and plays every quest through to delivery with a simple player. A change that breaks the rules or leaves a quest impossible fails there before anyone has to play it.
+
+`tests/music.test.js` does the same for the music. It reads the score and composes half an hour of road music, then checks that:
+
+- every note is one its instrument can play;
+- the same seed always plays the same music;
+- nothing long comes round again soon;
+- the music rests between pieces.
+
+It also plays every cue for ten minutes against `tests/webaudio-stub.js`, a stand-in for Web Audio that throws wherever a browser would. In the game a throw from the music would only mean silence, so it is caught here instead.
 
 `main` carries the same branch ruleset as the Sigrix public repositories (see `docs/new-repository.md` in `sigrix-io/actions`):
 
@@ -75,6 +86,33 @@ scripts/apply-ruleset.sh
 ```
 
 It also turns on the branch deletion. It never creates a second ruleset, since rulesets stack: if one exists, it leaves it alone. `scripts/apply-ruleset.sh --verify` prints what is in force.
+
+## Music
+
+The music is composed as it plays. `js/score.js` writes it out as data: a piece is a ground of the time (a chord a bar), tunes over it, and figures for the lute. `js/music.js` arranges each piece afresh each time it comes round:
+
+- who carries the tune (recorder, viol or lute);
+- whether it is ornamented, thinned or moved an octave;
+- which figures the lute plays;
+- whether the bass viol and the drone come in.
+
+The chords are voice-led from bar to bar, each piece ends by echoing its last bars, softly and slowing, and the road rests for 8 to 20 seconds between pieces. Camp and the road go through a folia, a lament on the falling fourth, a cossack duma and a Polish dance, never the same one twice running. The muster and the fight move from section to section for as long as they last.
+
+The instruments are built the way Pageant builds its music bed ([sigrix-io/pageant](https://github.com/sigrix-io/pageant), `src/pageant/music.py`):
+
+- each tone is a few harmonics, with soft envelopes;
+- each instrument has a gentle low-pass;
+- a room of decaying noise sits over all of it.
+
+Pageant's own pad, bass and pluck are in `SOUNDS`, with its numbers.
+
+`MUSIC.render()` renders a cue outside the game, faster than it plays, and resolves to an `AudioBuffer`. To hear two minutes of road music, run this in the browser console on the game's page:
+
+```js
+const ac = new AudioContext(), src = ac.createBufferSource();
+src.buffer = await MUSIC.render(SCORE, 'camp', 120, { seed: 1, level: 0.1 });
+src.connect(ac.destination); src.start();
+```
 
 ## Data
 
