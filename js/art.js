@@ -308,3 +308,335 @@ function drawMap(cv, st, plan) {
     }
   }
 }
+
+/* ---------- the company in camp: sitting, lying, foraging, and the people of the baggage train ---------- */
+const HATS = {
+  pike: (R, d, sk) => { R(-3, -15 + d, 7, 1, PAL.steel); R(-1, -17 + d, 3, 2, PAL.helm); R(0, -18 + d, 1, 1, PAL.helm); },
+  shot: (R, d, sk) => { R(-3, -15 + d, 7, 1, INK); R(-1, -17 + d, 3, 2, INK); R(-3, -18 + d, 2, 2, sk.trim); },
+  sabre: (R, d, sk) => { R(-2, -16 + d, 5, 2, PAL.fur); R(-1, -17 + d, 3, 1, sk.coat); R(-3, -16 + d, 1, 3, sk.coat); R(1, -11 + d, 2, 1, INK); }
+};
+// pose: 'sit' (on a log, facing the fire), 'lie' (abed, or fallen), 'forage' (walking out with a basket); anything else stands, as on the field.
+function drawCamper(g, x, y, o) {
+  if (o.pose !== 'sit' && o.pose !== 'lie' && o.pose !== 'forage') { drawSoldier(g, x, y, o); if (o.bandage) { const f = o.face || 1; g.fillStyle = PAL.white; g.fillRect(f > 0 ? x - 1 : x - 1, y - 14, 3, 1); } return; }
+  const f = o.face || 1, sk = SKINS[o.skin] || SKINS.own;
+  const R = (dx, dy, w, h, c) => { g.fillStyle = c; g.fillRect(f > 0 ? x + dx : x - dx - w + 1, y + dy, w, h); };
+  if (o.pose === 'lie') {
+    R(-8, -2, 18, 2, PAL.drab); R(-3, -4, 11, 2, sk.coat); R(-1, -5, 9, 1, PAL.drab);
+    R(-7, -5, 3, 3, PAL.skin); R(8, -5, 2, 3, INK); R(-5, -3, 1, 1, INK);
+    if (o.bandage !== false) { R(-7, -6, 3, 1, PAL.white); R(-8, -5, 1, 2, PAL.white); }
+    return;
+  }
+  if (o.pose === 'sit') {
+    R(-3, -10, 1, 4, INK); R(1, -4, 5, 2, INK); R(5, -3, 2, 3, INK);
+    R(-2, -10, 5, 5, sk.coat); R(-3, -6, 5, 2, sk.coat); R(-2, -7, 5, 1, sk.trim);
+    R(-1, -13, 3, 3, PAL.skin); R(1, -12, 1, 1, INK);
+    HATS[o.cls](R, 1, sk);
+    if (o.prop === 'bandura') { R(2, -9, 2, 2, sk.coat); R(1, -7, 5, 3, PAL.wood); R(5, -12, 1, 5, PAL.wood); R(2, -6, 3, 1, INK); R(4, o.strum ? -7 : -8, 1, 1, PAL.skin); }
+    else if (o.prop === 'pipe') { R(2, -9, 2, 2, sk.coat); R(3, -10, 1, 1, sk.coat); R(3, -11, 1, 1, PAL.skin); R(2, -11, 3, 1, INK); R(5, -12, 1, 2, PAL.wood); }
+    else { R(2, -9, 2, 2, sk.coat); R(4, -7, 2, 1, sk.coat); R(6, -7, 1, 1, PAL.skin); }
+    return;
+  }
+  const step = Math.floor(o.anim || 0) % 2;
+  if (step === 0) { R(-3, -4, 2, 4, INK); R(2, -4, 2, 4, INK); R(-2, -5, 5, 1, INK); } else R(-1, -5, 3, 5, INK);
+  const b = step === 1 ? -1 : 0;
+  R(-2, -11 + b, 5, 6, sk.coat); R(-3, -7 + b, 7, 2, sk.coat); R(-2, -8 + b, 5, 1, sk.trim); R(-3, -11 + b, 1, 4, INK);
+  R(-1, -14 + b, 3, 3, PAL.skin); R(1, -13 + b, 1, 1, INK);
+  HATS[o.cls](R, b, sk);
+  R(2, -10 + b, 1, 4, sk.coat); R(2, -7 + b, 5, 3, PAL.wood); R(2, -7 + b, 5, 1, INK); R(3, -8 + b, 3, 1, PAL.green);
+}
+const STAFF_LOOK = { surgeon: { coat: PAL.black, trim: INK }, drill: { coat: PAL.red, trim: PAL.ochre }, qm: { coat: PAL.blue, trim: PAL.ochre }, chaplain: { coat: INK, trim: INK } };
+function drawCivilian(g, x, y, k, face) {
+  const f = face || 1, L = STAFF_LOOK[k];
+  const R = (dx, dy, w, h, c) => { g.fillStyle = c; g.fillRect(f > 0 ? x + dx : x - dx - w + 1, y + dy, w, h); };
+  g.fillStyle = 'rgba(28,26,23,.22)'; g.fillRect(x - 4, y, 9, 1);
+  R(-2, -5, 2, 5, INK); R(1, -5, 2, 5, INK);
+  R(-2, -11, 5, 6, L.coat); R(-3, -7, 7, 2, L.coat); R(-2, -8, 5, 1, L.trim); R(-3, -11, 1, 4, INK);
+  R(-1, -14, 3, 3, PAL.skin); R(1, -13, 1, 1, INK); R(-4, -15, 9, 1, INK); R(-2, -17, 5, 2, INK);
+  if (k === 'surgeon') { R(-1, -11, 3, 1, PAL.white); R(-1, -10, 3, 5, PAL.white); R(2, -10, 1, 4, L.coat); R(3, -8, 4, 1, PAL.steel); R(4, -7, 3, 1, PAL.steel); }
+  else if (k === 'drill') { R(2, -10, 1, 4, L.coat); R(3, -16, 1, 16, PAL.wood); R(3, -17, 1, 1, PAL.ochre); R(-1, -16, 3, 1, PAL.white); }
+  else if (k === 'qm') { R(2, -10, 2, 3, L.coat); R(2, -9, 4, 4, PAL.white); R(2, -9, 4, 1, INK); R(-1, -18, 3, 1, PAL.ochre); }
+  else { R(-1, -11, 3, 1, PAL.white); R(2, -10, 1, 4, L.coat); R(3, -12, 1, 5, PAL.ochre); R(2, -11, 3, 1, PAL.ochre); }
+}
+// An ox, standing or lying, in the colour it should have by day or by firelight.
+function drawOx(g, x, y, f, lying, hide) {
+  const R = (dx, dy, w, h, c) => { g.fillStyle = c; g.fillRect(f > 0 ? x + dx : x - dx - w + 1, y + dy, w, h); };
+  const dark = '#3a2a1a', horn = PAL.paperHi;
+  if (lying) { R(-6, -5, 12, 5, hide); R(5, -7, 4, 4, hide); R(6, -9, 1, 2, horn); R(8, -9, 1, 2, horn); R(7, -6, 1, 1, INK); R(-7, -3, 1, 2, dark); return; }
+  R(-6, -9, 12, 5, hide); R(-5, -4, 1, 4, dark); R(-3, -4, 1, 4, dark); R(3, -4, 1, 4, dark); R(5, -4, 1, 4, dark);
+  R(6, -10, 4, 4, hide); R(7, -12, 1, 2, horn); R(9, -12, 1, 2, horn); R(8, -9, 1, 1, INK); R(-7, -9, 1, 4, dark);
+}
+// The cargo of the quest, by how it travels. x,y is the foot of its left end; load runs from 0 to 1.
+function drawCargo(g, kind, x, y, load, night) {
+  const F = (a, b, w, h, c) => { g.fillStyle = c; g.fillRect(x + a, y + b, w, h); };
+  const wood = night ? '#4b3420' : PAL.wood, wood2 = night ? '#6a4a2c' : '#8a6440', keg = night ? '#5a3f27' : '#7a5a3a';
+  const wheel = (a) => { g.strokeStyle = night ? '#2e2116' : INK; g.lineWidth = 2; g.beginPath(); g.arc(x + a, y + 4, 5.5, 0, Math.PI * 2); g.stroke(); F(a - 1, -1, 2, 10, night ? '#2e2116' : INK); F(a - 5, 3, 10, 2, night ? '#2e2116' : INK); };
+  const wagon = () => { F(0, -6, 50, 6, wood); F(0, -6, 50, 1, wood2); F(-14, -3, 14, 1.5, wood); wheel(9); wheel(40); };
+  if (kind === 'oxcart' || kind === 'chest') {
+    drawOx(g, x - 10, y + 8, 1, true, night ? '#4a3c2f' : '#6b5338');
+    wagon();
+    if (kind === 'chest') {
+      F(8, -15, 22, 9, night ? '#2e2116' : '#3b2a1c'); F(8, -12, 22, 1, PAL.steel); F(8, -8, 22, 1, PAL.steel); F(18, -14, 2, 3, PAL.ochre);
+      F(33, -14, 13, 8, night ? '#a89f8a' : PAL.paper);
+    } else {
+      const n = Math.max(1, Math.round(5 * load)), spots = [[3, -16], [14, -16], [25, -16], [8, -25], [19, -25]];
+      for (let i = 0; i < n; i++) { const s = spots[i]; F(s[0], s[1], 9, 10, keg); F(s[0], s[1] + 2, 9, 1, INK); F(s[0], s[1] + 7, 9, 1, INK); F(s[0] + 1, s[1] - 1, 7, 1, night ? '#a89f8a' : PAL.white); }
+      F(36, -14, 11, 8, night ? '#a89f8a' : PAL.paper); F(38, -16, 7, 2, night ? '#a89f8a' : PAL.paper);
+    }
+  } else if (kind === 'herd') {
+    const hide = night ? '#4a3c2f' : '#6b5338', hide2 = night ? '#5b4a3a' : '#8a6c4a';
+    drawOx(g, x + 6, y - 2, 1, true, hide); drawOx(g, x + 30, y + 2, -1, true, hide2); drawOx(g, x + 50, y - 4, 1, false, hide); drawOx(g, x + 18, y + 10, 1, true, hide2);
+  } else {
+    F(-20, -8, 92, 16, night ? '#17222f' : '#9fb0b8');
+    for (let i = 0; i < 9; i++) F(-16 + i * 10, -4 + (i % 3) * 4, 5, 1, night ? '#2d4b70' : PAL.white);
+    F(0, -4, 48, 5, wood); for (let i = 0; i < 6; i++) F(i * 8, -4, 1, 5, INK);
+    const n = Math.max(1, Math.round(4 * load));
+    for (let i = 0; i < n; i++) { F(4 + i * 10, -10, 8, 6, night ? '#a89f8a' : PAL.paper); F(6 + i * 10, -11, 4, 1, night ? '#a89f8a' : PAL.paper); F(4 + i * 10, -7, 8, 1, PAL.drab); }
+    F(44, -20, 1, 16, wood); F(36, -18, 8, 1, wood);
+  }
+}
+
+/* ---------- card art: small woodcut pictures for the cards, drawn once and kept ---------- */
+const artCache = {};
+function artURL(key, W, H, fn) {
+  if (artCache[key]) return artCache[key];
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d'); fn(g, W, H);
+  return (artCache[key] = c.toDataURL());
+}
+function landscape(g, W, H, seed) {
+  const r = mulberry(seed * 977 + 13), hz = H - 7, a = r() * 6, b = r() * 6;
+  g.fillStyle = PAL.paperHi; g.fillRect(0, 0, W, H);
+  for (let i = 0; i < 2; i++) { const cx = r() * (W - 16) | 0, cy = 3 + (r() * 7 | 0), w = 8 + (r() * 10 | 0); g.fillStyle = PAL.hill; g.fillRect(cx, cy + 2, w, 1); g.fillRect(cx + 2, cy, w - 5, 1); }
+  for (let x = 0; x < W; x++) {
+    const y = Math.round(hz - 6 - 3 * Math.sin(x * 0.11 + a) - 2 * Math.sin(x * 0.29 + b));
+    g.fillStyle = PAL.hill; g.fillRect(x, y, 1, hz - y); g.fillStyle = INK; g.fillRect(x, y, 1, 1);
+  }
+  if (r() < 0.6) { const px = 4 + (r() * (W - 8) | 0), py = Math.round(hz - 8 - 3 * Math.sin(px * 0.11 + a) - 2 * Math.sin(px * 0.29 + b)); g.fillStyle = INK; g.fillRect(px, py - 6, 1, 6); g.fillRect(px - 1, py - 4, 3, 3); }
+  g.fillStyle = PAL.ground; g.fillRect(0, hz, W, H - hz); g.fillStyle = INK; g.fillRect(0, hz, W, 1);
+  for (let i = 0; i < 6; i++) { g.fillStyle = 'rgba(28,26,23,.35)'; g.fillRect(r() * W | 0, hz + 2 + (r() * (H - hz - 3) | 0), 2 + (r() * 5 | 0), 1); }
+}
+// A man of the company on his card: standing with his arms, or abed.
+function soldierArt(s) {
+  const seed = s.id % 5, pose = s.wound ? 'lie' : 'stand';
+  return artURL('m' + s.cls + pose + seed, 48, 36, (g, W, H) => { landscape(g, W, H, seed); drawCamper(g, 24, H - 3, { cls: s.cls, skin: 'own', face: 1, mode: 'idle', anim: 0, pose }); });
+}
+// After a fight: how each man came out of it.
+function fateArt(cls, fate, id) {
+  const seed = id % 5;
+  return artURL('f' + cls + fate + seed, 48, 36, (g, W, H) => {
+    landscape(g, W, H, seed);
+    if (fate === 'killed' || fate === 'struck down') drawCamper(g, 24, H - 3, { cls, skin: 'own', pose: 'lie', bandage: fate !== 'killed' });
+    else if (fate === 'fled') drawCamper(g, 24, H - 3, { cls, skin: 'own', face: -1, mode: 'rout', moving: true, anim: 1 });
+    else drawCamper(g, 24, H - 3, { cls, skin: 'own', face: 1, mode: 'idle', anim: 0, bandage: fate === 'wounded' });
+  });
+}
+// The other side of a contract or an ambush, facing the reader's company.
+function foesArt(c) {
+  const us = c.units.slice(0, 6);
+  return artURL('e' + c.id + us.map(u => u.cls).join(''), 72, 36, (g, W, H) => {
+    landscape(g, W, H, c.id % 5);
+    const step = us.length > 4 ? 10 : 12, x0 = Math.round(W / 2 - (us.length - 1) * step / 2);
+    us.forEach((u, i) => drawSoldier(g, x0 + i * step, H - 3 - (i % 2) * 2, { cls: u.cls, skin: c.skin || u.skin, face: -1, mode: 'idle', anim: 0 }));
+  });
+}
+function staffArt(k) { return artURL('s' + k, 48, 36, (g, W, H) => { landscape(g, W, H, k.length); drawCivilian(g, 24, H - 3, k, 1); }); }
+function stanceArt(s) {
+  return artURL('t' + s, 60, 36, (g, W, H) => {
+    landscape(g, W, H, s.length + 1);
+    const y = H - 3, o = (cls, x, m) => drawSoldier(g, x, y - (x % 3 === 0 ? 1 : 0), Object.assign({ cls, skin: 'own', face: 1, mode: 'idle', anim: 0 }, m));
+    if (s === 'hold') { o('pike', 12, {}); o('shot', 29, { mode: 'aim', flash: 1 }); o('pike', 46, {}); }
+    else if (s === 'advance') { o('pike', 10, { moving: true, anim: 0 }); o('sabre', 27, { moving: true, anim: 1 }); o('shot', 44, { moving: true, anim: 0 }); }
+    else { o('pike', 8, { moving: true, anim: 1, level: true }); o('sabre', 36, { mode: 'fight', moving: true, anim: 0 }); o('sabre', 51, { mode: 'fight', moving: true, anim: 1, swing: 1 }); }
+  });
+}
+function supplyArt(k) {
+  return artURL('u' + k, 48, 36, (g, W, H) => {
+    g.fillStyle = PAL.paperHi; g.fillRect(0, 0, W, H); g.fillStyle = PAL.ground; g.fillRect(0, H - 9, W, 9); g.fillStyle = INK; g.fillRect(0, H - 9, W, 1);
+    const F = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
+    if (k === 'bread') {
+      [[8, 20], [24, 20], [16, 12]].forEach(([x, y]) => { F(x, y, 14, 7, PAL.ochre); F(x + 1, y - 1, 12, 1, PAL.ochre); F(x, y + 7, 14, 1, INK); F(x + 3, y + 1, 2, 1, '#e6c47a'); F(x + 7, y + 1, 2, 1, '#e6c47a'); F(x + 11, y + 2, 1, 1, '#e6c47a'); });
+    } else {
+      F(9, 10, 16, 18, '#4b3420'); F(10, 9, 14, 1, '#4b3420'); F(9, 13, 16, 1, INK); F(9, 24, 16, 1, INK); F(15, 17, 4, 4, INK);
+      F(28, 18, 11, 4, PAL.paper); F(26, 20, 4, 3, PAL.paper); F(38, 16, 3, 3, PAL.wood); F(28, 22, 11, 1, INK);
+    }
+  });
+}
+function questArt(q, frac) {
+  return artURL('q' + q.id, 72, 36, (g, W, H) => {
+    landscape(g, W, H, q.id.length);
+    if (q.transport === 'raft') { drawCargo(g, 'raft', 16, H - 6, 1, false); return; }
+    if (q.transport === 'herd') { drawCargo(g, 'herd', 6, H - 6, 1, false); drawSoldier(g, 66, H - 3, { cls: 'sabre', skin: 'own', face: -1, mode: 'idle', anim: 0 }); return; }
+    drawCargo(g, q.transport, 22, H - 8, 0.8, false);
+    drawSoldier(g, 8, H - 3, { cls: q.transport === 'chest' ? 'shot' : 'pike', skin: 'own', face: 1, mode: 'idle', anim: 0 });
+  });
+}
+// A corner of the camp at night, for the cards of camp events.
+function eventArt() {
+  return artURL('night', 96, 32, (g, W, H) => {
+    const F = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
+    F(0, 0, W, H, '#1f2a3e'); F(0, 12, W, 6, '#26324a');
+    [[9, 3], [22, 6], [47, 2], [74, 5], [60, 8], [88, 4]].forEach(p => F(p[0], p[1], 1, 1, PAL.paperHi));
+    F(0, 18, W, 14, '#2b3446'); F(0, 23, W, 9, '#3b3325');
+    const gr = g.createRadialGradient(48, 24, 2, 48, 24, 26); gr.addColorStop(0, 'rgba(240,170,60,.55)'); gr.addColorStop(1, 'rgba(240,170,60,0)'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    F(40, 21, 4, 1, '#d8642a'); F(52, 21, 4, 1, '#d8642a');
+    drawCamper(g, 36, 27, { cls: 'sabre', skin: 'own', pose: 'sit', face: 1, prop: 'bandura' });
+    drawCamper(g, 61, 27, { cls: 'pike', skin: 'own', pose: 'sit', face: -1 });
+    F(46, 26, 6, 2, '#4b3420'); F(46, 22, 6, 4, '#c2412b'); F(47, 20, 4, 4, PAL.flash); F(48, 18, 2, 2, PAL.flash); F(48, 23, 2, 2, '#fff3c4');
+  });
+}
+
+/* ---------- the camp at night: the company round its fire, each man where his order puts him ---------- */
+const CW = 320, CH = 151;
+const CAMP = {
+  rest: [[130, 100, 1], [141, 90, 1], [179, 90, -1], [190, 100, -1], [136, 114, 1], [184, 114, -1], [150, 124, 1], [172, 124, -1]],
+  drill: [[207, 130, 1], [221, 116, 1], [195, 141, 1], [225, 143, 1], [240, 138, -1]],
+  forage: [[20, 130, -1], [40, 138, -1], [10, 118, -1], [59, 142, -1], [30, 146, -1]],
+  abed: [[103, 88, 1], [87, 95, 1], [119, 95, -1], [103, 101, 1], [88, 106, 1], [118, 107, -1], [96, 112, 1], [112, 116, -1]],
+  staff: { surgeon: [124, 86, -1], drill: [252, 121, -1], qm: [76, 98, -1], chaplain: [242, 90, -1] }
+};
+// Where each man of the roll belongs tonight, and what he is doing there.
+function campPlan(st) {
+  const n = { rest: 0, drill: 0, forage: 0, abed: 0 }, out = [];
+  let bard = false;
+  for (const s of st.roster) {
+    const k = s.wound ? 'abed' : s.order, list = CAMP[k], slot = list[Math.min(n[k]++, list.length - 1)];
+    let prop = null;
+    if (k === 'rest' && !bard && s.origin === 'Zaporozhian') { prop = 'bandura'; bard = true; } else if (k === 'rest' && s.id % 3 === 1) prop = 'pipe';
+    out.push({ id: s.id, s, k, x: slot[0], y: slot[1], f: slot[2], prop });
+  }
+  return out;
+}
+function campBack(st) {
+  const c = document.createElement('canvas'); c.width = CW; c.height = CH;
+  const g = c.getContext('2d'), F = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+  const poly = (pts, col) => { g.beginPath(); g.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) g.lineTo(pts[i], pts[i + 1]); g.closePath(); g.fillStyle = col; g.fill(); };
+  const r = mulberry(st.date * 31 + 7), stars = [];
+  F(0, 0, CW, CH, '#0f1520'); F(0, 34, CW, 40, '#141c2b'); F(0, 58, CW, 16, '#1a2335');
+  for (let i = 0; i < 46; i++) { const x = r() * CW | 0, y = r() * 58 | 0; if (Math.hypot(x - 52, y - 17) < 11) continue; const s = { x, y, k: r() * 6, big: r() < 0.08 }; stars.push(s); F(x, y, s.big ? 2 : 1, s.big ? 2 : 1, 'rgba(230,223,204,.75)'); }
+  g.fillStyle = PAL.paperHi; g.beginPath(); g.arc(52, 17, 7, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#0f1520'; g.beginPath(); g.arc(55.5, 15, 6.3, 0, Math.PI * 2); g.fill();
+  poly([0, 74, 18, 70, 40, 72, 62, 66, 88, 70, 110, 67, 140, 71, 170, 65, 200, 69, 228, 66, 256, 70, 284, 67, 320, 71, 320, 151, 0, 151], '#192132');
+  poly([0, 83, 40, 80, 90, 83, 140, 79, 200, 82, 250, 79, 320, 81, 320, 151, 0, 151], '#221c15');
+  F(0, 134, CW, 17, '#1a1510');
+  for (let i = 0; i < 26; i++) F(r() * CW | 0, 86 + (r() * 62 | 0), 2 + (r() * 2 | 0), 1, '#2c241a');
+  [[262, 18, 86, 16], [290, 6, 90, 19], [314, 24, 92, 14], [244, 44, 84, 10]].forEach(([x, top, base, w]) => {
+    const h = base - top; poly([x, top, x - w * 0.5, top + h * 0.35, x - w * 0.25, top + h * 0.35, x - w * 0.75, top + h * 0.68, x - w * 0.45, top + h * 0.68, x - w, base, x + w, base, x + w * 0.45, top + h * 0.68, x + w * 0.75, top + h * 0.68, x + w * 0.25, top + h * 0.35, x + w * 0.5, top + h * 0.35], '#0c120d');
+    F(x - 1, base, 2, 4, '#0c120d');
+  });
+  const tent = (l, rr, top, base, peak) => { poly([peak, top, l, base, rr, base], '#6c624f'); poly([peak, top, rr, base, peak + (rr - peak) * 0.5, base], '#564e40'); poly([peak, top + (base - top) * 0.34, peak - (rr - l) * 0.135, base, peak + (rr - l) * 0.135, base], '#120f0b'); F(peak - 0.5, top - 4, 1, 4, PAL.wood); };
+  tent(75, 130, 49, 84, 102.5); tent(190, 235, 48, 80, 212.5);
+  F(198, 68, 29, 2, '#7a2230'); poly([213, 43, 220, 43, 218, 44.5, 220, 46, 213, 46], PAL.red);
+  F(159, 20, 2, 62, '#5a3f26'); F(158, 17, 4, 3, PAL.ochre);
+  drawCargo(g, questOf(st).transport, 18, 92, st.cargo0 ? st.cargo / st.cargo0 : 1, true);
+  F(236, 111, 2, 16, '#4b3420'); F(233, 111, 8, 9, '#8a6d2c'); F(231, 113, 12, 1.5, '#4b3420'); F(233, 114, 8, 1, '#6e5622'); F(233, 117, 8, 1, '#6e5622');
+  for (const [x, y, f] of CAMP.rest) { const lx = f > 0 ? x - 4 : x - 3; F(lx, y - 4, 7, 3, '#4b3420'); F(lx, y - 4, 7, 1, PAL.wood); }
+  g.strokeStyle = '#3a2a1a'; g.lineWidth = 1; g.beginPath(); g.moveTo(160, 79); g.lineTo(153, 103); g.moveTo(160, 79); g.lineTo(167, 103); g.stroke();
+  F(160, 79, 1, 7, PAL.steel); F(156, 86, 8, 1, PAL.steel); F(157, 87, 6, 3, INK);
+  F(146, 117, 9, 3, '#6b5338'); F(154, 116, 3, 3, '#6b5338'); F(155, 115, 1, 1, '#3a2a1a'); F(145, 118, 1, 1, '#6b5338');
+  c.stars = stars;
+  return c;
+}
+function newCamp(cv, pos) {
+  const buf = document.createElement('canvas'); buf.width = CW; buf.height = CH;
+  const sel = document.createElement('canvas'); sel.width = 44; sel.height = 44;
+  const v = { cv, ctx: cv.getContext('2d'), buf, g: buf.getContext('2d'), sel, back: null, key: '', pos: pos || {}, parts: [], t: 0, btns: null };
+  fitCamp(v);
+  return v;
+}
+function fitCamp(v) {
+  const w = v.cv.clientWidth || 640, dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const W = Math.round(w * dpr), H = Math.round(W * CH / CW);
+  if (v.cv.width !== W || v.cv.height !== H) { v.cv.width = W; v.cv.height = H; }
+}
+function campFlag(g, t) {
+  for (let x = 0; x < 23; x++) {
+    const off = Math.round(Math.sin(t * 3.2 - x * 0.45) * (x / 22) * 1.4), X = 161 + x, Y = 22 + off;
+    g.fillStyle = PAL.red;
+    if (x < 19) g.fillRect(X, Y, 1, 11);
+    else { const gap = (x - 18) * 2 - 1; g.fillRect(X, Y, 1, (11 - gap) >> 1); g.fillRect(X, Y + 11 - ((11 - gap) >> 1), 1, (11 - gap) >> 1); }
+    g.fillStyle = PAL.ochre;
+    if (x === 9 || x === 10) g.fillRect(X, Y + 2, 1, 7);
+    if (x >= 7 && x <= 12) g.fillRect(X, Y + 4, 1, 2);
+  }
+}
+function campFire(g, t, still) {
+  const F = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(154 + x, 89 + y, w, h); };
+  F(0, 12, 12, 2, '#4b3420'); F(2, 12, 8, 1, PAL.wood); F(2, 11, 8, 1, '#d8642a');
+  if (still || Math.floor(t * 4.8) % 2) {
+    F(2, 7, 8, 4, '#c2412b'); F(3, 5, 6, 5, PAL.flash); F(5, 8, 2, 2, '#fff3c4'); F(4, 3, 2, 2, PAL.flash); F(7, 2, 1, 3, PAL.flash); F(2, 5, 1, 2, '#c2412b'); F(9, 6, 1, 2, '#c2412b');
+  } else {
+    F(2, 8, 8, 3, '#c2412b'); F(3, 6, 6, 4, PAL.flash); F(5, 8, 2, 2, '#fff3c4'); F(6, 2, 2, 4, PAL.flash); F(3, 4, 1, 2, PAL.flash); F(9, 5, 1, 3, '#c2412b'); F(1, 7, 1, 2, '#c2412b');
+  }
+}
+// Draw the camp. dt is the time since the last frame; still draws it at rest, as for reduced motion.
+function drawCamp(v, st, sel, dt, still) {
+  if (!v || !st) return;
+  v.t += dt;
+  const t = v.t, g = v.g, key = st.quest + st.date + ':' + (st.cargo0 ? Math.round(5 * st.cargo / st.cargo0) : 0);
+  if (v.key !== key) { v.back = campBack(st); v.key = key; }
+  g.globalAlpha = 1; g.drawImage(v.back, 0, 0);
+  if (!still) for (const s of v.back.stars) if (s.k < 2) { g.globalAlpha = 0.5 + 0.5 * Math.sin(t * 1.3 + s.k * 9); g.fillStyle = PAL.paperHi; g.fillRect(s.x, s.y, 1, 1); }
+  g.globalAlpha = 1;
+  campFlag(g, still ? 0 : t);
+  const plan = campPlan(st);
+  for (const p of plan) {
+    let c = v.pos[p.id];
+    if (!c || still) c = v.pos[p.id] = { x: p.x, y: p.y };
+    const dx = p.x - c.x, dy = p.y - c.y, d = Math.hypot(dx, dy);
+    if (d > 0.6) { const m = Math.min(d, 42 * dt); c.x += dx / d * m; c.y += dy / d * m; c.moving = true; c.face = dx >= 0 ? 1 : -1; c.anim = (c.anim || 0) + dt * 6; }
+    else { c.x = p.x; c.y = p.y; c.moving = false; }
+  }
+  const draw = (gg, p, x, y) => {
+    const c = v.pos[p.id], s = p.s;
+    if (c.moving) return drawCamper(gg, x, y, { cls: s.cls, skin: 'own', face: c.face, mode: 'idle', moving: true, anim: c.anim });
+    if (p.k === 'abed') return drawCamper(gg, x, y, { cls: s.cls, skin: 'own', face: p.f, pose: 'lie' });
+    if (p.k === 'rest') return drawCamper(gg, x, y, { cls: s.cls, skin: 'own', face: p.f, pose: 'sit', prop: p.prop, strum: Math.floor(t * 5) % 2 });
+    if (p.k === 'forage') return drawCamper(gg, x, y, { cls: s.cls, skin: 'own', face: p.f, pose: 'forage', anim: t * 1.6 + p.id });
+    const ph = (t + p.id * 0.7) % 3;
+    if (s.cls === 'sabre') return drawCamper(gg, x, y, { cls: 'sabre', skin: 'own', face: p.f, mode: 'fight', swing: ph % 1 < 0.35 ? 1 : 0 });
+    if (s.cls === 'shot') return drawCamper(gg, x, y, { cls: 'shot', skin: 'own', face: p.f, mode: ph > 1.2 ? 'aim' : 'idle', flash: ph > 2.6 && ph < 2.75 ? 1 : 0 });
+    return drawCamper(gg, x, y, { cls: 'pike', skin: 'own', face: p.f, mode: 'idle', level: ph % 1.5 > 0.75 });
+  };
+  for (const p of plan.slice().sort((a, b) => v.pos[a.id].y - v.pos[b.id].y)) {
+    const c = v.pos[p.id], x = Math.round(c.x), y = Math.round(c.y);
+    if (p.id === sel) {
+      const sg = v.sel.getContext('2d'); sg.clearRect(0, 0, 44, 44); draw(sg, p, 22, 40);
+      sg.globalCompositeOperation = 'source-in'; sg.fillStyle = '#e8c46a'; sg.fillRect(0, 0, 44, 44); sg.globalCompositeOperation = 'source-over';
+      for (const o of [[1, 0], [-1, 0], [0, 1], [0, -1]]) g.drawImage(v.sel, x - 22 + o[0], y - 40 + o[1]);
+    }
+    draw(g, p, x, y);
+  }
+  for (const k in STAFF_LOOK) if (st.staff[k]) { const s = CAMP.staff[k]; drawCivilian(g, s[0], s[1], k, s[2]); }
+  const fl = still ? 1 : 1 + 0.05 * Math.sin(t * 7.1) + 0.03 * Math.sin(t * 17.3);
+  let gr = g.createRadialGradient(160, 100, 40, 160, 100, 230);
+  gr.addColorStop(0, 'rgba(5,8,14,0)'); gr.addColorStop(1, 'rgba(5,8,14,.55)'); g.fillStyle = gr; g.fillRect(0, 0, CW, CH);
+  gr = g.createRadialGradient(160, 100, 2, 160, 100, 100 * fl);
+  gr.addColorStop(0, 'rgba(240,170,60,.36)'); gr.addColorStop(0.35, 'rgba(216,100,42,.15)'); gr.addColorStop(1, 'rgba(216,100,42,0)'); g.fillStyle = gr; g.fillRect(0, 0, CW, CH);
+  campFire(g, t, still);
+  if (!still) {
+    if (Math.random() < dt * 5) v.parts.push({ k: 'e', x: 157 + Math.random() * 6, y: 94, vx: rnd(-3, 5), vy: rnd(-34, -20), life: 0, max: rnd(1.2, 2.4) });
+    if (Math.random() < dt * 1.2) v.parts.push({ k: 's', x: 159 + Math.random() * 3, y: 84, vx: rnd(-1, 1), vy: -4, life: 0, max: 2.6 });
+    for (const p of plan) {
+      const c = v.pos[p.id]; if (c.moving || p.k !== 'rest') continue;
+      if (p.prop === 'bandura' && Math.random() < dt * 0.6) v.parts.push({ k: 'n', x: c.x + p.f * 3, y: c.y - 16, vx: p.f * 4, vy: -11, life: 0, max: 3 });
+      if (p.prop === 'pipe' && Math.random() < dt * 0.5) v.parts.push({ k: 's', x: c.x + p.f * 5, y: c.y - 14, vx: p.f * 2, vy: -5, life: 0, max: 2.2 });
+    }
+    for (let i = v.parts.length - 1; i >= 0; i--) {
+      const p = v.parts[i]; p.life += dt; p.x += p.vx * dt; p.y += p.vy * dt;
+      if (p.life >= p.max) { v.parts.splice(i, 1); continue; }
+      const a = 1 - p.life / p.max; g.globalAlpha = Math.min(1, a * 1.6);
+      if (p.k === 'e') { g.fillStyle = a > 0.5 ? PAL.flash : '#d8642a'; g.fillRect(p.x | 0, p.y | 0, 1, 1); }
+      else if (p.k === 's') { g.fillStyle = PAL.smoke; g.fillRect(p.x | 0, p.y | 0, 1, 1); }
+      else { g.fillStyle = '#e8c46a'; const x = p.x | 0, y = p.y | 0; g.fillRect(x, y, 1, 4); g.fillRect(x - 2, y + 3, 2, 2); g.fillRect(x + 1, y, 1, 1); g.fillRect(x + 2, y + 1, 1, 1); }
+    }
+    g.globalAlpha = 1;
+  }
+  const c = v.ctx; c.imageSmoothingEnabled = false; c.drawImage(v.buf, 0, 0, v.cv.width, v.cv.height);
+  // keep the clickable figures over the drawn ones as they walk
+  if (v.btns) for (const b of v.btns) {
+    const p = v.pos[b.dataset.id]; if (!p) continue;
+    const L = ((p.x - 9) / CW * 100).toFixed(2) + '%', T = ((p.y - (b.dataset.k === 'abed' ? 8 : b.dataset.k === 'rest' ? 18 : 31)) / CH * 100).toFixed(2) + '%';
+    if (b.style.left !== L) b.style.left = L;
+    if (b.style.top !== T) b.style.top = T;
+  }
+}
