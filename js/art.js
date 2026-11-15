@@ -4,13 +4,13 @@ const LW = BW, LH = 124, FY = 72, HZ = 56;
 const PAL = {
   paper: '#d9d1bc', hill: '#d0c7ae', ground: '#cbc2a8', paperHi: '#e6dfcc', ink: '#1c1a17', red: '#9c1f2e', blue: '#2d4b70',
   ochre: '#b98a2b', green: '#4e6b50', drab: '#77705a', grey: '#8b877c', plum: '#5c2d55', black: '#2a2725', skin: '#d6ad86',
-  wood: '#6a4a2c', fur: '#4b3524', steel: '#3d4144', helm: '#7e8284', white: '#f4f0e4', flash: '#f0b93a', smoke: '#a9a498'
+  wood: '#6a4a2c', fur: '#4b3524', steel: '#3d4144', helm: '#7e8284', white: '#f4f0e4', flash: '#f0b93a', smoke: '#a9a498', russet: '#7a3b26'
 };
 const INK = PAL.ink;
 const SKINS = {
   own: { coat: PAL.red, trim: PAL.ochre }, bandit: { coat: PAL.drab, trim: PAL.paperHi }, deserter: { coat: PAL.grey, trim: PAL.ink },
   raider: { coat: PAL.green, trim: PAL.ochre }, imperial: { coat: PAL.ochre, trim: PAL.ink }, swede: { coat: PAL.blue, trim: PAL.ochre },
-  champion: { coat: PAL.plum, trim: PAL.ochre }, black: { coat: PAL.black, trim: PAL.red }
+  champion: { coat: PAL.plum, trim: PAL.ochre }, black: { coat: PAL.black, trim: PAL.red }, muscovite: { coat: PAL.russet, trim: PAL.ochre }
 };
 
 /* ---------- sprites ---------- */
@@ -223,6 +223,72 @@ function drawField(v, b, t) {
       if (u.side !== 0 || !alive(u) || u.routing) continue;
       const n = u.name.split(' ')[0], X = u.x * sc, Y = (FY + u.y - 26) * sc;
       c.strokeText(n, X, Y); c.fillText(n, X, Y);
+    }
+  }
+}
+
+/* ---------- the map: a plain working map of the real lands, to be dressed in the period style later ---------- */
+const MAP_K = Math.cos(50 * Math.PI / 180);
+const MAP_ASPECT = (MAP_BOX.e - MAP_BOX.w) * MAP_K / (MAP_BOX.n - MAP_BOX.s);
+const MAP_SEAS = [['The Black Sea', 31.4, 45.2], ['The Sea of Azov', 36.9, 46.2], ['The Baltic Sea', 16.6, 55.35]];
+function drawMap(cv, st) {
+  if (!cv || !st) return;
+  cv.style.aspectRatio = String(MAP_ASPECT);
+  const w = cv.clientWidth || 900, h = w / MAP_ASPECT, dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  const g = cv.getContext('2d'), s = w / ((MAP_BOX.e - MAP_BOX.w) * MAP_K);
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const X = lon => (lon - MAP_BOX.w) * MAP_K * s, Y = lat => (MAP_BOX.n - lat) * s;
+  const at = id => [X(PLACES[id].lon), Y(PLACES[id].lat)];
+  const line = pts => { g.beginPath(); for (let i = 0; i < pts.length; i += 2) { if (i) g.lineTo(X(pts[i]), Y(pts[i + 1])); else g.moveTo(X(pts[i]), Y(pts[i + 1])); } };
+  // sea, then the land over it
+  g.fillStyle = '#bcbdb3'; g.fillRect(0, 0, w, h);
+  g.beginPath();
+  for (const ring of COAST) { for (let i = 0; i < ring.length; i += 2) { if (i) g.lineTo(X(ring[i]), Y(ring[i + 1])); else g.moveTo(X(ring[i]), Y(ring[i + 1])); } g.closePath(); }
+  g.fillStyle = PAL.paper; g.fill('evenodd');
+  g.strokeStyle = PAL.ink; g.lineWidth = 1; g.stroke();
+  g.lineJoin = 'round'; g.lineCap = 'round';
+  g.strokeStyle = PAL.blue; g.globalAlpha = 0.5; g.lineWidth = 1.4;
+  for (const k in RIVERS) { line(RIVERS[k]); g.stroke(); }
+  g.globalAlpha = 1;
+  // every road, then the roads open from here, then the road travelled
+  g.setLineDash([2, 3]); g.strokeStyle = 'rgba(28,26,23,.45)'; g.lineWidth = 1;
+  for (const r of ROADS) { if (r.river) continue; const a = at(r.a), b = at(r.b); g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); }
+  g.setLineDash([]);
+  const here0 = at(st.at), out = st.over ? [] : roadsFrom(st);
+  g.strokeStyle = PAL.ink; g.lineWidth = 2;
+  for (const r of out) { const b = at(r.to); g.beginPath(); g.moveTo(here0[0], here0[1]); g.lineTo(b[0], b[1]); g.stroke(); }
+  g.strokeStyle = PAL.red; g.lineWidth = 3;
+  g.beginPath(); st.path.forEach((id, i) => { const p = at(id); if (i) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]); }); g.stroke();
+  // places: a filled dot where there is a market, an open one where there is none
+  const q = questOf(st), named = new Set([st.at, q.to].concat(out.map(r => r.to), [q.from]));
+  for (const id in PLACES) {
+    const p = PLACES[id], xy = at(id), shop = (SERVICES[p.kind] || {}).market;
+    g.beginPath(); g.arc(xy[0], xy[1], 2.6, 0, Math.PI * 2);
+    g.fillStyle = shop ? PAL.ink : PAL.paper; g.fill(); g.strokeStyle = PAL.ink; g.lineWidth = 1.2; g.stroke();
+    if (p.major) named.add(id);
+  }
+  const dest = at(q.to);
+  g.strokeStyle = PAL.ochre; g.lineWidth = 3; g.beginPath(); g.arc(dest[0], dest[1], 7.5, 0, Math.PI * 2); g.stroke();
+  g.fillStyle = PAL.ink; g.fillRect(here0[0] - 1, here0[1] - 19, 2, 19);
+  g.fillStyle = PAL.red; g.beginPath(); g.moveTo(here0[0] + 1, here0[1] - 19); g.lineTo(here0[0] + 13, here0[1] - 15); g.lineTo(here0[0] + 1, here0[1] - 11); g.closePath(); g.fill();
+  // names, with a paper halo so they read over roads and rivers
+  const fs = Math.round(clamp(w / 82, 10, 14));
+  g.textBaseline = 'middle'; g.lineJoin = 'round';
+  g.font = 'italic ' + Math.round(fs * 1.1) + "px 'Alegreya', Georgia, serif"; g.fillStyle = PAL.blue; g.textAlign = 'center';
+  for (const m of MAP_SEAS) g.fillText(m[0], X(m[1]), Y(m[2]));
+  g.font = fs + "px 'Alegreya SC', Georgia, serif";
+  const boxes = [], hit = b => boxes.some(o => o[0] < b[0] + b[2] && b[0] < o[0] + o[2] && o[1] < b[1] + b[3] && b[1] < o[1] + o[3]);
+  for (const id of named) {
+    const xy = at(id), name = cap1(PLACES[id].name), tw = g.measureText(name).width, x = xy[0], y = xy[1];
+    const tries = [[x + 7, y, 'left'], [x - 7, y, 'right'], [x + 4, y + fs, 'left'], [x + 4, y - fs, 'left'], [x - 4, y + fs, 'right'], [x - 4, y - fs, 'right']];
+    for (const t of tries) {
+      const bx = t[2] === 'left' ? t[0] : t[0] - tw, box = [bx - 2, t[1] - fs / 2 - 1, tw + 4, fs + 2];
+      if (box[0] < 1 || box[0] + box[2] > w - 1 || box[1] < 1 || box[1] + box[3] > h - 1 || hit(box)) continue;
+      boxes.push(box);
+      g.textAlign = t[2]; g.lineWidth = 3.5; g.strokeStyle = PAL.paper; g.strokeText(name, t[0], t[1]);
+      g.fillStyle = id === st.at ? PAL.red : PAL.ink; g.fillText(name, t[0], t[1]);
+      break;
     }
   }
 }

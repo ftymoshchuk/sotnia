@@ -21,13 +21,18 @@ function newDemo() {
   demoWait = 0;
   drawField(ui.view, ui.demo, 0);
 }
-function nightfall() {
-  const r = endDay(G);
+// Back to camp, unless nobody is left under the banner.
+function toCamp() {
+  ui.screen = 'camp'; ui.open = null;
+  if (stranded(G)) { G.over = 'dissolved'; ui.screen = 'end'; ui.modal = null; return false; }
+  return true;
+}
+// After a march or a day in camp: show the news, then any ambush or camp event.
+function dayDone(r) {
   ui.news = r.lines;
-  if (!G.roster.length && (!G.recruits.length || G.thalers < Math.min.apply(null, G.recruits.map(x => x.price)))) { G.over = 'dissolved'; ui.screen = 'end'; ui.modal = null; return; }
-  ui.screen = 'camp';
-  if (r.event) ui.modal = { type: 'event' };
-  if (G.day >= DAYS) ui.tab = 'contracts';
+  if (!toCamp()) return;
+  if (r.ambush) ui.modal = { type: 'ambush' };
+  else if (r.event) ui.modal = { type: 'event' };
 }
 function setStance(s) {
   const b = ui.b; if (!b || b.over || b.retreated) return;
@@ -38,17 +43,32 @@ function setStance(s) {
 function act(a, d) {
   wake();
   switch (a) {
-    case 'new': G = newGame(); ui.screen = 'camp'; ui.tab = 'contracts'; ui.open = null; ui.news = null; ui.modal = null; break;
-    case 'continue': { const s = loadSave(); if (s) { G = s; ui.screen = 'camp'; ui.news = null; if (G.pending && G.pending.id) ui.modal = { type: 'event' }; } break; }
+    case 'new': G = newGame(d.q); ui.screen = 'camp'; ui.tab = 'market'; ui.open = null; ui.news = null; ui.modal = null; break;
+    case 'title': ui.screen = 'title'; ui.modal = null; break;
+    case 'continue': {
+      const s = loadSave(); if (!s) break;
+      G = s; ui.screen = 'camp'; ui.tab = 'market'; ui.news = null;
+      ui.modal = G.ambush ? { type: 'ambush' } : G.pending && G.pending.id ? { type: 'event' } : null;
+      break;
+    }
     case 'tab': ui.tab = d.k; break;
     case 'open': ui.open = ui.open === +d.id ? null : +d.id; break;
     case 'order': { const s = man(+d.id); if (s) s.order = d.o; break; }
     case 'promo': promote(G, +d.id, d.k); G.odds = {}; break;
-    case 'up': upgrade(G, +d.id, d.k); break;
+    case 'up': if (has(G, 'market')) upgrade(G, +d.id, d.k); break;
     case 'dismiss': dismiss(G, +d.id); ui.open = null; break;
-    case 'hire': hire(G, +d.i); break;
-    case 'buy': buy(G, d.k); break;
-    case 'staff': hireStaff(G, d.k); break;
+    case 'hire': if (has(G, 'recruits')) hire(G, +d.i); break;
+    case 'buy': if (has(G, 'market')) buy(G, d.k); break;
+    case 'staff': if (has(G, 'staff')) hireStaff(G, d.k); break;
+    case 'sell': sellCargo(G, +d.n); break;
+    case 'march': { const r = march(G, +d.r, d.f === '1'); if (!r) return; dayDone(r); break; }
+    case 'halt': dayDone(campDay(G)); break;
+    case 'deliver': if (!deliver(G)) return; ui.screen = 'end'; ui.modal = null; break;
+    case 'payoff': if (!payOff(G, d.k)) return; ui.modal = null; break;
+    case 'fightambush': {
+      const c = G.ambush; if (!c) return;
+      ui.c = c; ui.pick = defaultPick(G, c); ui.stance = null; ui.modal = null; ui.screen = 'muster'; queueOdds(); break;
+    }
     case 'muster': { const c = G.contracts.find(x => x.id === +d.id); if (!c) return; ui.c = c; ui.pick = defaultPick(G, c); ui.stance = null; ui.screen = 'muster'; queueOdds(); break; }
     case 'pick': {
       const id = +d.id, i = ui.pick.indexOf(id);
@@ -56,7 +76,7 @@ function act(a, d) {
       queueOdds(); break;
     }
     case 'stance': ui.stance = d.s; break;
-    case 'back': ui.screen = 'camp'; break;
+    case 'back': if (ui.c && ui.c.ambush) return; ui.screen = 'camp'; break;
     case 'fight': {
       if (!ui.pick.length) return;
       ui.b = battleFor(G, ui.c, ui.pick, ui.stance || (ui.odds ? ui.odds.best : 'advance'), true);
@@ -66,11 +86,11 @@ function act(a, d) {
     case 'retreat': if (ui.b) { orderRetreat(ui.b); paintHud(); } return;
     case 'speed': ui.speed = +d.v; paintHud(); return;
     case 'report': if (!ui.b || !ui.b.over) return; ui.rep = resolveBattle(G, ui.c, ui.b); ui.b = null; ui.screen = 'report'; break;
-    case 'camp': if (G.over) ui.screen = 'end'; else nightfall(); break;
-    case 'endday': nightfall(); break;
+    // After an ambush the company goes on to where it was bound; paid work took the day.
+    case 'camp': if (G.over) ui.screen = 'end'; else if (ui.rep && ui.rep.ambush) toCamp(); else dayDone(campDay(G)); break;
     case 'choice': { const e = EVENTS.find(x => x.id === (G.pending && G.pending.id)); const res = applyEvent(G, +d.i); ui.modal = { type: 'result', title: e ? e.title : '', text: res }; break; }
-    case 'close': { const was = ui.modal; ui.modal = null; if (was && was.type === 'help') { renderModal(); return; } break; }
-    case 'help': ui.modal = { type: 'help', prev: ui.modal }; renderModal(); return;
+    case 'close': { const was = ui.modal; ui.modal = null; if (was && was.type === 'help') { ui.modal = was.prev || null; renderModal(); return; } break; }
+    case 'help': if (ui.modal && ui.modal.type === 'help') return; ui.modal = { type: 'help', prev: ui.modal }; renderModal(); return;
     case 'sound': {
       ui.sound = !ui.sound; try { localStorage.setItem('sotnia-sound', ui.sound ? 'on' : 'off'); } catch (e) { /* fine */ }
       document.querySelectorAll('[data-act="sound"]').forEach(el => { el.textContent = 'Sound ' + (ui.sound ? 'on' : 'off'); });
@@ -82,7 +102,6 @@ function act(a, d) {
       if (ui.music) { wake(); setCue(cueForScreen()); } else setCue(null);
       return;
     }
-    case 'disband': G.over = 'dissolved'; ui.screen = 'end'; break;
     default: return;
   }
   render();
@@ -95,7 +114,7 @@ document.addEventListener('keydown', e => {
   if (k && !(ui.c.duel && k === 'hold')) setStance(k);
   else if (e.key === ' ' && !(e.target.closest && e.target.closest('button'))) { e.preventDefault(); ui.speed = ui.speed ? 0 : 1; paintHud(); }
 });
-window.addEventListener('resize', () => { if (ui.view) fitView(ui.view); });
+window.addEventListener('resize', () => { if (ui.view) fitView(ui.view); if (ui.screen === 'camp' && G) drawMap($('#map'), G); });
 document.addEventListener('visibilitychange', () => { if (AC) setCue(document.hidden ? null : cueForScreen()); });
 
 /* ---------- the loop ---------- */
@@ -122,7 +141,7 @@ function frame(now) {
 
 /* ---------- boot ---------- */
 function start(data) {
-  if (data && data.G && data.G.v === 1) { G = data.G; ui.screen = G.over ? 'end' : 'camp'; }
+  if (data && data.G && data.G.v === 2) { G = data.G; ui.screen = G.over ? 'end' : 'camp'; }
   render();
   requestAnimationFrame(frame);
   if (document.fonts && document.fonts.load) document.fonts.load("12px 'Alegreya SC'").catch(() => {});

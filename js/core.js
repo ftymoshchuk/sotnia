@@ -6,7 +6,6 @@ const pick = a => a[Math.floor(Math.random() * a.length)];
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const chance = p => Math.random() < p;
 
-const DAYS = 24;
 const ROSTER_MAX = 8;
 
 const CLS = {
@@ -59,7 +58,7 @@ const TRAITS = {
   'Hardy':      { good: true,  desc: 'Takes more killing than most.' },
   'Lucky':      { good: true,  desc: 'Tends to survive what should kill him.' },
   'Skittish':   { good: false, desc: 'Runs sooner than the others.' },
-  'Grasping':   { good: false, desc: 'Wants two thalers more a day.' }
+  'Grasping':   { good: false, desc: 'Wants three thalers more a month.' }
 };
 
 const SCARS = [
@@ -70,10 +69,10 @@ const SCARS = [
 ];
 
 const STAFF = {
-  surgeon:  { name: 'Barber-surgeon', fee: 40, wage: 2, desc: 'Rest heals faster. Men struck down die less often.' },
-  drill:    { name: 'Drillmaster',    fee: 45, wage: 2, desc: 'A day of drill teaches half as much again.' },
-  qm:       { name: 'Quartermaster',  fee: 30, wage: 1, desc: 'The company eats a quarter less. Market prices fall 15%.' },
-  chaplain: { name: 'Field chaplain', fee: 25, wage: 1, desc: 'Spirits rise a little every day.' }
+  surgeon:  { name: 'Barber-surgeon', fee: 40, wage: 6, desc: 'Rest heals faster. Men struck down die less often.' },
+  drill:    { name: 'Drillmaster',    fee: 45, wage: 6, desc: 'A day of drill teaches half as much again.' },
+  qm:       { name: 'Quartermaster',  fee: 30, wage: 3, desc: 'The company eats a quarter less. Market prices fall 15%.' },
+  chaplain: { name: 'Field chaplain', fee: 25, wage: 3, desc: 'Spirits rise a little every day.' }
 };
 
 /* ---------- soldiers ---------- */
@@ -100,7 +99,7 @@ function makeSoldier(st, cls, level, origin) {
   return s;
 }
 const xpNeed = level => 30 + level * 18;
-const wageOf = s => 1 + s.level + (s.trait === 'Grasping' ? 2 : 0);
+const wageOf = s => 3 + 2 * s.level + (s.trait === 'Grasping' ? 3 : 0); // thalers a month
 const rating = s => s.vig / 8 + s.mel + (s.cls === 'shot' ? s.aim : 0) + s.grd * 0.6 + s.wpn * 2 + s.arm * 2;
 function levelUps(st, L) {
   for (const s of st.roster) {
@@ -127,7 +126,7 @@ function enemyUnit(cls, tier, skin) {
 
 /* ---------- economy ---------- */
 const priceMul = st => (st.staff.qm ? 0.85 : 1);
-const breadPrice = st => Math.round(8 * priceMul(st));
+const breadPrice = st => Math.round(4 * priceMul(st));
 const powderPrice = st => Math.round(14 * priceMul(st));
 const gearPrice = (st, tier) => Math.round(GEAR_COST[tier] * priceMul(st));
 function wagesDue(st) {
@@ -137,7 +136,7 @@ function wagesDue(st) {
   return w;
 }
 const breadDue = st => Math.ceil(st.roster.length * (st.staff.qm ? 0.75 : 1));
-function logLine(st, t) { st.log.unshift({ d: st.day, t }); if (st.log.length > 80) st.log.length = 80; }
+function logLine(st, t) { st.log.unshift({ d: st.day, n: st.date, t }); if (st.log.length > 120) st.log.length = 120; }
 
 function genRecruits(st) {
   const top = clamp(1 + Math.floor(st.renown / 18), 1, 4);
@@ -145,7 +144,7 @@ function genRecruits(st) {
   const want = ['pike', 'shot', 'sabre'].sort(() => Math.random() - 0.5);
   for (let i = 0; i < 3; i++) {
     const lv = ri(1, top);
-    const s = makeSoldier(st, want[i], lv);
+    const s = makeSoldier(st, want[i], lv, originFor(want[i], here(st).land));
     const good = s.trait && TRAITS[s.trait].good ? 6 : 0;
     const bad = s.trait && !TRAITS[s.trait].good ? -5 : 0;
     st.recruits.push({ s, price: Math.round((20 + lv * 14 + good + bad + ri(-2, 3)) * priceMul(st)) });
@@ -221,7 +220,7 @@ function rollWeather() { const r = Math.random(); return r < 0.6 ? 'clear' : r <
 const GRADE = { easy: { dn: -1, dq: -0.5, pay: 1 }, fair: { dn: 0, dq: 0, pay: 1 }, hard: { dn: 1, dq: 0.35, pay: 1.15 } };
 function powerOf(units) { let p = 0; for (const u of units) p += COST[u.tier]; return p * (1 + 0.12 * (units.length - 1)); }
 function makeContract(st, tpl, grade) {
-  const day = st.day, G = GRADE[grade];
+  const day = threat(st), G = GRADE[grade];
   const dayN = 3 + Math.floor((day - 1) / 5), mine = st.roster.length;
   const n = clamp(grade === 'easy' ? Math.min(dayN - 1, mine - 1) : grade === 'fair' ? Math.min(dayN, Math.max(mine, 3)) : dayN + 1, 2, 8);
   const q = clamp(0.3 + (day - 1) / 10 + G.dq + (tpl.tier - 1) * 0.3, 0, 2.7);
@@ -234,13 +233,13 @@ function makeContract(st, tpl, grade) {
   return {
     id: st.nextId++, tpl: tpl.id, title: tpl.title, who: tpl.who, text: tpl.text, skin: tpl.skin, foe: tpl.foe,
     units, ai: tpl.ai, grade, weather: rollWeather(), ttl: ri(2, 4), bonus: tpl.bonus || null,
-    pay: Math.round((18 + 18 * powerOf(units)) * G.pay * (1 + st.renown / 250)),
+    pay: Math.round((11 + 11 * powerOf(units)) * G.pay * (1 + st.renown / 250)),
     renown: grade === 'easy' ? 3 : grade === 'hard' ? 8 : 5,
     cap: clamp(n + (grade === 'easy' ? 1 : 0), 2, ROSTER_MAX)
   };
 }
 function makeDuel(st) {
-  const tier = st.day < 8 ? 1 : st.day < 16 ? 2 : 3;
+  const tl = threat(st), tier = tl < 8 ? 1 : tl < 16 ? 2 : 3;
   const u = enemyUnit('sabre', tier, 'champion');
   u.morale = 70;
   const who = pick(['A rotmistrz of the Crown horse', 'A Saxon captain', 'A Hungarian nobleman', 'The colonel of a rival company']);
@@ -248,9 +247,10 @@ function makeDuel(st) {
     id: st.nextId++, tpl: 'duel', duel: true, title: 'An affair of honour', who,
     text: 'Your banner has been called a rabble of horse-thieves at table. One man from each side, cold steel, until one yields.',
     skin: 'champion', foe: 'a hired blade', units: [u], ai: 'advance', grade: 'duel', weather: 'clear', ttl: 2, bonus: null,
-    pay: 22 + st.day * 2, renown: 7, cap: 1
+    pay: 22 + tl * 2, renown: 7, cap: 1
   };
 }
+// The Black Regiment: out of the journey until it returns as a set piece on the road.
 function finalContract(st) {
   const mix = [['pike', 3], ['pike', 2], ['pike', 1], ['shot', 2], ['shot', 2], ['sabre', 3], ['sabre', 2]];
   return {
@@ -263,15 +263,18 @@ function finalContract(st) {
 function genContracts(st) {
   const have = new Set(st.contracts.map(c => c.grade));
   const used = new Set(st.contracts.map(c => c.tpl));
+  const tl = threat(st), land = here(st).land;
+  const fits = t => tl >= t.min && tl <= t.max && (!t.lands || t.lands.includes(land));
   for (const g of ['easy', 'fair', 'hard']) {
     if (have.has(g)) continue;
-    let pool = TEMPLATES.filter(t => st.day >= t.min && st.day <= t.max && !used.has(t.id));
-    if (!pool.length) pool = TEMPLATES.filter(t => st.day >= t.min && st.day <= t.max);
+    let pool = TEMPLATES.filter(t => fits(t) && !used.has(t.id));
+    if (!pool.length) pool = TEMPLATES.filter(fits);
+    if (!pool.length) continue;
     const tpl = pick(pool);
     used.add(tpl.id);
     st.contracts.push(makeContract(st, tpl, g));
   }
-  if (!have.has('duel') && st.day > 2 && chance(0.22)) st.contracts.push(makeDuel(st));
+  if (!have.has('duel') && chance(0.22)) st.contracts.push(makeDuel(st));
 }
 
 /* ---------- battle ---------- */
@@ -580,7 +583,7 @@ function oddsWord(p) {
 /* ---------- aftermath ---------- */
 function resolveBattle(st, c, b) {
   const won = b.winner === 0 && !b.retreated;
-  const rep = { won, retreated: !!b.retreated, draw: !!b.draw, lines: [], pay: 0, loot: null, renown: 0, dead: [], title: c.title, final: !!c.final, duel: !!c.duel, shots: b.shots, secs: Math.round(b.t) };
+  const rep = { won, retreated: !!b.retreated, draw: !!b.draw, lines: [], pay: 0, loot: null, renown: 0, dead: [], title: c.title, final: !!c.final, duel: !!c.duel, ambush: !!c.ambush, foe: c.foe, cargoLost: 0, shots: b.shots, secs: Math.round(b.t) };
   st.powder = Math.max(0, b.powder);
   st.stats.battles++; if (won) st.stats.won++;
   for (const u of b.units) {
@@ -596,7 +599,7 @@ function resolveBattle(st, c, b) {
       if (chance(p)) {
         line.fate = 'killed';
         st.roster = st.roster.filter(r => r !== s);
-        st.stats.dead.push({ name: s.name, cls: s.cls, origin: s.origin, day: st.day, where: c.title, level: s.level, kills: s.kills });
+        st.stats.dead.push({ name: s.name, cls: s.cls, origin: s.origin, day: st.day, date: st.date, where: c.title, level: s.level, kills: s.kills });
         rep.dead.push(s.name);
       } else {
         s.hp = Math.max(1, Math.round(s.vig * 0.12)); s.wound = ri(3, 5); s.order = 'rest'; line.fate = 'struck down';
@@ -622,13 +625,18 @@ function resolveBattle(st, c, b) {
     const loot = { bread: ri(0, 3), powder: c.duel ? 0 : ri(0, 3) };
     if (c.bonus) for (const k in c.bonus) loot[k] = (loot[k] || 0) + c.bonus[k];
     st.bread += loot.bread; st.powder += loot.powder; rep.loot = loot;
-    logLine(st, 'Won: ' + c.title + '. ' + c.pay + ' thalers paid.' + (rep.dead.length ? ' Buried: ' + rep.dead.join(', ') + '.' : ''));
+    logLine(st, (c.ambush ? 'Beat off ' + c.foe + ' on the road.' : 'Won: ' + c.title + '. ' + c.pay + ' thalers paid.') + (rep.dead.length ? ' Buried: ' + rep.dead.join(', ') + '.' : ''));
+  } else if (c.ambush) {
+    const n = raidLoss(st, b.retreated);
+    st.cargo -= n; st.stats.lost.raid += n; rep.cargoLost = n;
+    logLine(st, (b.retreated ? 'Fell back before ' : 'Beaten by ') + c.foe + ' on the road. ' + n + ' ' + cargoName(st, n) + ' lost.' + (rep.dead.length ? ' Buried: ' + rep.dead.join(', ') + '.' : ''));
   } else {
     const pen = b.retreated ? 3 : 5;
     rep.renown = -Math.min(pen, st.renown); st.renown = Math.max(0, st.renown - pen);
     logLine(st, (b.retreated ? 'Withdrew from: ' : 'Beaten at: ') + c.title + '.' + (rep.dead.length ? ' Buried: ' + rep.dead.join(', ') + '.' : ''));
   }
   st.contracts = st.contracts.filter(x => x.id !== c.id);
+  if (c.ambush) st.ambush = null;
   levelUps(st);
   st.odds = {};
   if (c.final) st.over = won ? 'victory' : 'defeat';
@@ -728,58 +736,4 @@ function applyEvent(st, i) {
   logLine(st, e.title + ': ' + res);
   st.pending = null; st.odds = {};
   return res;
-}
-
-/* ---------- days ---------- */
-function newGame() {
-  const st = {
-    v: 1, day: 1, thalers: 60, bread: 20, powder: 14, renown: 0, roster: [], recruits: [], contracts: [],
-    staff: { surgeon: false, drill: false, qm: false, chaplain: false }, log: [], seen: [], pending: null, over: null,
-    nextId: 1, odds: {}, stats: { battles: 0, won: 0, kills: 0, earned: 0, deserted: 0, dead: [] }
-  };
-  st.roster.push(makeSoldier(st, 'pike', 1), makeSoldier(st, 'shot', 1), makeSoldier(st, 'sabre', 1));
-  st.roster.forEach(s => { if (s.trait && !TRAITS[s.trait].good) s.trait = null; });
-  genRecruits(st); genContracts(st);
-  logLine(st, 'A banner is raised outside Kraków. Three men stand under it.');
-  return st;
-}
-function endDay(st) {
-  const L = [];
-  for (const s of st.roster) {
-    if (s.wound > 0) {
-      s.wound--; s.hp = Math.min(s.vig, s.hp + (st.staff.surgeon ? 7 : 4));
-      if (s.wound === 0) L.push(s.name + ' is back on his feet.');
-    } else if (s.fought) s.hp = Math.min(s.vig, s.hp + 2);
-    else if (s.order === 'rest') { s.hp = Math.min(s.vig, s.hp + (st.staff.surgeon ? 16 : 10)); s.morale = clamp(s.morale + 4, 0, 100); }
-    else if (s.order === 'forage') { st.bread += ri(1, 3); s.hp = Math.min(s.vig, s.hp + 2); s.xp += 3; }
-    else { s.xp += st.staff.drill ? 15 : 10; s.hp = Math.min(s.vig, s.hp + 2); }
-    s.fought = false;
-  }
-  const w = wagesDue(st);
-  if (st.thalers >= w) st.thalers -= w;
-  else { st.thalers = 0; all(st, s => bump(s, 'morale', -12)); if (st.roster.length) L.push('The pay chest is empty. The men go unpaid.'); }
-  const need = breadDue(st);
-  if (st.bread >= need) st.bread -= need;
-  else { st.bread = 0; all(st, s => { bump(s, 'morale', -9); bump(s, 'hp', -5); }); if (st.roster.length) L.push('No bread. The company goes hungry.'); }
-  all(st, s => { if (st.staff.chaplain) bump(s, 'morale', 3); if (s.morale < 55) s.morale++; else if (s.morale > 82) s.morale--; });
-  for (const s of st.roster.slice()) {
-    if (s.morale < 15 && chance(0.45)) { st.roster = st.roster.filter(r => r !== s); st.stats.deserted++; L.push(s.name + ' deserts in the night.'); }
-  }
-  levelUps(st, L);
-  st.day++;
-  st.contracts.forEach(c => c.ttl--);
-  st.contracts = st.contracts.filter(c => c.ttl > 0);
-  if (st.day >= DAYS) {
-    st.day = DAYS; st.contracts = [finalContract(st)]; st.thalers += 60; st.powder += 10; genRecruits(st);
-    L.push("The Hetman's drums are beating. The Black Regiment holds the ford.");
-    L.push("The Hetman's paymaster advances 60 thalers and ten charges of powder against the day.");
-  } else {
-    genContracts(st);
-    if ((st.day - 1) % 3 === 0) genRecruits(st);
-  }
-  st.odds = {};
-  L.forEach(x => logLine(st, x));
-  let ev = null;
-  if (st.day < DAYS && st.roster.length && chance(0.4)) ev = rollEvent(st);
-  return { lines: L, event: ev };
 }
