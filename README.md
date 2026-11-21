@@ -37,7 +37,8 @@ npm run typecheck   # check the types without writing anything
 | `src/core.ts` | The rules of the company, with no DOM: troop classes, origins, traits, soldiers, economy, contracts, the battle simulation, scouting odds, aftermath and camp events |
 | `src/journey.ts` | The rules of the road, with no DOM: the calendar, the lands, places and roads of 1633, quests, travel days, cargo, ambushes, selling and delivery |
 | `src/geo.ts` | Coastlines and rivers for the map (drawing data only) |
-| `src/art.ts` | Palette, pixel sprites (standing, sitting, lying, foraging, and the baggage train's people), the woodcut backdrop, the battlefield and its particles, the camp at night, the pictures on the cards, and the map |
+| `src/art.ts` | Palette, the woodcut backdrop, the battlefield and its particles, the camp at night, the pictures on the cards, and the map |
+| `src/figures.ts` | Every man, hired hand and foe, drawn at twice the pixels of the scene around him and dressed in the weapon and armour he has bought; the pictures of gear for the cards; and the call that puts a scene on the screen |
 | `src/music.ts` | The music engine, which knows nothing of the game: it reads a score, composes as it plays and synthesises every note with Web Audio (there are no recordings) |
 | `src/score.ts` | The game's music, written out: the journey's pieces, the muster, the fight and the flourishes after it |
 | `src/audio.ts` | Sound effects, and starting the right music for each screen |
@@ -46,8 +47,9 @@ npm run typecheck   # check the types without writing anything
 | `src/main.ts` | Click and key handling, the frame loop and boot |
 | `js/` | The scripts the page loads, one for each file in `src/`, written by `npm run build`. Generated: never edited by hand |
 | `package.json`, `tsconfig.json` | TypeScript, the only dependency, and the compiler settings: strict, with every file a script (see below) |
-| `tests/` | Headless tests of the rules and the music (they load the compiled `js/`), and the guard that keeps every workflow action pinned |
+| `tests/` | Headless tests of the rules, the music and the figures (they load the compiled `js/`), and the guard that keeps every workflow action pinned |
 | `.github/` | CI, which ends in the `ci-passed` check, and Dependabot for the action pins and TypeScript |
+| `docs/figures.html` | A sheet of every figure, weapon and piece of armour, drawn by the game's own scripts: open it after `npm run build`, or with `?zoom=6` for larger pixels |
 | `docs/default-branch.ruleset.json` | The branch rules for `main` |
 | `scripts/apply-ruleset.sh` | Puts those rules on the repository, and checks them |
 
@@ -64,6 +66,7 @@ Keep `src/core.ts` and `src/journey.ts` free of DOM access. The scouts' odds com
 - **Battle behaviour:** `stepBattle`, `strike`, `fire` and `moraleTick` in `src/core.ts`.
 - **Camp events:** add entries to `EVENTS` in `src/core.ts`. Give each choice an `fx` list of `[icon, amount, what]` as well as its `hint`: the dialog shows those as chips, and falls back to the hint where there are none.
 - **The look:** every man, recruit, supply, job, member of the baggage train, opening order and fallen man is a card, built by `cardHTML()` in `src/screens.ts`: a name banner, a picture, the body, and a type bar coloured by kind, with the price or wage on a coin at its left. Icons stand in for words wherever a number says enough; the word stays for screen readers and on hover.
+- **Kit:** each man has a weapon level and an armour level, `wpn` and `arm`, from 0 to 3. Their names are `WPN` (for each class) and `ARM`, their prices `GEAR_COST`, and `upgrade()` buys the next level. The levels change what he does in a fight (`wpn` adds to the damage of his blows, `arm` to the armour that turns them) and what he looks like: see [Figures](#figures). A card shows each slot as a ladder of its four pieces (`gearHTML()` in `src/screens.ts`), and shows the man in the next piece while its button is under the pointer. Foes wear the gear of their tier.
 - **The camp:** `campPlan()` in `src/art.ts` puts each man where his order sends him (by the fire to rest, the drill yard, out foraging, or abed by the tent), and `drawCamp()` draws the night, the fire and the men walking between places. The slots are in `CAMP`.
 - **Music:** what plays is in `src/score.ts`: each piece's ground, tunes and figures, and the cues that say which pieces play on which screen and how loud each cue is against the others. `MUSIC_LEVEL` in `src/audio.ts` sets the loudness of all of it, and the instruments are `SOUNDS` in `src/music.ts`. See [Music](#music).
 - **Saves:** the state built by `newGame()` is a `Campaign` (in `src/journey.ts`) and carries `v: 2`, and `loadSave()` ignores any other version. Bump it when the shape of `Campaign` changes, so old saves are dropped instead of loading broken.
@@ -91,6 +94,13 @@ npm test
 - the music rests between pieces.
 
 It also plays every cue for ten minutes against `tests/webaudio-stub.js`, a stand-in for Web Audio that throws wherever a browser would. In the game a throw from the music would only mean silence, so it is caught here instead.
+
+`tests/figures.test.js` loads the figures against a canvas that records each rectangle painted, which is enough to check that:
+
+- every level of weapon and of armour changes a man's picture, in every class and in every pose where the weapon is in his hand;
+- every pose, in every kit, fits the frame the cards and the field leave for it;
+- a man who faces left is exactly the mirror of one who faces right, and the same man is drawn the same each time;
+- the pictures of gear differ at every level, and a battle unit and a line of the report carry the gear the picture shows.
 
 `main` carries the same branch ruleset as the Sigrix public repositories (see `docs/new-repository.md` in `sigrix-io/actions`):
 
@@ -135,6 +145,25 @@ src.buffer = await MUSIC.render(SCORE, 'camp', 120, { seed: 1, level: 0.1 });
 src.connect(ac.destination); src.start();
 ```
 
+## Figures
+
+`src/figures.ts` draws every man. A figure has twice the pixels of the scene it stands in (`SS`, so a man is about 40 pixels tall where he used to be 18), which is room for a buckle, the lock of a musket and the comb of a helmet. The woodcut backdrops keep their coarse pixels and the men stand in front of them. A scene that holds figures keeps a canvas `SS` times larger, made by `sceneCanvas()`, whose context is scaled so that the scene's own coordinates draw as before; the field, the camp and every card picture are made so. `present()` puts such a buffer on the screen, blowing it up by a whole number before shrinking it the rest of the way, so that its pixels are all the same size on a screen that is not a whole number of times as big.
+
+A figure is layers, drawn from the feet up in pixels from his feet (x forward, y up as a negative number), so that a man who faces left is the same drawing mirrored: legs, the coat and whatever armour he wears over it (`torso()`), his head, what is on it (`hat()`), his weapon, and his arms. `drawSoldier()` is given what he is (`cls`, his livery `skin`), what he has (`wpn`, `arm`, levels 0 to 3), which man he is (`man`, which settles his hair and moustache), and what he is doing (`mode`, `moving`, `swing`, `flash`; see `SoldierLook` in `src/art.ts`). `drawCamper()` adds the poses of camp, and `drawCivilian()` the hired hands.
+
+What each level looks like:
+
+| Level | Armour | Pike | Musket | Sabre |
+| --- | --- | --- | --- | --- |
+| 0 | Linen shirt, in the company's colour | Ash pike, a small leaf of iron | Old arquebus: short, dark, a bare serpentine | Notched sabre, dull iron |
+| 1 | Buff coat; the company's colour moves to the sleeves and a sash | Ironbound pike: a longer head, straps down the shaft | Matchlock musket: banded barrel, ramrod, a glowing match | Hungarian sabre: steel, with a knuckle bow |
+| 2 | Breastplate and gorget, a brass belt buckle | Partisan: a broad blade with lugs, and a tassel | Dutch musket: the longest, in walnut with brass | Karabela: a brighter blade, the bird's-head pommel |
+| 3 | Cuirass, shoulder plates and tassets, and the plume of the finest hat | Master's halberd: an axe blade, a spike and a beak, gilt | Wheel-lock: shorter, black and gilt, a steel wheel and no match | Damascened sabre: streaked steel, a gilt hilt and a tassel |
+
+Hats grow with the armour too: a pikeman's morion gains a brass band and, at the top, a plume; a musketeer's hat a bigger plume, a brooch and a gilt band; a sabreur's cap a clasp and a feather. A musketeer in armour wears a flask of powder where a lighter man has his bandolier.
+
+To add a level or change one, edit the part for its class (`musketArt()`, `pikeArt()` or `sabreArt()` in the frame of the weapon itself: `a` runs along it from the butt and `c` across it, so one drawing serves a musket held level and held upright) or `torso()`. To add a pose, add a branch to `drawSoldier()`; the figure tests then draw it in every kit and check that it fits. `gearArt()` draws the pictures of weapons and armour that the cards show in their ladders, from the same code. Open `docs/figures.html` to see everything at once.
+
 ## Data
 
 Coastlines come from Natural Earth's 1:50m land, which is in the public domain. Dates are shown in both calendars of the time: Gregorian, kept in Catholic Poland, and Julian, ten days behind, kept in Saxony and Orthodox Ukraine.
@@ -150,5 +179,7 @@ git show $(git rev-list --max-parents=0 HEAD):index.html > sotnia-original.html
 The next commit split that file into separate files without changing the code. After that, the 24-day campaign and its final battle with the Black Regiment gave way to the journey ([issue 1](https://github.com/ftymoshchuk/sotnia/issues/1)). The Black Regiment is meant to come back as a set piece on the road.
 
 Then the scripts became TypeScript: written in `src/` under `strict`, and compiled to the `js/` files the page loads. Nothing a player can see was meant to change, and three checks say nothing did. Each compiled script has the same syntax tree as the JavaScript it replaced (the comparison ignores layout and comments, but not a single name, operator or literal). Every comment of the original survives into `js/`. And a browser run that clicked through 1,600 steps of the old game, with fights, marches, trading and the map, is reproduced step for step by the new one. The last hand-written JavaScript is at `git show bca68a2:js/core.js`, and likewise for the other nine scripts.
+
+After that the men were redrawn at twice the pixels, and dressed in the weapon and armour they have bought: until then the rules had levels of gear but the picture never showed them. See [Figures](#figures).
 
 `src/main.ts` still checks for `window.claude.hot`. That only exists inside the Claude artifact runtime, where it keeps the campaign across hot reloads. Everywhere else it is absent and the game boots normally.
