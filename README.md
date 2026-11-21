@@ -66,7 +66,7 @@ Keep `src/core.ts` and `src/journey.ts` free of DOM access. The scouts' odds com
 - **The look:** every man, recruit, supply, job, member of the baggage train, opening order and fallen man is a card, built by `cardHTML()` in `src/screens.ts`: a name banner, a picture, the body, and a type bar coloured by kind, with the price or wage on a coin at its left. Icons stand in for words wherever a number says enough; the word stays for screen readers and on hover.
 - **The camp:** `campPlan()` in `src/art.ts` puts each man where his order sends him (by the fire to rest, the drill yard, out foraging, or abed by the tent), and `drawCamp()` draws the night, the fire and the men walking between places. The slots are in `CAMP`.
 - **Music:** what plays is in `src/score.ts`: each piece's ground, tunes and figures, and the cues that say which pieces play on which screen and how loud each cue is against the others. `MUSIC_LEVEL` in `src/audio.ts` sets the loudness of all of it, and the instruments are `SOUNDS` in `src/music.ts`. See [Music](#music).
-- **Saves:** the state built by `newGame()` carries `v: 2`, and `loadSave()` ignores any other version. Bump it when the shape of the state changes, so old saves are dropped instead of loading broken.
+- **Saves:** the state built by `newGame()` is a `Campaign` (in `src/journey.ts`) and carries `v: 2`, and `loadSave()` ignores any other version. Bump it when the shape of `Campaign` changes, so old saves are dropped instead of loading broken.
 
 ## Checks and branch rules
 
@@ -147,5 +147,7 @@ git show $(git rev-list --max-parents=0 HEAD):index.html > sotnia-original.html
 ```
 
 The next commit split that file into separate files without changing the code. After that, the 24-day campaign and its final battle with the Black Regiment gave way to the journey ([issue 1](https://github.com/ftymoshchuk/sotnia/issues/1)). The Black Regiment is meant to come back as a set piece on the road.
+
+Then the scripts became TypeScript: written in `src/` under `strict`, and compiled to the `js/` files the page loads. Nothing a player can see was meant to change, and three checks say nothing did. Each compiled script has the same syntax tree as the JavaScript it replaced (the comparison ignores layout and comments, but not a single name, operator or literal). Every comment of the original survives into `js/`. And a browser run that clicked through 1,600 steps of the old game, with fights, marches, trading and the map, is reproduced step for step by the new one. The last hand-written JavaScript is at `git show bca68a2:js/core.js`, and likewise for the other nine scripts.
 
 `src/main.ts` still checks for `window.claude.hot`. That only exists inside the Claude artifact runtime, where it keeps the campaign across hot reloads. Everywhere else it is absent and the game boots normally.

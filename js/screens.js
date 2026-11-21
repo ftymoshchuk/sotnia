@@ -1,7 +1,7 @@
 "use strict";
 /* ===== SOTNIA interface: screens (shared state, saving, the HTML for every screen) ===== */
 const $ = (s, r) => (r || document).querySelector(s);
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const pct = (a, b) => clamp(Math.round(100 * a / b), 0, 100);
 const ORDER = { drill: 'Drill', rest: 'Rest', forage: 'Forage' };
 const STANCE = {
@@ -21,7 +21,8 @@ const STAFF_FX = {
 };
 const LOOK = { pike: 'woad', shot: 'steel', sabre: 'madder' };
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
-const roman = n => ROMAN[n] || String(n);
+const roman = (n) => ROMAN[n] || String(n);
+// The campaign in play: null until one is raised or continued, so on the title screen.
 let G = null;
 const ui = { screen: 'title', tab: 'market', course: null, open: null, c: null, pick: [], stance: null, odds: null, b: null, speed: 1, rep: null, modal: null, news: null, sound: true, music: true, view: null, camp: null, campPos: {}, demo: null, overT: 0, verdict: false };
 /* ---------- saving ---------- */
@@ -46,14 +47,14 @@ try {
 }
 catch (e) { /* default on */ }
 /* ---------- small parts: every screen is built from these ---------- */
-const man = id => G.roster.find(s => s.id === id);
-const foeName = u => TIER[u.tier] + ' ' + CLS[u.cls].name.toLowerCase();
+const man = (id) => G.roster.find(s => s.id === id);
+const foeName = (u) => TIER[u.tier] + ' ' + CLS[u.cls].name.toLowerCase();
 const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
 const DANGER = ['A quiet road', 'Robbers about', 'Dangerous country', 'Deadly country'];
-const sr = t => '<span class="sr">' + t + '</span>';
+const sr = (t) => '<span class="sr">' + t + '</span>';
 const meter = (kind, v, max) => '<span class="meter ' + kind + '"><i style="width:' + pct(v, max) + '%"></i></span>';
 const pips = (n, of, label) => '<span class="pips" role="img" aria-label="' + esc(label) + '">' + Array.from({ length: of }, (_, i) => '<i' + (i < n ? ' class="on"' : '') + '></i>').join('') + '</span>';
-const oddsPips = p => (p >= 0.85 ? 5 : p >= 0.65 ? 4 : p >= 0.42 ? 3 : p >= 0.2 ? 2 : 1);
+const oddsPips = (p) => (p >= 0.85 ? 5 : p >= 0.65 ? 4 : p >= 0.42 ? 3 : p >= 0.2 ? 2 : 1);
 // An icon and its number; the word is there for screen readers and on hover.
 const stat = (icon, v, label) => '<span class="st" title="' + esc(label) + '">' + ic(icon) + '<b>' + v + '</b>' + sr(' ' + esc(label)) + '</span>';
 // An effect: an icon, an amount and what it is of, coloured by whether it helps.
@@ -61,7 +62,7 @@ function fxChip(f) {
     const tone = /^\+/.test(f[1]) ? 'up' : /^[−-]/.test(f[1]) ? 'down' : 'even';
     return '<span class="fx ' + tone + '">' + ic(f[0]) + '<b>' + esc(f[1]) + '</b><span>' + esc(f[2]) + '</span></span>';
 }
-const fxLine = f => '<span class="line">' + ic(f[0]) + '<span>' + esc(f[1]) + '</span></span>';
+const fxLine = (f) => '<span class="line">' + ic(f[0]) + '<span>' + esc(f[1]) + '</span></span>';
 // The card: a name banner, a picture, its body, and the type bar along the foot with the coin at its left.
 function cardHTML(o) {
     const tag = o.tag || 'article', head = tag === 'article' ? 'h3' : 'span';
@@ -393,7 +394,7 @@ function paintHud() {
     const b = ui.b;
     if (!b || ui.screen !== 'battle')
         return;
-    const chip = u => '<span class="unit' + (alive(u) ? '' : ' out') + (u.routing && alive(u) ? ' run' : '') + '">' + ic(u.cls) + '<span>' + (u.side === 0 ? esc(u.name.split(' ')[0]) : cap1(TIER[u.tier])) +
+    const chip = (u) => '<span class="unit' + (alive(u) ? '' : ' out') + (u.routing && alive(u) ? ' run' : '') + '">' + ic(u.cls) + '<span>' + (u.side === 0 ? esc(u.name.split(' ')[0]) : cap1(TIER[u.tier])) +
         (u.routing && alive(u) ? ' runs' : '') + '</span>' + meter(u.side ? 'foe' : 'hp', u.hp, u.max) + '</span>';
     $('#ours').innerHTML = b.units.filter(u => u.side === 0).map(chip).join('');
     $('#theirs').innerHTML = b.units.filter(u => u.side === 1).map(chip).join('');
@@ -455,6 +456,7 @@ function reportHTML() {
     return h + '<span class="grow"></span><button class="btn go huge" data-act="camp">' + ic(G.over ? 'book' : r.ambush ? 'boot' : 'tent') + (G.over ? 'Close the ledger' : r.ambush ? 'On to ' + esc(here(G).name) : 'Back to camp') + '</button></div></section>';
 }
 function endHTML() {
+    // r is the delivery, which only the ending 'arrived' has and reads.
     const st = G.stats, q = questOf(G), r = G.result, to = PLACES[q.to].name;
     let word = 'The ledger is closed', lede = '';
     if (G.over === 'arrived') {
@@ -478,7 +480,7 @@ function endHTML() {
         lede = 'Krafft’s black-coats held. What is left of the company scatters into the hills, and the Hetman’s clerks strike its name from the muster book.';
     }
     const good = (G.over === 'arrived' && !r.late && r.cargo / r.cargo0 >= 0.75) || G.over === 'victory';
-    const lost = [['rain', 'rain', 'spoiled by rain'], ['forced', 'forced', 'lost on forced marches'], ['raid', 'swords', 'taken on the road'], ['pilfered', 'warn', 'pilfered by your own men']].filter(x => st.lost[x[0]]).map(x => [x[1], '−' + st.lost[x[0]], x[2]]);
+    const lost = [['rain', 'rain', 'spoiled by rain'], ['forced', 'forced', 'lost on forced marches'], ['raid', 'swords', 'taken on the road'], ['pilfered', 'warn', 'pilfered by your own men']].filter(x => st.lost[x[0]]).map((x) => [x[1], '−' + st.lost[x[0]], x[2]]);
     if (st.sold)
         lost.push(['scales', '−' + st.sold, q.kind === 'commission' ? 'taken from the chest' : 'sold on the way']);
     let h = '<section class="report end">' + bannerHTML(word, !good) + '<p class="lede">' + esc(lede) + '</p>' +

@@ -25,6 +25,7 @@ function drawSoldier(g, x, y, o) {
         R(7, -2, 3, 2, hat);
         return;
     }
+    // hurt, flash, swing and anim may be left out (see SoldierLook): the ! below only quiets "possibly undefined", and undefined > 0 is false
     const coat = o.hurt > 0.1 ? PAL.white : sk.coat;
     g.fillStyle = 'rgba(28,26,23,.22)';
     g.fillRect(x - 4, y, 9, 1);
@@ -255,7 +256,7 @@ function makeBackdrop(seed, weather) {
             g.fillRect(cx + 4, cy + 6, w * 0.7 | 0, 1);
     }
     const a1 = r() * 6, a2 = r() * 6;
-    const hy = x => Math.round(HZ - 12 - 6 * Math.sin(x * 0.019 + a1) - 3 * Math.sin(x * 0.047 + a2));
+    const hy = (x) => Math.round(HZ - 12 - 6 * Math.sin(x * 0.019 + a1) - 3 * Math.sin(x * 0.047 + a2));
     for (let x = 0; x < LW; x++) {
         const y = hy(x);
         g.fillStyle = PAL.hill;
@@ -304,7 +305,7 @@ function newView(cv, seed, weather, names) {
     const buf = document.createElement('canvas');
     buf.width = LW;
     buf.height = LH;
-    const v = { cv, ctx: cv.getContext('2d'), buf, g: buf.getContext('2d'), back: makeBackdrop(seed, weather), parts: [], names, weather };
+    const v = { cv, ctx: cv.getContext('2d'), buf, g: buf.getContext('2d'), back: makeBackdrop(seed, weather), parts: [], names, weather }; // css and dpr: fitView sets them next
     fitView(v);
     return v;
 }
@@ -478,9 +479,9 @@ function drawMap(cv, st, plan) {
     cv.height = Math.round(h * dpr);
     const g = cv.getContext('2d'), s = w / ((MAP_BOX.e - MAP_BOX.w) * MAP_K);
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const X = lon => (lon - MAP_BOX.w) * MAP_K * s, Y = lat => (MAP_BOX.n - lat) * s;
-    const at = id => [X(PLACES[id].lon), Y(PLACES[id].lat)];
-    const line = pts => { g.beginPath(); for (let i = 0; i < pts.length; i += 2) {
+    const X = (lon) => (lon - MAP_BOX.w) * MAP_K * s, Y = (lat) => (MAP_BOX.n - lat) * s;
+    const at = (id) => [X(PLACES[id].lon), Y(PLACES[id].lat)];
+    const line = (pts) => { g.beginPath(); for (let i = 0; i < pts.length; i += 2) {
         if (i)
             g.lineTo(X(pts[i]), Y(pts[i + 1]));
         else
@@ -608,7 +609,7 @@ function drawMap(cv, st, plan) {
     for (const m of MAP_SEAS)
         g.fillText(m[0], X(m[1]), Y(m[2]));
     g.font = fs + "px 'Alegreya SC', Georgia, serif";
-    const boxes = [], hit = b => boxes.some(o => o[0] < b[0] + b[2] && b[0] < o[0] + o[2] && o[1] < b[1] + b[3] && b[1] < o[1] + o[3]);
+    const boxes = [], hit = (b) => boxes.some(o => o[0] < b[0] + b[2] && b[0] < o[0] + o[2] && o[1] < b[1] + b[3] && b[1] < o[1] + o[3]);
     for (const id of named) {
         const xy = at(id), name = cap1(PLACES[id].name), tw = g.measureText(name).width, x = xy[0], y = xy[1];
         const tries = [[x + 7, y, 'left'], [x - 7, y, 'right'], [x + 4, y + fs, 'left'], [x + 4, y - fs, 'left'], [x - 4, y + fs, 'right'], [x - 4, y - fs, 'right']];
@@ -948,6 +949,7 @@ function supplyArt(k) {
         }
     });
 }
+// The quest's cargo (and, but for the raft, the man who guards it) for its card. frac is not used.
 function questArt(q, frac) {
     return artURL('q' + q.id, 72, 36, (g, W, H) => {
         landscape(g, W, H, q.id.length);

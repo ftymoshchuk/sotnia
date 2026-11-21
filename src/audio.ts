@@ -1,37 +1,42 @@
 "use strict";
 /* ===== SOTNIA interface: sound effects, and starting and stopping the music (js/music.js) ===== */
 /* ---------- sound ---------- */
-let AC = null, sfxT = 0, sfxN = 0;
+let AC: GameAudioContext | null = null, sfxT = 0, sfxN = 0;
+/** The audio context with the two things the sound effects share, which audio() hangs on it as it makes it: the master volume, and half a second of noise. */
+interface GameAudioContext extends AudioContext { master: GainNode; noise: AudioBuffer }
+interface Window { webkitAudioContext?: typeof AudioContext } // Safari's name for the audio context, in the versions that have only that
 function audio() {
   if (!ui.sound && !ui.music) return null;
   if (!AC) {
     try {
-      AC = new (window.AudioContext || window.webkitAudioContext)();
+      AC = new (window.AudioContext || window.webkitAudioContext)() as GameAudioContext;
       AC.master = AC.createGain(); AC.master.gain.value = 0.45; AC.master.connect(AC.destination);
       AC.noise = mkNoise(AC);
     } catch (e) { AC = null; }
   }
   return AC;
 }
-function mkNoise(ac) {
+function mkNoise(ac: AudioContext) {
   const len = ac.sampleRate * 0.5 | 0, nb = ac.createBuffer(1, len, ac.sampleRate), d = nb.getChannelData(0);
   for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
   return nb;
 }
 function wake() { const ac = audio(); if (ac && ac.state === 'suspended') ac.resume().catch(() => {}); }
-function tone(ac, type, f0, f1, dur, vol, at) {
+function tone(ac: GameAudioContext, type: OscillatorType, f0: number, f1: number, dur: number, vol: number, at?: number) {
   const o = ac.createOscillator(), g = ac.createGain(), t = at || ac.currentTime;
   o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   o.connect(g); g.connect(ac.master); o.start(t); o.stop(t + dur + 0.02);
 }
-function hiss(ac, type, f0, f1, dur, vol) {
+function hiss(ac: GameAudioContext, type: BiquadFilterType, f0: number, f1: number, dur: number, vol: number) {
   const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain(), t = ac.currentTime;
   s.buffer = ac.noise; f.type = type; f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + dur);
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   s.connect(f); f.connect(g); g.connect(ac.master); s.start(t); s.stop(t + dur + 0.02);
 }
-function sfx(kind) {
+/** The sound effects: a musket shot, one that only fizzed, a blow, a clash of blades, a man falling, and the drum that opens a fight. */
+type SfxName = 'shot' | 'fizz' | 'hit' | 'clang' | 'fall' | 'drum';
+function sfx(kind: SfxName) {
   if (!ui.sound) return;
   const ac = audio();
   if (!ac || ac.state !== 'running') return;
@@ -51,8 +56,17 @@ function sfx(kind) {
 /* ---------- music: js/music.js composes and plays js/score.js; this is where the game starts and stops it ---------- */
 // How loud the music plays. The cues are balanced against each other in js/score.js.
 const MUSIC_LEVEL = 0.1;
+/** What the music is doing: the cue asked for and the player of it, the camp piece heard last, and when it may next start. */
+interface MusicState {
+  name: CueName | null; // the cue asked for, or null for silence
+  player: MusicPlayer | null; // the player of it, once the audio context lets it start
+  piece: string | null;
+  timer: number; // the interval that ticks the player, or 0 before it starts
+  quiet: number; // when the flourish after a fight has ended: no cue starts before then, in the context's seconds
+  opened: boolean; // the music has started once, so it no longer opens on the first piece of its cue
+}
 // `piece` is the camp piece heard last, which the camp music does not start on again.
-const MU = { name: null, player: null, piece: null, timer: 0, quiet: 0, opened: false };
+const MU: MusicState = { name: null, player: null, piece: null, timer: 0, quiet: 0, opened: false };
 function musicTick() {
   const ac = AC;
   if (!ac || !MU.player || ac.state !== 'running') return;
@@ -60,7 +74,7 @@ function musicTick() {
 }
 // Changes what plays: the cue for the screen, or nothing. The old cue fades as the new one comes in;
 // camp music begins on a new piece each time, never the one that played last.
-function setCue(name) {
+function setCue(name: CueName | null) {
   if (!ui.music) name = null;
   if (MU.name === name) return;
   const ac = audio();
@@ -81,7 +95,7 @@ function setCue(name) {
   } catch (e) { MU.player = null; }
 }
 // A flourish when a fight ends; the next cue waits for it.
-function sting(won) {
+function sting(won: boolean) {
   if (!ui.music) return;
   const ac = audio();
   if (!ac || ac.state !== 'running') return;
@@ -91,4 +105,4 @@ function sting(won) {
     setTimeout(s.close, 9000);
   } catch (e) { /* music is optional */ }
 }
-const cueForScreen = () => (ui.screen === 'battle' ? (ui.b && ui.b.over ? null : ui.c && ui.c.final ? 'final' : 'battle') : ui.screen === 'muster' ? 'muster' : 'camp');
+const cueForScreen = (): CueName | null => (ui.screen === 'battle' ? (ui.b && ui.b.over ? null : ui.c && ui.c.final ? 'final' : 'battle') : ui.screen === 'muster' ? 'muster' : 'camp');
