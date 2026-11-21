@@ -77,6 +77,7 @@ const STAFF = {
     qm: { name: 'Quartermaster', fee: 30, wage: 3, desc: 'The company eats a quarter less. Market prices fall 15%.' },
     chaplain: { name: 'Field chaplain', fee: 25, wage: 3, desc: 'Spirits rise a little every day.' }
 };
+/* ---------- soldiers ---------- */
 function applyPromo(s, k) {
     if (k === 'vig') {
         s.vig += 8;
@@ -232,6 +233,7 @@ function dismiss(st, id) {
     logLine(st, s.name + ' is struck from the roll and sent on his way.');
     st.odds = {};
 }
+/* ---------- contracts ---------- */
 const TEMPLATES = [
     { id: 'road', title: 'Road agents on the salt road', who: 'The salt-masters of Wieliczka',
         text: 'Cut-purses stop the carts between the mines and Kraków. Scatter them, and the salt-masters pay in coin.',
@@ -793,6 +795,7 @@ const KIND = {
 function oddsWord(p) {
     return p >= 0.85 ? 'Easy pickings' : p >= 0.65 ? 'Favourable' : p >= 0.42 ? 'Even odds' : p >= 0.2 ? 'Hard' : 'Grim';
 }
+/* ---------- aftermath ---------- */
 function resolveBattle(st, c, b) {
     const won = b.winner === 0 && !b.retreated;
     const rep = { won, retreated: !!b.retreated, draw: !!b.draw, lines: [], pay: 0, loot: null, renown: 0, dead: [], title: c.title, final: !!c.final, duel: !!c.duel, ambush: !!c.ambush, foe: c.foe, cargoLost: 0, shots: b.shots, secs: Math.round(b.t) };

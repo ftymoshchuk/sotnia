@@ -17,13 +17,14 @@ function dateText(n: number, short?: boolean) {
   return j.d + '/' + g.d + ' ' + M[g.m] + (short ? '' : ' ' + g.y);
 }
 
-/* ---------- the lands ---------- */
 /** The countries the roads run through. */
 type LandId = 'steppe' | 'ukraine' | 'poland' | 'prussia' | 'lithuania' | 'front' | 'silesia' | 'saxony';
 /** Who may waylay a train: the keys of AMBUSHES. */
 type AmbushId = 'tatars' | 'masterless' | 'roadagents' | 'deserters' | 'riverthieves' | 'muscovites' | 'imperials' | 'croats' | 'swedes';
 /** danger: how often trouble finds a train on the road (see AMBUSH_RATE). origins: who signs on there. ambush: who may waylay a train there. */
 interface Land { name: string; danger: number; origins: OriginId[]; ambush: AmbushId[] }
+/* ---------- the lands ---------- */
+// danger: how often trouble finds a train on the road (see AMBUSH_RATE). origins: who signs on there.
 const LANDS: Record<LandId, Land> = {
   steppe:    { name: 'the Wild Fields', danger: 3, origins: ['cossack', 'tatar'], ambush: ['tatars'] },
   ukraine:   { name: 'Ukraine', danger: 2, origins: ['cossack', 'pole'], ambush: ['tatars', 'masterless'] },
@@ -45,9 +46,10 @@ const SERVICES: Record<PlaceKind, Partial<Record<Service, boolean>>> = {
   ford:  {}, lakes: {}, camp: {}
 };
 
-/* ---------- places ---------- */
 /** lon, lat in degrees. major places are always named on the map. */
 interface Place { name: string; lon: number; lat: number; land: LandId; kind: PlaceKind; major: boolean }
+/* ---------- places ---------- */
+// lon, lat in degrees. major places are always named on the map.
 const P = (name: string, lon: number, lat: number, land: LandId, kind?: PlaceKind, major?: boolean): Place => ({ name, lon, lat, land, kind: kind || 'town', major: !!major });
 const PLACES = {
   leipzig: P('Leipzig', 12.37, 51.34, 'saxony', 'town', true),
@@ -110,12 +112,12 @@ function kmBetween(A: Place, B: Place) {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-/* ---------- roads ---------- */
 /**
  * A road joins two places. danger runs 0 to 3 and picks the ambush rate from AMBUSH_RATE. land is the more dangerous of the two ends'
  * lands, which says who may waylay a train there. A river road is for cargo that floats.
  */
 interface Road { a: PlaceId; b: PlaceId; km: number; danger: number; land: LandId; river: boolean }
+/* ---------- roads ---------- */
 // Roads wind, so a leg is the straight distance plus 15%; rivers meander, plus 25%. River legs run downstream from a to b.
 const ROADS: Road[] = [];
 function road(a: PlaceId, b: PlaceId, danger: number, river?: boolean) {
@@ -149,7 +151,6 @@ road('orsha', 'vitebsk', 2); road('orsha', 'smolensk', 3); road('vitebsk', 'smol
 road('sandomierz', 'kazimierz', 1, true); road('kazimierz', 'warsaw', 1, true); road('warsaw', 'plock', 1, true);
 road('plock', 'torun', 1, true); road('torun', 'danzig', 1, true);
 
-/* ---------- how the cargo travels ---------- */
 /** What carries the cargo: ox-carts, a driven herd, rafts on the river, or a light wagon with a chest. */
 type TransportId = 'oxcart' | 'herd' | 'raft' | 'chest';
 /** How a cargo travels: how fast, and what bad weather and forced marching cost it. */
@@ -160,6 +161,7 @@ interface Transport {
   rain: number; forcedLoss: number; // the chance that a day of rain, or of forced marching, costs cargo
   rainText?: string; forcedMax?: number; forcedText?: (n: number) => string; // told with the loss: set whenever rain and forcedLoss are above 0
 }
+/* ---------- how the cargo travels ---------- */
 // km a day at a steady and at a forced pace; the chance a day of rain or of forced marching costs cargo.
 const TRANSPORT: Record<TransportId, Transport> = {
   oxcart: { name: 'ox-carts', steady: 18, forced: 26, rain: 0.12, forcedLoss: 0.22, forcedMax: 1,
@@ -173,7 +175,6 @@ const TRANSPORT: Record<TransportId, Transport> = {
   chest: { name: 'a light wagon', steady: 25, forced: 34, rain: 0, forcedLoss: 0 }
 };
 
-/* ---------- quests ---------- */
 /** The commissions on offer: the keys of the ids in QUESTS. */
 type QuestId = 'salt' | 'oxen' | 'grain' | 'payroll';
 /** What the train carries: n units to start with, and what one and several are called. */
@@ -196,6 +197,7 @@ interface Venture extends QuestBase { kind: 'venture'; price: number }
 interface Commission extends QuestBase { kind: 'commission'; fee: number }
 /** A journey the company can take up. Tell the two kinds apart by kind. */
 type Quest = Venture | Commission;
+/* ---------- quests ---------- */
 const QUESTS: Quest[] = [
   { id: 'salt', title: 'Salt for the Leipzig fair', who: "On the company's own account", kind: 'venture', transport: 'oxcart',
     from: 'syvash', to: 'leipzig', start: dayOf(6, 9), deadline: dayOf(10, 23), until: 'the Michaelmas fair closes',

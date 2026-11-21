@@ -17,6 +17,8 @@ function dateText(n, short) {
         return j.d + ' ' + M[j.m] + '/' + g.d + ' ' + M[g.m] + (short ? '' : ' ' + g.y);
     return j.d + '/' + g.d + ' ' + M[g.m] + (short ? '' : ' ' + g.y);
 }
+/* ---------- the lands ---------- */
+// danger: how often trouble finds a train on the road (see AMBUSH_RATE). origins: who signs on there.
 const LANDS = {
     steppe: { name: 'the Wild Fields', danger: 3, origins: ['cossack', 'tatar'], ambush: ['tatars'] },
     ukraine: { name: 'Ukraine', danger: 2, origins: ['cossack', 'pole'], ambush: ['tatars', 'masterless'] },
@@ -33,6 +35,8 @@ const SERVICES = {
     fort: { market: true },
     ford: {}, lakes: {}, camp: {}
 };
+/* ---------- places ---------- */
+// lon, lat in degrees. major places are always named on the map.
 const P = (name, lon, lat, land, kind, major) => ({ name, lon, lat, land, kind: kind || 'town', major: !!major });
 const PLACES = {
     leipzig: P('Leipzig', 12.37, 51.34, 'saxony', 'town', true),
@@ -92,6 +96,7 @@ function kmBetween(A, B) {
     const h = Math.sin(dLat / 2) ** 2 + Math.cos(A.lat * rad) * Math.cos(B.lat * rad) * Math.sin(dLon / 2) ** 2;
     return 2 * R * Math.asin(Math.sqrt(h));
 }
+/* ---------- roads ---------- */
 // Roads wind, so a leg is the straight distance plus 15%; rivers meander, plus 25%. River legs run downstream from a to b.
 const ROADS = [];
 function road(a, b, danger, river) {
@@ -174,6 +179,7 @@ road('kazimierz', 'warsaw', 1, true);
 road('warsaw', 'plock', 1, true);
 road('plock', 'torun', 1, true);
 road('torun', 'danzig', 1, true);
+/* ---------- how the cargo travels ---------- */
 // km a day at a steady and at a forced pace; the chance a day of rain or of forced marching costs cargo.
 const TRANSPORT = {
     oxcart: { name: 'ox-carts', steady: 18, forced: 26, rain: 0.12, forcedLoss: 0.22, forcedMax: 1,
@@ -186,6 +192,7 @@ const TRANSPORT = {
         forcedText: n => 'Floating on through the night, a raft runs aground: ' + n + (n > 1 ? ' lasts' : ' last') + ' of rye lost.' },
     chest: { name: 'a light wagon', steady: 25, forced: 34, rain: 0, forcedLoss: 0 }
 };
+/* ---------- quests ---------- */
 const QUESTS = [
     { id: 'salt', title: 'Salt for the Leipzig fair', who: "On the company's own account", kind: 'venture', transport: 'oxcart',
         from: 'syvash', to: 'leipzig', start: dayOf(6, 9), deadline: dayOf(10, 23), until: 'the Michaelmas fair closes',

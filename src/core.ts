@@ -98,9 +98,9 @@ const STAFF: Record<StaffId, StaffInfo> = {
   chaplain: { name: 'Field chaplain', fee: 25, wage: 3, desc: 'Spirits rise a little every day.' }
 };
 
-/* ---------- soldiers ---------- */
 /** A promotion raises vigour, the skill his class lives by (aim for a musketeer, melee for the rest) or guard. */
 type Promo = 'vig' | 'skill' | 'grd';
+/* ---------- soldiers ---------- */
 function applyPromo(s: Soldier, k: Promo) {
   if (k === 'vig') { s.vig += 8; s.hp = Math.min(s.vig, (s.hp || 0) + 8); }
   else if (k === 'skill') { if (s.cls === 'shot') s.aim += 2; else s.mel += 2; }
@@ -242,7 +242,6 @@ function dismiss(st: Campaign, id: number) {
   st.odds = {};
 }
 
-/* ---------- contracts ---------- */
 /**
  * How the foe fights: 'hold' waits dug in, 'advance' marches on you, 'charge' comes at a rush. The company picks from the same three,
  * and may add 'retreat' once the fight is on.
@@ -259,6 +258,7 @@ interface Encounter {
 }
 /** Paid work, on offer in the lands listed while the company's threat level (see threat()) lies from min to max. */
 interface Template extends Encounter { id: TemplateId; min: number; max: number; lands?: LandId[] }
+/* ---------- contracts ---------- */
 const TEMPLATES: Template[] = [
   { id: 'road', title: 'Road agents on the salt road', who: 'The salt-masters of Wieliczka',
     text: 'Cut-purses stop the carts between the mines and Kraków. Scatter them, and the salt-masters pay in coin.',
@@ -722,7 +722,6 @@ function oddsWord(p: number) {
   return p >= 0.85 ? 'Easy pickings' : p >= 0.65 ? 'Favourable' : p >= 0.42 ? 'Even odds' : p >= 0.2 ? 'Hard' : 'Grim';
 }
 
-/* ---------- aftermath ---------- */
 /** How a man fared in a fight. */
 type Fate = 'unhurt' | 'wounded' | 'struck down' | 'killed' | 'fled' | 'yielded';
 /** One man's line in the report: his kills, his fate, the experience he earned and any scar he took. */
@@ -740,6 +739,7 @@ interface BattleReport {
   cargoLost: number; // taken by the raiders after a lost ambush
   shots: number; secs: number;
 }
+/* ---------- aftermath ---------- */
 function resolveBattle(st: Campaign, c: Contract, b: Battle): BattleReport {
   const won = b.winner === 0 && !b.retreated;
   const rep: BattleReport = { won, retreated: !!b.retreated, draw: !!b.draw, lines: [], pay: 0, loot: null, renown: 0, dead: [], title: c.title, final: !!c.final, duel: !!c.duel, ambush: !!c.ambush, foe: c.foe, cargoLost: 0, shots: b.shots, secs: Math.round(b.t) };
