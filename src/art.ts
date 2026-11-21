@@ -34,6 +34,7 @@ interface SoldierLook {
   wpn?: number; arm?: number; // the gear he carries and wears, levels 0 to 3 (see WPN and ARM); left out is the worst of each
   man?: number; // what settles his hair and his moustache: a soldier's id, so the same man always looks the same
   nation?: NationId; // a man of the company wears the dress of his nation (see NATIONS); a foe's comes from his skin
+  rank?: 'captain'; // the company's captain, who wears gilt where the men wear red
 }
 
 /* ---------- the random numbers of the backdrops (the backdrops themselves are in terrain.ts) ---------- */
@@ -54,6 +55,7 @@ interface FieldView {
   back: HTMLCanvasElement; parts: FieldParticle[];
   names: boolean; // write the names of the company's men over their heads
   weather: Weather; css: number; dpr: number;
+  captain?: Captain; // the company's captain, who stands behind the line in a fight and gives his order
 }
 
 /* ---------- the field ---------- */
@@ -116,6 +118,17 @@ function drawField(v: FieldView, b: Battle, t: number) {
       g.fillStyle = INK; g.fillRect(x - 5, y - 27, 11, 3); g.fillStyle = PAL.paperHi; g.fillRect(x - 4, y - 26, 9, 1);
       g.fillStyle = (SKINS[u.skin] || SKINS.own).coat; g.fillRect(x - 4, y - 26, Math.max(1, Math.round(9 * u.hp / u.max)), 1);
     }
+  }
+  // the captain's order: a ring of gold under the men it is on, and the captain behind the line, his sabre up as he calls it
+  const O = b.order, left = O ? b.buffs[O] : undefined;
+  if (O && left !== undefined) {
+    g.fillStyle = 'rgba(246,220,151,.75)';
+    for (const u of us) if (u.side === 0 && !u.dead && (O === 'rally' || (O === 'volley' ? u.cls === 'shot' : O === 'stand' ? u.cls === 'pike' : u.cls === 'sabre'))) g.fillRect(Math.round(u.x) - 6, FY + Math.round(u.y) + 1, 13, 1);
+  }
+  if (v.captain && b.order) {
+    const C = CAPTAINS[v.captain.type], cx = 11, cy = FY + 30, calling = O && left !== undefined && left > ORDERS[O].secs - 0.7;
+    g.fillStyle = '#4b3420'; g.fillRect(cx - 9, cy - 38, 1, 38); g.fillStyle = PAL.red; g.fillRect(cx - 8, cy - 38, 8, 5); g.fillStyle = PAL.ochre; g.fillRect(cx - 5, cy - 37, 2, 3);
+    drawCamper(g, cx, cy, { cls: C.cls, skin: 'own', face: 1, mode: calling ? 'fight' : 'idle', swing: calling ? 1 : 0, wpn: 2, arm: 2, man: v.captain.name.length, nation: C.origin, rank: 'captain' });
   }
   for (const p of v.parts) {
     const px = Math.round(p.x), py = Math.round(FY + p.y - p.h);
@@ -248,7 +261,47 @@ type CampProp = 'bandura' | 'pipe';
 interface CamperLook extends SoldierLook { pose?: Pose; bandage?: boolean; prop?: CampProp | null; strum?: number }
 
 /* ---------- the company in camp: sitting, lying, foraging, and the people of the baggage train ---------- */
-const STAFF_LOOK: Record<StaffId, Livery> = { surgeon: { coat: PAL.black, trim: INK }, drill: { coat: PAL.red, trim: PAL.ochre }, qm: { coat: PAL.blue, trim: PAL.ochre }, chaplain: { coat: INK, trim: INK } };
+/** How the post alone is drawn: what a camp shows when it knows no more of the man (an officer is drawn by his kind). */
+const STATION_LOOK: Record<StaffId, PersonLook> = {
+  surgeon: { coat: '#5a4630', trim: PAL.white, hat: 'cap', hatCol: '#3b3128', prop: 'razor', apron: true },
+  drill: { coat: '#6b6b66', trim: PAL.ochre, hat: 'morion', prop: 'pike' },
+  qm: { coat: '#2b7d78', trim: PAL.ochre, hat: 'cap', hatCol: '#a3222f', prop: 'purse' },
+  chaplain: { coat: INK, trim: PAL.white, hat: 'biretta', prop: 'cross', long: true }
+};
+/** How each kind of officer is drawn: his coat, his hat and what he carries say what he is. */
+const OFFICER_LOOK: Record<OfficerKind, PersonLook> = {
+  barber: STATION_LOOK.surgeon,
+  bonesetter: { coat: '#6b4a2c', trim: PAL.white, hat: 'felt', hatCol: '#3b3128', prop: 'splints' },
+  physician: { coat: INK, trim: PAL.white, hat: 'flat', prop: 'vial', ruff: true, long: true },
+  herbalist: { coat: '#5b6b3a', trim: PAL.white, hat: 'wide', hatCol: '#7a6a45', prop: 'herbs' },
+  armysurgeon: { coat: PAL.blue, trim: PAL.ochre, hat: 'plumed', hatCol: '#2c2926', prop: 'saw' },
+  pikemaster: STATION_LOOK.drill,
+  fencer: { coat: '#7a2230', trim: PAL.white, hat: 'plumed', hatCol: '#2c2926', prop: 'rapier' },
+  gunner: { coat: '#8a6d3a', trim: PAL.ochre, hat: 'felt', hatCol: '#2c2926', prop: 'musket' },
+  taskmaster: { coat: '#3a3a3f', trim: PAL.red, hat: 'felt', hatCol: '#2c2926', prop: 'cane' },
+  veteran: { coat: '#4f4a42', trim: PAL.ochre, hat: 'bare', prop: 'halberd', grey: true, beard: true },
+  haggler: STATION_LOOK.qm,
+  provisioner: { coat: '#8a7a52', trim: PAL.white, hat: 'cap', hatCol: '#d8c79a', prop: 'sack', apron: true },
+  scrounger: { coat: '#6a5a3a', trim: PAL.ochre, hat: 'wide', hatCol: '#5b4a2a', prop: 'goose' },
+  paymaster: { coat: INK, trim: PAL.white, hat: 'flat', prop: 'ledger', ruff: true },
+  fixer: { coat: '#3b2f3f', trim: PAL.ochre, hat: 'wide', hatCol: '#2c2926', prop: 'letter' },
+  catholic: STATION_LOOK.chaplain,
+  orthodox: { coat: INK, trim: PAL.white, hat: 'kamilavka', prop: 'orthodox', long: true, beard: true },
+  lutheran: { coat: INK, trim: PAL.white, hat: 'flat', prop: 'tome', ruff: true, long: true },
+  reformed: { coat: INK, trim: PAL.white, hat: 'felt', hatCol: '#2c2926', prop: 'tome', long: true },
+  open: { coat: '#6f665a', trim: PAL.white, hat: 'bare', prop: 'woodcross', long: true }
+};
+/** How each retainer is drawn. */
+const RETAINER_LOOK: Record<RetainerId, PersonLook> = {
+  engineer: { coat: '#7a5a2a', trim: PAL.ochre, hat: 'wide', hatCol: '#3b3128', prop: 'spade' },
+  cartographer: { coat: '#3a4a5a', trim: PAL.white, hat: 'wide', hatCol: '#2c2926', prop: 'scrolls' },
+  informant: { coat: '#2a2725', trim: PAL.ochre, hat: 'wide', hatCol: '#2a2725', prop: 'letter' },
+  wisewoman: { coat: '#6b4f6b', trim: PAL.white, hat: 'scarf', hatCol: '#d9c48a', prop: 'herbs', long: true },
+  renegade: { coat: PAL.blue, trim: PAL.ochre, hat: 'felt', hatCol: '#2c2926', prop: 'halberd' },
+  duellist: { coat: PAL.plum, trim: PAL.ochre, hat: 'plumed', hatCol: '#2c2926', prop: 'rapier' },
+  kobzar: { coat: '#cfc8b4', trim: PAL.white, hat: 'cap', hatCol: '#4b3524', prop: 'bandura', grey: true, beard: true, blind: true },
+  merchant: { coat: '#7a2230', trim: PAL.ochre, hat: 'turban', hatCol: '#d9d1bc', prop: 'bales', long: true }
+};
 // An ox, standing or lying, in the colour it should have by day or by firelight.
 function drawOx(g: CanvasRenderingContext2D, x: number, y: number, f: 1 | -1, lying: boolean, hide: string) {
   const R: Painter = (dx, dy, w, h, c) => { g.fillStyle = c; g.fillRect(f > 0 ? x + dx : x - dx - w + 1, y + dy, w, h); };
@@ -327,7 +380,19 @@ function foesArt(c: Contract) {
     us.forEach((u, i) => drawSoldier(g, x0 + i * step, H - 3 - (i % 2) * 2, { cls: u.cls, skin: c.skin || u.skin, face: -1, mode: 'idle', anim: 0, wpn: u.wpn, arm: u.arm, man: i + 2 }));
   });
 }
-function staffArt(k: StaffId, land: LandId = landNow()) { return artURL('s' + k + land, 48, 36, (g, W, H) => { landscape(g, W, H, k.length, land); drawCivilian(g, 24, H - 3, k, 1); }); }
+/** The portrait of a person of the command, in a window onto the land the company is in. */
+const personArt = (key: string, L: PersonLook, land: LandId) => artURL('p' + key + land, 48, 36, (g, W, H) => { landscape(g, W, H, key.length, land); drawPerson(g, 24, H - 3, L, 1); });
+const officerArt = (kind: OfficerKind, land: LandId = landNow()) => personArt(kind, OFFICER_LOOK[kind], land);
+const retainerArt = (t: RetainerId, land: LandId = landNow()) => personArt(t, RETAINER_LOOK[t], land);
+/** A retainer in the wide picture of the camp event in which he asks for a place. */
+const retainerWideArt = (t: RetainerId, land: LandId = landNow()) => artURL('w' + t + land, 96, 30, (g, W, H) => { landscape(g, W, H, t.length, land); drawPerson(g, 48, H - 2, RETAINER_LOOK[t], 1); });
+/** The station's own portrait, for a vacant post. */
+const staffArt = (k: StaffId, land: LandId = landNow()) => personArt('s' + k, STATION_LOOK[k], land);
+/** A captain at the head of his company, in the dress of his nation and the gilt of his rank. */
+const captainArt = (c: Captain, land: LandId = landNow()) => {
+  const T = CAPTAINS[c.type];
+  return artURL('c' + c.type + land, 48, 36, (g, W, H) => { landscape(g, W, H, c.type.length, land); drawCamper(g, 24, H - 3, { cls: T.cls, skin: 'own', face: 1, mode: 'idle', anim: 0, wpn: 2, arm: 2, man: c.name.length, nation: T.origin, rank: 'captain' }); });
+};
 function stanceArt(s: Stance, land: LandId = landNow()) {
   return artURL('t' + s + land, 60, 36, (g, W, H) => {
     landscape(g, W, H, s.length + 1, land);
@@ -422,14 +487,15 @@ const CW = 320, CH = 151;
 type CampSlot = readonly [x: number, y: number, face: 1 | -1];
 /** Where a man is in camp: wherever his order sends him, or abed by the tent if he is wounded. */
 type CampSpot = CampOrder | 'abed';
-/** The slots for each spot, taken in turn by the men whose spot it is, and one slot for each hired hand of the baggage train. */
-interface CampLayout extends Readonly<Record<CampSpot, readonly CampSlot[]>> { readonly staff: Readonly<Record<StaffId, CampSlot>> }
+/** The slots for each spot, taken in turn by the men whose spot it is, and one for each officer, for the captain and for the retainer. */
+interface CampLayout extends Readonly<Record<CampSpot, readonly CampSlot[]>> { readonly staff: Readonly<Record<StaffId, CampSlot>>; readonly captain: CampSlot; readonly retainer: CampSlot }
 const CAMP: CampLayout = {
   rest: [[130, 100, 1], [141, 90, 1], [179, 90, -1], [190, 100, -1], [136, 114, 1], [184, 114, -1], [150, 124, 1], [172, 124, -1]],
   drill: [[204, 126, 1], [228, 112, 1], [274, 132, 1], [196, 142, 1], [226, 140, 1], [258, 147, -1], [288, 144, -1], [242, 129, -1]],
   forage: [[20, 130, -1], [40, 138, -1], [10, 118, -1], [59, 142, -1], [30, 146, -1], [50, 124, -1], [70, 134, -1], [16, 146, -1]],
   abed: [[103, 88, 1], [87, 95, 1], [119, 95, -1], [103, 101, 1], [88, 106, 1], [118, 107, -1], [96, 112, 1], [112, 116, -1]],
-  staff: { surgeon: [124, 86, -1], drill: [252, 121, -1], qm: [76, 98, -1], chaplain: [242, 90, -1] }
+  staff: { surgeon: [124, 86, -1], drill: [252, 121, -1], qm: [76, 98, -1], chaplain: [242, 90, -1] },
+  captain: [213, 87, -1], retainer: [258, 114, -1]
 };
 /** One man of the roll as the camp shows him: where he belongs tonight (x, y at his feet, f the way he faces), what he is doing there (k) and what he holds. */
 interface CampFigure { id: number; s: Soldier; k: CampSpot; x: number; y: number; f: 1 | -1; prop: CampProp | null }
@@ -447,17 +513,14 @@ function campPlan(st: Campaign) {
 }
 /** A star of the night sky at x, y. Those whose phase k is under 2 twinkle (see drawCamp); a big one is 2 pixels across. */
 interface CampStar { x: number; y: number; k: number; big: boolean }
-/** The camp's backdrop keeps its stars, for drawCamp to twinkle. */
+/** The camp's ground (the hills, the tents and all that stands on it, with the sky left clear) keeps its stars, for campSky to paint and drawCamp to twinkle. */
 interface HTMLCanvasElement { stars?: CampStar[] }
 function campBack(st: Campaign) {
   const c = sceneCanvas(CW, CH);
   const g = c.getContext('2d')!, F: Painter = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
   const poly = (pts: number[], col: string) => { g.beginPath(); g.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) g.lineTo(pts[i], pts[i + 1]); g.closePath(); g.fillStyle = col; g.fill(); };
   const r = mulberry(st.date * 31 + 7), stars: CampStar[] = [];
-  F(0, 0, CW, CH, '#0f1520'); F(0, 34, CW, 40, '#141c2b'); F(0, 58, CW, 24, '#1e2a42');
-  for (let i = 0; i < 46; i++) { const x = r() * CW | 0, y = r() * 58 | 0; if (Math.hypot(x - 52, y - 17) < 11) continue; const s = { x, y, k: r() * 6, big: r() < 0.08 }; stars.push(s); F(x, y, s.big ? 2 : 1, s.big ? 2 : 1, 'rgba(230,223,204,.75)'); }
-  g.fillStyle = PAL.paperHi; g.beginPath(); g.arc(52, 17, 7, 0, Math.PI * 2); g.fill();
-  g.fillStyle = '#0f1520'; g.beginPath(); g.arc(55.5, 15, 6.3, 0, Math.PI * 2); g.fill();
+  for (let i = 0; i < 46; i++) { const x = r() * CW | 0, y = r() * 58 | 0; if (Math.hypot(x - 52, y - 17) < 11) continue; stars.push({ x, y, k: r() * 6, big: r() < 0.08 }); }
   poly([0, 74, 320, 74, 320, 151, 0, 151], '#192132');
   g.drawImage(skylineOf(here(st).land, st.date % 3 + 1, CW), 0, 81 - HZ, CW, HZ);
   poly([0, 83, 40, 80, 90, 83, 140, 79, 200, 82, 250, 79, 320, 81, 320, 151, 0, 151], '#221c15');
@@ -473,8 +536,48 @@ function campBack(st: Campaign) {
   g.strokeStyle = '#3a2a1a'; g.lineWidth = 1; g.beginPath(); g.moveTo(160, 79); g.lineTo(153, 103); g.moveTo(160, 79); g.lineTo(167, 103); g.stroke();
   F(160, 79, 1, 7, PAL.steel); F(156, 86, 8, 1, PAL.steel); F(157, 87, 6, 3, INK);
   F(146, 117, 9, 3, '#6b5338'); F(154, 116, 3, 3, '#6b5338'); F(155, 115, 1, 1, '#3a2a1a'); F(145, 118, 1, 1, '#6b5338');
+  // the noticeboard, with a paper pinned on it for each piece of work posted here, and the signpost where the roads leave
+  if (has(st, 'work')) {
+    F(262, 77, 2, 28, '#3a2a1a'); F(282, 77, 2, 28, '#3a2a1a'); F(259, 68, 28, 2, '#4b3420'); F(260, 70, 26, 22, '#5a3f27'); F(260, 70, 26, 1, PAL.wood); F(260, 91, 26, 1, '#3a2a1a');
+    for (let i = 0; i < Math.min(st.contracts.length, 4); i++) { const x = 262 + (i % 2) * 11, y = 72 + Math.floor(i / 2) * 9; F(x, y, 9, 7, '#a89f8a'); F(x + 1, y + 1, 7, 1, '#6b6455'); F(x + 1, y + 3, 5, 1, '#6b6455'); F(x + 4, y - 1, 1, 2, '#7a2230'); }
+  }
+  F(304, 62, 2, 44, '#3a2a1a'); F(302, 60, 6, 3, '#4b3420');
+  for (let i = 0; i < Math.min(roadsFrom(st).length, 3); i++) {
+    const y = 66 + i * 9;
+    if (i % 2 === 0) { poly([292, y + 3, 296, y, 307, y, 307, y + 6, 296, y + 6], '#6b5338'); F(297, y + 2, 8, 1, '#3a2a1a'); } else { poly([318, y + 3, 314, y, 303, y, 303, y + 6, 314, y + 6], '#6b5338'); F(305, y + 2, 8, 1, '#3a2a1a'); }
+  }
   c.stars = stars;
   return c;
+}
+/**
+ * The light of a day passing over the camp, at q from 0 (the night the camp is drawn at) round to 1 (the next): d is how much daylight there is,
+ * w the glow of dawn and dusk, sun how far along its arc the sun is (null while it is down) and moon how bright the moon.
+ */
+interface Light { d: number; w: number; sun: number | null; moon: number }
+const NIGHT_LIGHT: Light = { d: 0, w: 0, sun: null, moon: 1 };
+function lightAt(q: number): Light {
+  const sm = (a: number, b: number, x: number) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+  const d = sm(0.12, 0.34, q) * (1 - sm(0.66, 0.88, q)), sq = (q - 0.14) / 0.72;
+  return { d, w: Math.min(1, Math.max(0, 1 - Math.abs(q - 0.22) / 0.12) + Math.max(0, 1 - Math.abs(q - 0.78) / 0.12)), sun: sq > 0 && sq < 1 ? sq : null, moon: 1 - d };
+}
+const SKY_NIGHT = ['#0f1520', '#141c2b', '#1e2a42'], SKY_DAY = ['#5a8dc0', '#78a6cf', '#9fbed3'], SKY_GLOW = ['#4a3b66', '#c9805a', '#f0b27a'];
+/** The sky over the camp: its bands, its stars, the moon and, by day, the sun, as the light has them. At night it is the sky the camp was always drawn under. */
+function campSky(g: CanvasRenderingContext2D, stars: readonly CampStar[], L: Light) {
+  const F: Painter = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+  const band = (i: number) => mixHex(mixHex(SKY_NIGHT[i], SKY_DAY[i], L.d), SKY_GLOW[i], L.w * 0.6 * (1 - 0.4 * L.d));
+  F(0, 0, CW, CH, band(0)); F(0, 34, CW, 40, band(1)); F(0, 58, CW, 24, band(2));
+  const a = 0.75 * (1 - clamp(L.d * 2.4, 0, 1));
+  if (a > 0.02) { g.globalAlpha = a; for (const s of stars) F(s.x, s.y, s.big ? 2 : 1, s.big ? 2 : 1, '#e6dfcc'); g.globalAlpha = 1; }
+  if (L.moon > 0.02) {
+    g.globalAlpha = L.moon; g.fillStyle = PAL.paperHi; g.beginPath(); g.arc(52, 17, 7, 0, Math.PI * 2); g.fill();
+    g.fillStyle = band(0); g.beginPath(); g.arc(55.5, 15, 6.3, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1;
+  }
+  if (L.sun !== null) {
+    const x = 300 - 280 * L.sun, y = 78 - 64 * Math.sin(Math.PI * L.sun);
+    g.fillStyle = 'rgba(246,220,151,.22)'; g.beginPath(); g.arc(x, y, 13, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(246,220,151,.4)'; g.beginPath(); g.arc(x, y, 9, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#fbeeb8'; g.beginPath(); g.arc(x, y, 6, 0, Math.PI * 2); g.fill();
+  }
 }
 /** A speck of the camp's night: an ember (e), a wisp of smoke (s) or a note of the bandura (n). It starts at x, y, drifts at vx, vy and lives max seconds. */
 interface CampParticle { k: 'e' | 's' | 'n'; x: number; y: number; vx: number; vy: number; life: number; max: number }
@@ -522,22 +625,42 @@ function campFire(g: CanvasRenderingContext2D, t: number, still: boolean) {
     F(2, 8, 8, 3, '#c2412b'); F(3, 6, 6, 4, PAL.flash); F(5, 8, 2, 2, '#fff3c4'); F(6, 2, 2, 4, PAL.flash); F(3, 4, 1, 2, PAL.flash); F(9, 5, 1, 3, '#c2412b'); F(1, 7, 1, 2, '#c2412b');
   }
 }
-// Draw the camp. dt is the time since the last frame; still draws it at rest, as for reduced motion.
-function drawCamp(v: CampView | null, st: Campaign | null, sel: number | null, dt: number, still: boolean) {
+/**
+ * A day, or days, going by over the camp (see startPass in main.ts): how it is spent (kind), how many days it is, the seconds gone (t) of the seconds it takes (dur),
+ * and what it brought (res). A march leaves the camp it began in (oldBack) and arrives in another: swapped is whether it has. ledger is the company's purse and stores
+ * as they were before, for the ledger to show what changed.
+ */
+interface PassState { kind: 'rest' | 'march'; days: number; t: number; dur: number; res: DayNews; ledger: Ledger; oldBack: HTMLCanvasElement | null; swapped: boolean }
+/** The few things of the company that the ledger tells of, and the changes in them that a day or a march makes. */
+interface Ledger { thalers: number; bread: number; powder: number; renown: number; cargo: number }
+const ledgerOf = (st: Campaign): Ledger => ({ thalers: st.thalers, bread: st.bread, powder: st.powder, renown: st.renown, cargo: st.cargo });
+// Draw the camp. dt is the time since the last frame; still draws it at rest, as for reduced motion; pass is a day going by, which changes the light and sends men out and in.
+function drawCamp(v: CampView | null, st: Campaign | null, sel: number | null, dt: number, still: boolean, pass?: PassState | null) {
   if (!v || !st) return;
   v.t += dt;
-  const t = v.t, g = v.g, key = st.quest + st.at + st.date + ':' + (st.cargo0 ? Math.round(5 * st.cargo / st.cargo0) : 0);
-  if (v.key !== key) { v.back = campBack(st); v.key = key; }
-  g.globalAlpha = 1; g.drawImage(v.back!, 0, 0, CW, CH);
-  if (!still) for (const s of v.back!.stars!) if (s.k < 2) { g.globalAlpha = 0.5 + 0.5 * Math.sin(t * 1.3 + s.k * 9); g.fillStyle = PAL.paperHi; g.fillRect(s.x, s.y, 1, 1); }
+  const t = v.t, g = v.g, key = st.quest + st.at + st.date + ':' + (st.cargo0 ? Math.round(5 * st.cargo / st.cargo0) : 0) + ':' + st.contracts.length;
+  const u = pass ? clamp(pass.t / pass.dur, 0, 1) : 0, L = pass ? lightAt((u * pass.days) % 1) : NIGHT_LIGHT;
+  let fade = 0; // how far the picture has gone to black, between the camp a march leaves and the one it comes to
+  if (pass && pass.kind === 'march') {
+    fade = Math.max(0, 1 - Math.abs(u - 0.5) / 0.12);
+    if (u >= 0.5 && !pass.swapped) { pass.swapped = true; v.back = campBack(st); v.key = key; for (const p of campPlan(st)) v.pos[p.id] = { x: -26, y: p.y }; }
+  }
+  if (!v.back) { v.back = pass && pass.oldBack && !pass.swapped ? pass.oldBack : campBack(st); v.key = key; }
+  else if (!pass && v.key !== key) { v.back = campBack(st); v.key = key; }
+  campSky(g, v.back.stars!, L);
+  g.globalAlpha = 1; g.drawImage(v.back, 0, 0, CW, CH);
+  if (!still && L.d < 0.5) for (const s of v.back.stars!) if (s.k < 2) { g.globalAlpha = (0.5 + 0.5 * Math.sin(t * 1.3 + s.k * 9)) * (1 - 2 * L.d); g.fillStyle = PAL.paperHi; g.fillRect(s.x, s.y, 1, 1); }
   g.globalAlpha = 1;
   campFlag(g, still ? 0 : t);
   const plan = campPlan(st);
   for (const p of plan) {
+    // a day passing sends the foragers out and brings them back; a march sends everybody out of one camp and into the next
+    if (pass && pass.kind === 'rest' && p.k === 'forage' && u > 0.08 && u < 0.6) p.x = -18;
+    if (pass && pass.kind === 'march' && !pass.swapped) p.x = CW + 26;
     let c = v.pos[p.id];
     if (!c || still) c = v.pos[p.id] = { x: p.x, y: p.y };
-    const dx = p.x - c.x, dy = p.y - c.y, d = Math.hypot(dx, dy);
-    if (d > 0.6) { const m = Math.min(d, 42 * dt); c.x += dx / d * m; c.y += dy / d * m; c.moving = true; c.face = dx >= 0 ? 1 : -1; c.anim = (c.anim || 0) + dt * 6; }
+    const dx = p.x - c.x, dy = p.y - c.y, d = Math.hypot(dx, dy), speed = pass ? (pass.kind === 'march' ? 150 : 64) : 42;
+    if (d > 0.6) { const m = Math.min(d, speed * dt); c.x += dx / d * m; c.y += dy / d * m; c.moving = true; c.face = dx >= 0 ? 1 : -1; c.anim = (c.anim || 0) + dt * 6; }
     else { c.x = p.x; c.y = p.y; c.moving = false; }
   }
   const draw = (gg: CanvasRenderingContext2D, p: CampFigure, x: number, y: number) => {
@@ -561,12 +684,21 @@ function drawCamp(v: CampView | null, st: Campaign | null, sel: number | null, d
     }
     draw(g, p, x, y);
   }
-  for (const k in STAFF_LOOK) if (st.staff[k as StaffId]) { const s = CAMP.staff[k as StaffId]; drawCivilian(g, s[0], s[1], k as StaffId, s[2]); }
+  for (const o of officersOf(st)) { const s = CAMP.staff[o.station]; drawPerson(g, s[0], s[1], OFFICER_LOOK[o.kind], s[2]); }
+  if (st.retainer) { const s = CAMP.retainer; drawPerson(g, s[0], s[1], RETAINER_LOOK[st.retainer.type], s[2]); }
+  { const c = CAPTAINS[st.captain.type], s = CAMP.captain; drawCamper(g, s[0], s[1], { cls: c.cls, skin: 'own', face: s[2], mode: 'idle', wpn: 2, arm: 2, man: st.captain.name.length, nation: c.origin, rank: 'captain' }); }
+  // the light of the day lifts what the night left dark, and warms it at dawn and dusk
+  if (L.d > 0.01 || L.w > 0.01) {
+    g.globalCompositeOperation = 'lighter';
+    g.fillStyle = 'rgba(150,130,96,' + (0.5 * L.d).toFixed(3) + ')'; g.fillRect(0, 0, CW, CH);
+    g.fillStyle = 'rgba(150,66,12,' + (0.26 * L.w).toFixed(3) + ')'; g.fillRect(0, 0, CW, CH);
+    g.globalCompositeOperation = 'source-over';
+  }
   const fl = still ? 1 : 1 + 0.05 * Math.sin(t * 7.1) + 0.03 * Math.sin(t * 17.3);
   let gr = g.createRadialGradient(160, 100, 40, 160, 100, 230);
-  gr.addColorStop(0, 'rgba(5,8,14,0)'); gr.addColorStop(1, 'rgba(5,8,14,.55)'); g.fillStyle = gr; g.fillRect(0, 0, CW, CH);
+  gr.addColorStop(0, 'rgba(5,8,14,0)'); gr.addColorStop(1, 'rgba(5,8,14,' + (0.55 * (1 - 0.7 * L.d)).toFixed(3) + ')'); g.fillStyle = gr; g.fillRect(0, 0, CW, CH);
   gr = g.createRadialGradient(160, 100, 2, 160, 100, 100 * fl);
-  gr.addColorStop(0, 'rgba(240,170,60,.36)'); gr.addColorStop(0.35, 'rgba(216,100,42,.15)'); gr.addColorStop(1, 'rgba(216,100,42,0)'); g.fillStyle = gr; g.fillRect(0, 0, CW, CH);
+  gr.addColorStop(0, 'rgba(240,170,60,' + (0.36 * (1 - L.d)).toFixed(3) + ')'); gr.addColorStop(0.35, 'rgba(216,100,42,' + (0.15 * (1 - L.d)).toFixed(3) + ')'); gr.addColorStop(1, 'rgba(216,100,42,0)'); g.fillStyle = gr; g.fillRect(0, 0, CW, CH);
   campFire(g, t, still);
   if (!still) {
     if (Math.random() < dt * 5) v.parts.push({ k: 'e', x: 157 + Math.random() * 6, y: 94, vx: rnd(-3, 5), vy: rnd(-34, -20), life: 0, max: rnd(1.2, 2.4) });
@@ -586,6 +718,7 @@ function drawCamp(v: CampView | null, st: Campaign | null, sel: number | null, d
     }
     g.globalAlpha = 1;
   }
+  if (fade > 0) { g.fillStyle = 'rgba(8,6,4,' + fade.toFixed(3) + ')'; g.fillRect(0, 0, CW, CH); }
   present(v.ctx, v.buf, v.cv.width, v.cv.height);
   // keep the clickable figures over the drawn ones as they walk
   if (v.btns) for (const b of v.btns) {

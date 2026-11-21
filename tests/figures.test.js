@@ -23,7 +23,7 @@ const paint = fn => { const g = rec(); fn(g); return g.calls; };
 function figures() {
   const ctx = vm.createContext({});
   vm.runInContext(RECORDER, ctx);
-  for (const f of ['js/core.js', 'js/journey.js', 'js/geo.js', 'js/art.js', 'js/figures.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx, { filename: f });
+  for (const f of ['js/core.js', 'js/journey.js', 'js/command.js', 'js/geo.js', 'js/art.js', 'js/figures.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx, { filename: f });
   return code => vm.runInContext(code, ctx);
 }
 // Values built inside the VM have its own Array and Object, which strict equality treats as different types.

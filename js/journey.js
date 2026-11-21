@@ -390,33 +390,33 @@ function payOff(st, how) {
 function note(st, L, t) { logLine(st, t); L.push(t); }
 // One day passes. mode: 'march', 'forced' or 'camp'.
 function passDay(st, mode, L) {
-    const T = transportOf(st), road = mode === 'march' || mode === 'forced';
+    const T = transportOf(st), road = mode === 'march' || mode === 'forced', fx = effectsOf(st);
     st.weather = rollWeather();
     for (const s of st.roster) {
         if (s.wound > 0) {
             s.wound--;
-            s.hp = Math.min(s.vig, s.hp + (st.staff.surgeon ? 7 : 4));
+            s.hp = Math.min(s.vig, s.hp + 4 + fx.wounded);
             if (s.wound === 0)
                 note(st, L, s.name + ' is back on his feet.');
         }
         else if (s.fought)
-            s.hp = Math.min(s.vig, s.hp + 2);
+            s.hp = Math.min(s.vig, s.hp + 2 + fx.tend);
         else if (road) {
-            s.hp = Math.min(s.vig, s.hp + 2);
+            s.hp = Math.min(s.vig, s.hp + 2 + fx.tend);
             s.xp += 1;
         }
         else if (s.order === 'rest') {
-            s.hp = Math.min(s.vig, s.hp + (st.staff.surgeon ? 16 : 10));
+            s.hp = Math.min(s.vig, s.hp + 10 + fx.rest);
             s.morale = clamp(s.morale + 4, 0, 100);
         }
         else if (s.order === 'forage') {
-            st.bread += ri(1, 3);
-            s.hp = Math.min(s.vig, s.hp + 2);
+            st.bread += ri(1, 3) + fx.forage;
+            s.hp = Math.min(s.vig, s.hp + 2 + fx.tend);
             s.xp += 3;
         }
         else {
-            s.xp += st.staff.drill ? 15 : 10;
-            s.hp = Math.min(s.vig, s.hp + 2);
+            s.xp += Math.round(10 * fx.drill[s.cls]);
+            s.hp = Math.min(s.vig, s.hp + 2 + fx.tend);
         }
         if (mode === 'forced') {
             s.hp = Math.max(1, s.hp - 4);
@@ -433,8 +433,7 @@ function passDay(st, mode, L) {
         if (st.roster.length)
             note(st, L, 'No bread. The company goes hungry.');
     }
-    all(st, s => { if (st.staff.chaplain)
-        bump(s, 'morale', 1); if (s.morale < 55)
+    all(st, s => { bump(s, 'morale', fx.spirit + faithSpirit(fx, s)); if (s.morale < 55)
         s.morale++;
     else if (s.morale > 82)
         s.morale--; });
@@ -476,7 +475,7 @@ function payDay(st, L) {
         return;
     }
     st.thalers = 0;
-    all(st, s => bump(s, 'morale', -15));
+    all(st, s => bump(s, 'morale', -15 - effectsOf(st).unpaid));
     note(st, L, 'Pay day, and the chest cannot cover it. The men go unpaid.');
     if (questOf(st).kind !== 'commission')
         return;
@@ -493,10 +492,13 @@ function payDay(st, L) {
 function arrive(st) {
     st.contracts = [];
     st.recruits = [];
+    st.pool = {};
     if (has(st, 'work'))
         genContracts(st);
     if (has(st, 'recruits'))
         genRecruits(st);
+    if (has(st, 'staff'))
+        genOfficers(st);
 }
 // March one leg. Returns the day's news, and an ambush or camp event if one comes up.
 function march(st, roadIndex, forced) {
@@ -511,7 +513,7 @@ function march(st, roadIndex, forced) {
     note(st, L, 'After ' + days + (days > 1 ? ' days' : ' day') + (forced ? ' of forced marching' : ' on the road') + ', the company comes to ' + here(st).name + '.');
     arrive(st);
     let ambush = null, event = null;
-    const rate = AMBUSH_RATE[r.danger] * (q.kind === 'commission' ? 1.3 : 1);
+    const rate = AMBUSH_RATE[r.danger] * (q.kind === 'commission' ? 1.3 : 1) * effectsOf(st).ambush;
     if (st.roster.length && st.cargo > 0 && chance(1 - Math.pow(1 - rate, days))) {
         const a = makeAmbush(st, r.land, from.name);
         if (a.units.every(u => u.tier === 0) && st.renown >= 12)
@@ -519,8 +521,8 @@ function march(st, roadIndex, forced) {
         else
             ambush = a;
     }
-    if (!ambush && st.roster.length && chance(0.35))
-        event = rollEvent(st);
+    if (!ambush && st.roster.length)
+        event = rollRetainer(st, RETAINER_ODDS) || (chance(0.35) ? rollEvent(st) : null);
     st.ambush = ambush;
     st.odds = {};
     return { lines: L, event, ambush };
@@ -602,10 +604,12 @@ function campDay(st) {
     }
     if (has(st, 'recruits') && st.day % 3 === 0)
         genRecruits(st);
+    if (has(st, 'staff') && st.day % 6 === 0)
+        genOfficers(st);
     st.odds = {};
     let event = null;
-    if (st.roster.length && chance(0.12))
-        event = rollEvent(st);
+    if (st.roster.length)
+        event = rollRetainer(st, RETAINER_ODDS_CAMP) || (chance(0.12) ? rollEvent(st) : null);
     return { lines: L, event };
 }
 function sellCargo(st, n) {
@@ -642,24 +646,32 @@ function deliver(st) {
 function stranded(st) {
     if (st.roster.length)
         return false;
-    const cheapest = st.recruits.length ? Math.min.apply(null, st.recruits.map(r => r.price)) : Infinity;
+    const cheapest = st.recruits.length ? Math.min.apply(null, st.recruits.map(r => recruitPrice(st, r))) : Infinity;
     return !(has(st, 'recruits') && st.thalers >= cheapest);
 }
 function originFor(cls, land) {
     const ok = ORIGINS.filter(o => o.cls.includes(cls) && LANDS[land].origins.includes(o.id));
     return pick(ok.length ? ok : ORIGINS.filter(o => o.cls.includes(cls)));
 }
-function newGame(questId) {
+/** Begin a campaign on a quest under a captain (the first of the ones genCaptains offers, if none is named). */
+function newGame(questId, captain) {
     const q = QUESTS.find(x => x.id === questId) || QUESTS[0];
     const st = {
-        v: 2, quest: q.id, date: q.start, day: 1, at: q.from, path: [q.from], weather: 'clear',
+        v: 3, quest: q.id, date: q.start, day: 1, at: q.from, path: [q.from], weather: 'clear',
         thalers: q.thalers, bread: q.bread, powder: 14, renown: 0, cargo: q.cargo.n, cargo0: q.cargo.n, payDue: q.start + 30,
         roster: [], recruits: [], contracts: [], ambush: null, result: null,
-        staff: { surgeon: false, drill: false, qm: false, chaplain: false }, log: [], seen: [], pending: null, over: null,
+        captain: captain || genCaptains()[0], officers: {}, pool: {}, retainer: null, offered: -99, log: [], seen: [], pending: null, over: null,
         nextId: 1, odds: {}, stats: { battles: 0, won: 0, kills: 0, earned: 0, deserted: 0, dead: [], sold: 0, start: q.thalers, lost: { rain: 0, forced: 0, raid: 0, pilfered: 0 } }
     };
     const land = PLACES[q.from].land;
-    q.men.forEach(cls => st.roster.push(makeSoldier(st, cls, 1, originFor(cls, land))));
+    const cap = CAPTAINS[st.captain.type], home = ORIGINS.find(o => o.id === cap.origin);
+    let countryman = false; // the captain brings one man of his own nation, of the arm he knows
+    q.men.forEach(cls => {
+        const mine = !countryman && cls === cap.cls && home.cls.includes(cls);
+        if (mine)
+            countryman = true;
+        st.roster.push(makeSoldier(st, cls, 1, mine ? home : originFor(cls, land)));
+    });
     st.roster.forEach(s => { if (s.trait && !TRAITS[s.trait].good)
         s.trait = null; });
     arrive(st);

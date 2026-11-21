@@ -129,11 +129,11 @@ function dressFor(o) {
     const own = o.skin === 'own', id = o.nation || NATION_OF_SKIN[o.skin], N = id ? NATIONS[id] : null, sk = own && N ? N : SKINS[o.skin] || SKINS.own;
     const hit = o.hurt > 0.1, n = o.man || 0, c = hit ? PAL.white : sk.coat, arm = gearLv(o.arm), hose = N && N.hose ? N.hose : MAT.hose;
     return {
-        c, cd: tint(c, 0.74), cl: tint(c, 1.2), t: sk.trim, sash: hit ? PAL.white : own ? PAL.red : arm ? sk.coat : '',
+        c, cd: tint(c, 0.74), cl: tint(c, 1.2), t: sk.trim, sash: hit ? PAL.white : own ? (o.rank ? MAT.gilt : PAL.red) : arm ? sk.coat : '',
         hoseB: typeof hose === 'string' ? hose : hose[0], hoseF: typeof hose === 'string' ? hose : hose[1], boot: N && N.boot || MAT.boot,
         head: N && N.head && N.head[o.cls] || CLASS_HEAD[o.cls], bag: N && N.bag || c, plume: N && N.plume || sk.trim, mark: N ? N.mark : undefined,
         arm, wpn: gearLv(o.wpn), hair: N && N.hair ? N.hair[n % N.hair.length] : HAIR[n % HAIR.length],
-        mus: N && N.mus ? N.mus[(n >> 1) % N.mus.length] : Math.floor(n / HAIR.length) % 3, hit
+        mus: N && N.mus ? N.mus[(n >> 1) % N.mus.length] : Math.floor(n / HAIR.length) % 3, hit, rank: o.rank === 'captain'
     };
 }
 /** A painter for figure pixels, with the figure's feet at x, y of the scene (see SS), mirrored for one who faces left. */
@@ -401,7 +401,7 @@ function morion(U, d) {
         U(0, -37, 1, 1, MAT.giltHi);
         U(5, -33, 1, 3, lo);
     }
-    if (a > 2) {
+    if (a > 2 || d.rank) {
         U(-2, -42, 5, 1, MAT.gilt);
         plume(U, -9, -50, 1, d.plume);
     }
@@ -1041,62 +1041,330 @@ function drawCamper(g, x, y, o) {
     legs(R, step, d);
     drawForaging(R, U, d, o);
 }
-/* ---------- the baggage train: the hired hands ---------- */
-function drawCivilian(g, x, y, k, face) {
-    const f = face || 1, L = STAFF_LOOK[k], R = figurePainter(g, x, y, f), K = MAT.ink;
+function drawPerson(g, x, y, L, face) {
+    const f = face || 1, R = figurePainter(g, x, y, f), K = MAT.ink, coat = L.coat, cd = tint(coat === K ? '#3a3631' : coat, 0.7), hair = L.grey ? HAIR[4] : HAIR[1], white = PAL.white;
+    const arm = (hx, hy) => { seg(R, 3, -24, 5, -19, 3, coat); seg(R, 5, -19, hx, hy, 3, coat); R(hx - 1, hy - 1, 3, 3, MAT.skin); };
     R(-8, -1, 17, 2, SHADOW);
-    legs(R, -1, PLAIN_LEGS);
-    R(-6, -14, 13, 4, L.coat);
-    R(-4, -19, 9, 3, L.coat);
-    R(-5, -25, 11, 6, L.coat);
-    R(-6, -14, 1, 4, tint(L.coat === K ? '#3a3631' : L.coat, 0.7));
-    R(-5, -25, 1, 6, tint(L.coat === K ? '#3a3631' : L.coat, 0.7));
-    R(-6, -11, 13, 1, tint(L.coat === K ? '#3a3631' : L.coat, 0.7));
+    // behind him: what hangs on his back
+    if (L.prop === 'sack') {
+        R(-12, -38, 12, 13, '#b9a57a');
+        R(-12, -38, 12, 1, '#d8c79a');
+        R(-12, -26, 12, 1, '#8a7a52');
+        R(-9, -40, 6, 2, MAT.cord);
+        R(-7, -34, 1, 5, '#8a7a52');
+    }
+    if (L.prop === 'splints') {
+        seg(R, -6, -36, -10, -12, 2, MAT.ash);
+        seg(R, -3, -36, -8, -12, 2, MAT.woodHi);
+        R(-10, -26, 5, 1, MAT.cord);
+    }
+    if (L.prop === 'scrolls') {
+        seg(R, -7, -34, -9, -14, 3, '#d9c48a');
+        R(-10, -35, 5, 1, MAT.woodLo);
+    }
+    // coat
+    if (L.long) {
+        R(-7, -14, 15, 13, coat);
+        R(-7, -14, 1, 13, cd);
+        R(-7, -2, 15, 1, cd);
+        R(0, -13, 1, 11, cd);
+        R(-4, -2, 4, 2, MAT.boot);
+        R(2, -2, 5, 2, MAT.boot);
+    }
+    else {
+        legs(R, -1, PLAIN_LEGS);
+        R(-6, -14, 13, 4, coat);
+        R(-6, -14, 1, 4, cd);
+        R(-6, -11, 13, 1, cd);
+    }
+    R(-4, -19, 9, 3, coat);
+    R(-5, -25, 11, 6, coat);
+    R(-5, -25, 1, 6, cd);
     R(-4, -16, 9, 2, MAT.leather);
-    R(-3, -33, 2, 6, HAIR[1]);
+    if (L.trim !== coat)
+        R(2, -16, 2, 2, MAT.gilt);
+    if (L.apron) {
+        R(-2, -25, 7, 2, white);
+        R(-2, -23, 7, 10, white);
+        R(-2, -13, 7, 1, '#cfc8b4');
+    }
+    if (L.ruff) {
+        R(-5, -27, 12, 2, white);
+        R(-5, -26, 12, 1, '#cfc8b4');
+    }
+    else if (L.trim === white)
+        R(-2, -26, 6, 1, white);
+    // head
+    R(-3, -33, 2, 6, hair);
     R(-2, -33, 6, 6, MAT.skin);
     R(-2, -28, 6, 1, MAT.skinLo);
     R(-1, -27, 3, 1, MAT.skinLo);
     R(2, -31, 1, 1, K);
     R(4, -31, 1, 2, MAT.skin);
-    R(-8, -35, 17, 2, K);
-    R(-4, -39, 9, 4, K);
-    R(-4, -39, 1, 4, MAT.feltHi);
-    const arm = (hx, hy) => { seg(R, 3, -24, 5, -19, 3, L.coat); seg(R, 5, -19, hx, hy, 3, L.coat); R(hx - 1, hy - 1, 3, 3, MAT.skin); };
-    if (k === 'surgeon') {
-        R(-2, -25, 7, 2, PAL.white);
-        R(-2, -23, 7, 10, PAL.white);
-        R(-2, -13, 7, 1, '#cfc8b4');
-        arm(9, -19);
-        R(10, -17, 8, 2, MAT.steel);
-        R(14, -15, 5, 1, MAT.steel);
-        R(16, -14, 3, 1, MAT.steelHi);
+    if (L.beard) {
+        R(-2, -28, 6, 3, hair);
+        R(0, -25, 3, 2, hair);
+        R(4, -29, 1, 2, hair);
     }
-    else if (k === 'drill') {
-        arm(8, -19);
-        R(9, -32, 2, 32, MAT.wood);
-        R(9, -34, 2, 2, MAT.gilt);
-        R(-4, -37, 9, 1, PAL.white);
-        R(-5, -25, 11, 1, MAT.gilt);
+    if (L.blind)
+        R(1, -32, 4, 2, '#cfc8b4');
+    // hat
+    const hc = L.hatCol || K, hh = tint(hc === K ? '#4a443d' : hc, 1.3);
+    switch (L.hat) {
+        case 'felt':
+            R(-8, -35, 17, 2, hc);
+            R(-4, -39, 9, 4, hc);
+            R(-4, -39, 1, 4, hh);
+            break;
+        case 'wide':
+            R(-11, -35, 23, 2, hc);
+            R(-4, -38, 9, 3, hc);
+            R(-4, -38, 1, 3, hh);
+            R(-4, -36, 9, 1, L.trim);
+            break;
+        case 'flat':
+            R(-7, -35, 15, 2, hc);
+            R(-6, -37, 13, 2, hc);
+            R(-6, -37, 1, 2, hh);
+            break;
+        case 'cap':
+            R(-4, -36, 9, 3, hc);
+            R(-3, -38, 7, 2, hc);
+            R(-4, -36, 1, 3, hh);
+            R(-4, -34, 9, 1, L.trim);
+            break;
+        case 'biretta':
+            R(-4, -36, 9, 3, hc);
+            R(-3, -39, 2, 3, hc);
+            R(0, -40, 2, 4, hc);
+            R(3, -39, 2, 3, hc);
+            R(-4, -36, 9, 1, hh);
+            break;
+        case 'kamilavka':
+            R(-4, -43, 9, 10, hc);
+            R(-5, -44, 11, 2, hc);
+            R(-4, -43, 1, 10, hh);
+            R(-6, -34, 13, 1, hc);
+            break;
+        case 'morion':
+            R(-5, -35, 11, 1, MAT.steelLo);
+            R(-4, -39, 9, 4, MAT.steel);
+            R(-2, -41, 5, 2, MAT.steel);
+            R(-3, -38, 1, 2, MAT.steelHi);
+            R(-4, -36, 9, 1, MAT.giltLo);
+            R(-6, -36, 1, 2, MAT.steelLo);
+            R(6, -36, 1, 2, MAT.steelLo);
+            break;
+        case 'scarf':
+            R(-4, -36, 9, 4, hc);
+            R(-3, -37, 7, 1, hc);
+            R(-6, -34, 3, 4, hc);
+            R(-4, -36, 9, 1, hh);
+            R(-4, -33, 9, 1, tint(hc, 0.75));
+            break;
+        case 'plumed':
+            R(-8, -35, 17, 2, hc);
+            R(-4, -39, 9, 4, hc);
+            R(-4, -39, 1, 4, hh);
+            R(-4, -36, 9, 1, L.trim);
+            plume(R, -8, -49, 1, L.trim === coat ? white : L.trim);
+            break;
+        case 'turban':
+            R(-4, -41, 9, 1, hc);
+            R(-5, -40, 11, 7, hc);
+            R(-5, -37, 11, 1, tint(hc, 0.7));
+            R(-5, -35, 11, 1, tint(hc, 0.7));
+            R(2, -38, 2, 2, MAT.gilt);
+            break;
+        default:
+            R(-4, -35, 8, 3, hair);
+            R(-3, -36, 6, 1, hair);
+            R(-4, -33, 2, 2, hair);
+            if (L.grey)
+                R(-4, -35, 8, 1, tint(hair, 1.4));
+            break;
     }
-    else if (k === 'qm') {
-        arm(9, -19);
-        R(8, -19, 8, 8, PAL.white);
-        R(8, -19, 8, 1, K);
-        R(8, -19, 1, 8, K);
-        R(10, -16, 4, 1, MAT.cord);
-        R(10, -13, 4, 1, MAT.cord);
-        R(-3, -37, 6, 2, L.trim);
-    }
-    else {
-        R(-2, -25, 7, 2, PAL.white);
-        arm(8, -19);
-        R(9, -30, 2, 11, MAT.gilt);
-        R(6, -27, 8, 2, MAT.gilt);
-        R(9, -30, 1, 11, MAT.giltHi);
-        R(-3, -26, 7, 1, PAL.white);
+    // what he carries
+    switch (L.prop) {
+        case 'razor':
+            arm(9, -19);
+            R(10, -17, 8, 2, MAT.steel);
+            R(14, -15, 5, 1, MAT.steel);
+            R(16, -14, 3, 1, MAT.steelHi);
+            R(7, -22, 5, 4, '#cfc8b4');
+            break;
+        case 'splints':
+            arm(9, -19);
+            R(8, -22, 5, 4, white);
+            R(8, -20, 5, 1, '#cfc8b4');
+            break;
+        case 'vial':
+            arm(10, -19);
+            R(10, -26, 5, 7, '#9cc7c0');
+            R(10, -26, 5, 1, white);
+            R(11, -28, 3, 2, MAT.wood);
+            R(11, -22, 3, 3, '#6aa59b');
+            break;
+        case 'herbs':
+            arm(9, -16);
+            R(7, -21, 11, 7, MAT.wood);
+            R(7, -21, 11, 1, MAT.woodHi);
+            R(7, -15, 11, 1, MAT.woodLo);
+            R(8, -24, 9, 3, PAL.green);
+            R(10, -27, 1, 3, PAL.green);
+            R(14, -26, 1, 2, PAL.green);
+            R(12, -25, 2, 1, tint(PAL.green, 1.4));
+            break;
+        case 'saw':
+            arm(9, -19);
+            R(8, -23, 3, 5, MAT.wood);
+            R(11, -22, 12, 2, MAT.steel);
+            R(11, -22, 12, 1, MAT.steelHi);
+            for (let i = 0; i < 6; i++)
+                R(12 + i * 2, -20, 1, 1, MAT.steelLo);
+            break;
+        case 'pike':
+            R(9, -50, 2, 50, MAT.wood);
+            R(9, -50, 1, 50, MAT.woodHi);
+            R(8, -56, 4, 7, MAT.steel);
+            R(9, -58, 2, 3, MAT.steelHi);
+            arm(9, -21);
+            break;
+        case 'rapier':
+            arm(9, -21);
+            R(8, -22, 3, 1, MAT.gilt);
+            R(7, -21, 1, 3, MAT.gilt);
+            seg(R, 10, -22, 26, -34, 1, MAT.steelHi);
+            seg(R, 10, -21, 26, -33, 1, MAT.steel);
+            break;
+        case 'musket':
+            arm(17, -18);
+            musketArt(slanted(R, 2, -20, 5), 1);
+            R(8, -20, 3, 3, MAT.skin);
+            R(-6, -14, 2, 7, MAT.cord);
+            R(-6, -8, 2, 1, MAT.ember);
+            break;
+        case 'cane':
+            R(-5, -17, 11, 2, '#a3222f');
+            R(-5, -17, 11, 1, tint('#a3222f', 1.3));
+            arm(11, -26);
+            seg(R, 11, -27, 15, -42, 1, MAT.wood);
+            R(14, -44, 3, 2, MAT.gilt);
+            break;
+        case 'halberd':
+            R(9, -48, 2, 48, MAT.wood);
+            R(9, -48, 1, 48, MAT.woodHi);
+            R(11, -48, 6, 7, MAT.steel);
+            R(11, -48, 6, 1, MAT.steelHi);
+            R(7, -51, 4, 4, MAT.steel);
+            R(9, -53, 2, 3, MAT.steelHi);
+            arm(9, -21);
+            break;
+        case 'purse':
+            R(6, -15, 5, 5, MAT.leather);
+            R(6, -15, 5, 1, MAT.gilt);
+            R(7, -10, 3, 1, MAT.leather);
+            arm(10, -21);
+            R(10, -24, 3, 3, MAT.gilt);
+            R(10, -24, 3, 1, MAT.giltHi);
+            break;
+        case 'sack':
+            arm(-2, -26);
+            break;
+        case 'goose':
+            arm(9, -19);
+            R(8, -24, 9, 6, white);
+            R(8, -19, 9, 1, '#cfc8b4');
+            R(15, -29, 2, 6, white);
+            R(16, -30, 3, 2, white);
+            R(19, -29, 2, 1, '#d8a032');
+            R(16, -30, 1, 1, K);
+            R(9, -18, 1, 3, '#d8a032');
+            R(12, -18, 1, 3, '#d8a032');
+            break;
+        case 'ledger':
+            arm(10, -19);
+            R(8, -25, 9, 8, '#7a2230');
+            R(8, -25, 9, 1, MAT.gilt);
+            R(9, -24, 1, 6, tint('#7a2230', 0.7));
+            R(16, -24, 1, 6, '#e8dcc0');
+            seg(R, 17, -26, 21, -35, 1, white);
+            break;
+        case 'letter':
+            arm(10, -21);
+            R(9, -25, 6, 5, white);
+            R(9, -25, 6, 1, '#cfc8b4');
+            R(11, -23, 2, 2, '#a3222f');
+            R(-9, -28, 4, 16, cd);
+            break;
+        case 'cross':
+            arm(9, -19);
+            R(9, -31, 2, 12, MAT.gilt);
+            R(6, -28, 8, 2, MAT.gilt);
+            R(9, -31, 1, 12, MAT.giltHi);
+            R(-5, -13, 12, 2, white);
+            break;
+        case 'orthodox':
+            arm(9, -19);
+            R(9, -34, 2, 15, MAT.gilt);
+            R(6, -31, 8, 1, MAT.gilt);
+            R(7, -27, 6, 1, MAT.gilt);
+            R(6, -22, 6, 1, MAT.gilt);
+            R(9, -34, 1, 15, MAT.giltHi);
+            break;
+        case 'tome':
+            arm(9, -19);
+            R(8, -25, 9, 7, '#2f2a26');
+            R(9, -24, 7, 5, '#efe6d0');
+            R(12, -24, 1, 5, '#cfc8b4');
+            R(8, -25, 9, 1, MAT.gilt);
+            break;
+        case 'woodcross':
+            arm(9, -19);
+            R(9, -31, 2, 12, MAT.wood);
+            R(6, -28, 8, 2, MAT.wood);
+            R(9, -31, 1, 12, MAT.woodHi);
+            R(-5, -22, 11, 1, MAT.cord);
+            break;
+        case 'scrolls':
+            arm(9, -20);
+            R(8, -27, 3, 13, '#d9c48a');
+            R(7, -28, 5, 1, MAT.wood);
+            R(7, -14, 5, 1, MAT.wood);
+            R(9, -25, 1, 9, '#b79d64');
+            break;
+        case 'spade':
+            arm(9, -21);
+            R(9, -34, 2, 34, MAT.wood);
+            R(9, -34, 1, 34, MAT.woodHi);
+            R(7, -36, 6, 2, MAT.wood);
+            R(7, -7, 6, 7, MAT.steel);
+            R(7, -7, 6, 1, MAT.steelHi);
+            break;
+        case 'bandura':
+            arm(10, -17);
+            R(7, -23, 10, 8, MAT.wood);
+            R(8, -24, 8, 1, MAT.wood);
+            R(8, -23, 8, 1, MAT.woodHi);
+            R(7, -16, 10, 1, MAT.woodLo);
+            R(10, -21, 3, 3, K);
+            R(16, -29, 2, 7, MAT.wood);
+            R(15, -32, 4, 3, MAT.woodLo);
+            for (let i = 0; i < 3; i++)
+                R(9 + i * 2, -22, 1, 5, MAT.cord);
+            break;
+        default:
+            arm(9, -17);
+            R(6, -23, 11, 8, '#7a2230');
+            R(6, -23, 11, 1, MAT.gilt);
+            R(6, -19, 11, 1, tint('#7a2230', 0.7));
+            R(6, -15, 11, 1, tint('#7a2230', 0.7));
+            R(8, -17, 7, 1, MAT.gilt);
+            break; // bales
     }
 }
+/** A hired hand of the baggage train as the camp draws him by his post alone; an officer is drawn by what he is (see OFFICER_LOOK). */
+function drawCivilian(g, x, y, k, face) { drawPerson(g, x, y, STATION_LOOK[k], face); }
 /* ---------- the pictures of gear, for the cards ---------- */
 const gearCache = {};
 /**
