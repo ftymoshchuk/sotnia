@@ -162,10 +162,96 @@ test('a battle unit and a line of the report carry the gear the picture shows', 
     const c = makeContract(st, TEMPLATES[0], 'easy'), b = battleFor(st, c, [s.id], 'advance', false), u = b.units.find(x => x.sid === s.id);
     while (!b.over) stepBattle(b, 0.1);
     const rep = resolveBattle(st, c, b), line = rep.lines.find(l => l.id === s.id);
-    const foe = c.units[0];
-    return { unit: [u.wpn, u.arm], line: [line.wpn, line.arm], foe: [foe.wpn, foe.arm, foe.tier] };
+    const foe = c.units[0], theirs = b.units.find(x => x.side === 1);
+    return { unit: [u.wpn, u.arm], line: [line.wpn, line.arm], foe: [foe.wpn, foe.arm, foe.tier], origin: [u.origin, line.origin, s.origin, theirs.origin] };
   })()`);
   assert.deepEqual(out.unit, [2, 3]);
   assert.deepEqual(out.line, [2, 3]);
+  assert.ok(out.origin[0] && out.origin[0] === out.origin[2] && out.origin[1] === out.origin[2], 'a man of the company keeps his origin into the fight and its report');
+  assert.equal(out.origin[3], '', 'a foe has none: his skin dresses him');
   assert.ok(out.foe[0] >= 0 && out.foe[0] <= 3 && out.foe[1] >= 0 && out.foe[1] <= 3, 'a foe has gear levels too');
+});
+
+const ORIGIN_IDS = ['cossack', 'pole', 'german', 'swede', 'scot', 'magyar', 'croat', 'tatar'];
+
+test('every nation of the company dresses a man differently, in every class and at the worst and the best kit', () => {
+  const r = figures();
+  assert.deepEqual(plain(r, 'ORIGINS.map(o => o.id)').sort(), ORIGIN_IDS.slice().sort(), 'the test knows every origin');
+  for (const cls of CLASSES) for (const lv of [0, 3]) {
+    const seen = new Map();
+    for (const nation of [undefined, ...ORIGIN_IDS]) {
+      const key = JSON.stringify(draw(r, { cls, skin: 'own', wpn: lv, arm: lv, man: 4, nation }));
+      assert.ok(!seen.has(key), `${cls} ${lv}: ${nation} looks like ${seen.get(key)}`);
+      seen.set(key, nation);
+    }
+  }
+});
+
+test('the company wears its red sash over the colours of any nation, and a foe at the worst kit has none', () => {
+  const r = figures(), red = plain(r, 'PAL.red');
+  for (const nation of ORIGIN_IDS) for (const arm of [0, 1, 3]) {
+    const colours = draw(r, { cls: 'pike', skin: 'own', nation, arm }).map(c => c[4]);
+    assert.ok(colours.includes(red), `${nation} at armour ${arm} has no sash`);
+  }
+  // a foe of the same nation, his coat and trim from his skin: no sash until he has armour, and then of his coat's colour
+  const foe = draw(r, { cls: 'pike', skin: 'swede', arm: 0 }).map(c => c[4]);
+  assert.ok(!foe.includes(red), 'a Swedish foe wears no red sash');
+  assert.ok(draw(r, { cls: 'pike', skin: 'own', nation: 'swede' }).map(c => c[4]).includes(red));
+});
+
+test('a nation is told by more than its colours: its cap, its mark, its legs', () => {
+  const r = figures();
+  // the same coat and trim on two nations that differ only in what else they wear is not enough: check the pieces
+  const look = (cls, nation) => draw(r, { cls, skin: 'own', nation, arm: 0, wpn: 0, man: 6 });
+  const colours = (cls, nation) => new Set(look(cls, nation).map(c => c[4]));
+  assert.ok(colours('pike', 'scot').has('#2f6a45'), 'a Scot wears the green of a tartan');
+  assert.ok(!colours('pike', 'pole').has('#2f6a45'), 'and nobody else does');
+  assert.ok(colours('sabre', 'croat').has('#c0392b'), 'a Croat has his red cravat');
+  assert.ok(colours('pike', 'german').has('#a8232f') && colours('pike', 'german').has(plain(r, 'MAT.hose')), 'a German has one leg red and the other dark');
+  assert.ok(colours('sabre', 'cossack').has('#d2a63a'), 'a Cossack has yellow boots');
+  assert.ok(colours('sabre', 'magyar').has('#f1ece0'), 'a Hungarian has white braid');
+  // the heads: a Scot, a Hungarian and a Tatar do not wear what their class wears
+  const heads = plain(r, "(['pike', 'shot', 'sabre']).map(c => ['scot', 'magyar', 'tatar', 'cossack', 'pole'].map(n => dressFor({ cls: c, skin: 'own', nation: n }).head))");
+  assert.deepEqual(heads[0], ['bonnet', 'kalpak', 'tatar', 'kolpak', 'morion']);
+  assert.deepEqual(heads[1], ['bonnet', 'kalpak', 'tatar', 'kolpak', 'hat']);
+  assert.deepEqual(heads[2], ['kolpak', 'kalpak', 'tatar', 'kolpak', 'kolpak']);
+});
+
+test('foes of the peoples with a dress of their own wear it, and the Tatar raiders and the Croat horse are no longer one livery', () => {
+  const r = figures();
+  const as = (skin, cls) => JSON.stringify(draw(r, { cls, skin, wpn: 0, arm: 0, face: -1 }));
+  for (const [skin, cls] of [['tatar', 'sabre'], ['croat', 'sabre'], ['muscovite', 'pike'], ['swede', 'shot']]) assert.notEqual(as(skin, cls), as('bandit', cls), `${skin} dresses like a bandit`);
+  assert.notEqual(as('tatar', 'sabre'), as('croat', 'sabre'));
+  assert.deepEqual(plain(r, '[AMBUSHES.tatars.skin, AMBUSHES.croats.skin, AMBUSHES.muscovites.skin, AMBUSHES.swedes.skin, AMBUSHES.imperials.skin]'), ['tatar', 'croat', 'muscovite', 'swede', 'imperial']);
+  const tatars = plain(r, "TEMPLATES.filter(t => t.foe === 'Tatar raiders').map(t => t.skin)");
+  assert.ok(tatars.length > 0 && tatars.every(k => k === 'tatar'), 'the Tatar hunt is Tatar');
+});
+
+test('a man is known by his origin: the nation and the colours of his country', () => {
+  const r = figures();
+  assert.equal(r("nationOf('Polish')"), 'pole');
+  assert.equal(r("nationOf('Lipka Tatar')"), 'tatar');
+  assert.equal(r("nationOf('Zaporozhian')"), 'cossack');
+  assert.equal(r("nationOf('Atlantean')"), undefined);
+  assert.equal(r("nationOf()"), undefined);
+  for (const o of plain(r, 'ORIGINS')) {
+    const flag = plain(r, `flagOf(${JSON.stringify(o.label)})`);
+    assert.ok(flag.length >= 2 && flag.every(c => /^#[0-9a-f]{6}$/i.test(c)), `${o.label} has no flag`);
+  }
+  assert.equal(r("flagOf('Atlantean')"), null);
+  // the armour a man's card shows is in his own colours
+  assert.notEqual(r("gearArt('arm', 'pike', 1, 'scot')"), r("gearArt('arm', 'pike', 1, 'pole')"));
+  assert.notEqual(r("gearArt('arm', 'pike', 1, 'scot')"), r("gearArt('arm', 'pike', 1)"));
+});
+
+test('every nation, in every class and kit, fits the frame and paints something', () => {
+  const r = figures();
+  for (const nation of ORIGIN_IDS.concat(['imperial', 'muscovite'])) for (const cls of CLASSES) for (const m of [{}, { mode: 'aim', flash: 1 }, { mode: 'fight', swing: 1 }, { mode: 'rout' }, { dead: true }]) for (const lv of [0, 3]) {
+    const calls = draw(r, { cls, skin: 'own', nation, wpn: lv, arm: lv, ...m });
+    assert.ok(calls.length > (m.dead ? 10 : 20));
+    const S = 2, xs = calls.flatMap(c => [c[0] * S, (c[0] + c[2]) * S]), ys = calls.flatMap(c => [c[1] * S, (c[1] + c[3]) * S]);
+    assert.ok(Math.min(...xs) >= -26 && Math.max(...xs) <= 62, `${nation} ${cls} ${JSON.stringify(m)} runs from ${Math.min(...xs)} to ${Math.max(...xs)} across`);
+    assert.ok(Math.min(...ys) >= -66 && Math.max(...ys) <= 2, `${nation} ${cls} ${JSON.stringify(m)} runs from ${Math.min(...ys)} to ${Math.max(...ys)} up and down`);
+  }
+  for (const nation of ORIGIN_IDS) for (const look of [{ pose: 'sit' }, { pose: 'sit', prop: 'bandura' }, { pose: 'lie' }, { pose: 'forage', anim: 1 }]) assert.ok(plain(r, `paint(g => drawCamper(g, 20, 30, ${JSON.stringify({ cls: 'sabre', skin: 'own', nation, ...look })}))`).length > 15);
 });

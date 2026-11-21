@@ -27,6 +27,7 @@
   .row { display: flex; flex-wrap: wrap; align-items: stretch; gap: 14px; }
   .label { flex: none; width: 100%; font: 500 13px/1 'Alegreya SC', serif; letter-spacing: .14em; color: var(--gilt); margin: 8px 0 -4px; }
   .price { color: var(--gilt); font-style: normal; font-weight: 700; }
+  .flag { display: inline-block; width: 18px; height: 12px; margin-left: 8px; border: 1px solid var(--parchment); vertical-align: -1px; }
 </style>
 </head>
 <body>
@@ -83,6 +84,20 @@ const man = (o, x) => (g, w, h) => drawSoldier(g, Math.round(w / 2) + (x || 0), 
     const row = document.createElement('div'); row.className = 'row'; row.innerHTML = '<div class="label">' + CLS[cls].name + '</div>'; d.appendChild(row);
     for (let lv = 0; lv < 4; lv++) cell(row, WPN[cls][lv], ARM[lv], cls === 'shot' ? 44 : 34, 38, PAPER, man({ cls, wpn: lv, arm: lv, man: lv * 3 + 1 }, cls === 'shot' ? -5 : 0));
   }
+}
+// 1b. The nations of the company, and the foes who are a people of their own
+const flag = label => { const f = flagOf(label); if (!f) return ''; const n = f.length; return '<span class="flag" style="background:linear-gradient(' + f.map((c, i) => c + ' ' + (100 * i / n) + '% ' + (100 * (i + 1) / n) + '%').join(',') + ')"></span>'; };
+{
+  const d = section('Nations', 'Every man of the company is dressed as his nation, in its colours, and wears the company\u2019s red sash over them. Each is shown in the classes it fields, in the worst kit and in a better.');
+  for (const o of ORIGINS) {
+    const row = document.createElement('div'); row.className = 'row'; row.innerHTML = '<div class="label">' + o.label + flag(o.label) + '</div>'; d.appendChild(row);
+    for (const cls of [...new Set(o.cls)]) for (const lv of [0, 2]) cell(row, CLS[cls].name, ARM[lv], cls === 'shot' ? 44 : 34, 38, PAPER, man({ cls, nation: o.id, wpn: lv, arm: lv, man: 3 + lv }, cls === 'shot' ? -5 : 0));
+  }
+}
+{
+  const d = section('Foes of a people of their own', 'Their coat and trim come from their skin, and their legs, caps and marks from their people; they wear no company sash.');
+  const row = document.createElement('div'); row.className = 'row'; d.appendChild(row);
+  for (const skin of ['swede', 'imperial', 'muscovite', 'tatar', 'croat']) for (const cls of CLASSES) cell(row, skin.charAt(0).toUpperCase() + skin.slice(1), CLS[cls].name, cls === 'shot' ? 44 : 34, 38, PAPER, man({ cls, skin, wpn: 0, arm: 0, face: -1, man: 2 }, cls === 'shot' ? 5 : 0));
 }
 // 2. The pieces, as the cards show them
 {

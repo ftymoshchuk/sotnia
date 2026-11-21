@@ -156,11 +156,12 @@ function promote(st: Campaign, id: number, k: Promo) {
 }
 const TVIG: readonly number[] = [0.72, 0.9, 1.05, 1.2], TSK: readonly number[] = [-3, 0, 2, 4], TMOR: readonly number[] = [34, 48, 62, 78];
 /** The colours a fighter wears, which say who he is: 'own' for the company, the rest for the foes it meets. */
-type Skin = 'own' | 'bandit' | 'deserter' | 'raider' | 'imperial' | 'swede' | 'champion' | 'black' | 'muscovite';
+type Skin = 'own' | 'bandit' | 'deserter' | 'raider' | 'imperial' | 'swede' | 'champion' | 'black' | 'muscovite' | 'tatar' | 'croat';
 /** What a fighter brings to a battle. A Soldier has all of it, and so does a Foe. hp is a man's hit points now (a foe starts at full vigour). */
 interface Fighter {
   cls: TroopClass; vig: number; mel: number; aim: number; grd: number; wpn: number; arm: number; morale: number; trait: Trait | null;
   name?: string; hp?: number; tier?: number; skin?: Skin;
+  origin?: string; // a man of the company has the label of his Origin (see Soldier), which the picture dresses him by
 }
 /** An enemy as a contract lists him, with the numbers his tier gives him; the battle makes a BattleUnit of him. */
 interface Foe extends Fighter { tier: number; skin: Skin; name: string }
@@ -383,6 +384,7 @@ type UnitMode = 'idle' | 'walk' | 'fight' | 'reload' | 'aim' | 'rout';
 interface BattleUnit {
   sid: number | string; // the soldier's id, or 'e0', 'e1'... for a foe
   side: Side; name: string; cls: TroopClass; skin: Skin; tier: number;
+  origin: string; // of a man of the company, the label of his Origin (such as 'Polish'); a foe has none, and is dressed by his skin
   x: number; y: number; hx: number; hy: number;
   hp: number; max: number; mel: number; aim: number; grd: number; wpn: number;
   arm: number; // the level of his armour, 0 to 3, which the picture shows (as wpn is the level of his weapon)
@@ -399,7 +401,7 @@ interface BattleUnit {
 function toUnit(o: Fighter, side: Side, sid: number | string): BattleUnit {
   const c = CLS[o.cls];
   return {
-    sid, side, name: o.name || '', cls: o.cls, skin: side === 0 ? 'own' : (o.skin || 'bandit'), tier: o.tier || 0,
+    sid, side, name: o.name || '', cls: o.cls, skin: side === 0 ? 'own' : (o.skin || 'bandit'), tier: o.tier || 0, origin: side === 0 && o.origin || '',
     x: 0, y: 0, hx: 0, hy: 0, hp: o.hp != null ? o.hp : o.vig, max: o.vig, mel: o.mel, aim: o.aim, grd: o.grd,
     wpn: o.wpn, arm: o.arm, armv: c.arm + o.arm * 1.5, spd: c.spd * (o.trait === 'Fleet' ? 1.15 : 1), mor: o.morale,
     trait: o.trait, face: side ? -1 : 1, cd: rnd(0, 0.5), loaded: true, rl: 0, aimT: 0, aimNeed: rnd(0.5, 1),
@@ -726,7 +728,7 @@ function oddsWord(p: number) {
 /** How a man fared in a fight. */
 type Fate = 'unhurt' | 'wounded' | 'struck down' | 'killed' | 'fled' | 'yielded';
 /** One man's line in the report: his kills, his fate, the experience he earned and any scar he took. */
-interface ReportLine { id: number; name: string; cls: TroopClass; wpn: number; arm: number; kills: number; fate: Fate; xp: number; scar: string | null }
+interface ReportLine { id: number; name: string; cls: TroopClass; origin: string; wpn: number; arm: number; kills: number; fate: Fate; xp: number; scar: string | null }
 /** A man who died in the company's service, kept for the last page. */
 interface Fallen { name: string; cls: TroopClass; origin: string; day: number; date: number; where: string; level: number; kills: number }
 /** Supplies taken from the field. */
@@ -751,7 +753,7 @@ function resolveBattle(st: Campaign, c: Contract, b: Battle): BattleReport {
     const s = st.roster.find(r => r.id === u.sid);
     if (!s) continue;
     s.kills += u.kills; st.stats.kills += u.kills;
-    const line: ReportLine = { id: s.id, name: s.name, cls: s.cls, wpn: s.wpn, arm: s.arm, kills: u.kills, fate: 'unhurt', xp: 0, scar: null };
+    const line: ReportLine = { id: s.id, name: s.name, cls: s.cls, origin: s.origin, wpn: s.wpn, arm: s.arm, kills: u.kills, fate: 'unhurt', xp: 0, scar: null };
     if (u.dead) {
       let p = c.duel ? 0.2 : 0.42;
       if (st.staff.surgeon) p -= 0.18;

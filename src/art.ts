@@ -12,7 +12,8 @@ interface Livery { coat: string; trim: string }
 const SKINS: Record<Skin, Livery> = {
   own: { coat: PAL.red, trim: PAL.ochre }, bandit: { coat: PAL.drab, trim: PAL.paperHi }, deserter: { coat: PAL.grey, trim: PAL.ink },
   raider: { coat: PAL.green, trim: PAL.ochre }, imperial: { coat: PAL.ochre, trim: PAL.ink }, swede: { coat: PAL.blue, trim: PAL.ochre },
-  champion: { coat: PAL.plum, trim: PAL.ochre }, black: { coat: PAL.black, trim: PAL.red }, muscovite: { coat: PAL.russet, trim: PAL.ochre }
+  champion: { coat: PAL.plum, trim: PAL.ochre }, black: { coat: PAL.black, trim: PAL.red }, muscovite: { coat: PAL.russet, trim: PAL.ochre },
+  tatar: { coat: '#2b7d78', trim: PAL.paperHi }, croat: { coat: '#7b5a3c', trim: '#c0392b' }
 };
 
 /** Paints the rectangle at x, y, w by h, in colour c. Each painter has its own origin: a sprite's is the figure's feet (and it mirrors the figure when it faces left), a picture's is its corner. */
@@ -32,6 +33,7 @@ interface SoldierLook {
   t?: number; // the field's clock, for the ramrod
   wpn?: number; arm?: number; // the gear he carries and wears, levels 0 to 3 (see WPN and ARM); left out is the worst of each
   man?: number; // what settles his hair and his moustache: a soldier's id, so the same man always looks the same
+  nation?: NationId; // a man of the company wears the dress of his nation (see NATIONS); a foe's comes from his skin
 }
 
 /* ---------- backdrop: a woodcut landscape ---------- */
@@ -179,11 +181,11 @@ function drawField(v: FieldView, b: Battle, t: number) {
     for (let i = 0; i < 3; i++) g.fillRect(-30 + Math.sin(t * 0.21 + i * 1.7) * 22, 42 + i * 25, LW + 60, 9);
   }
   const us = b.units.filter(u => !u.fled).sort((a, c) => a.y - c.y);
-  for (const u of us) if (u.dead) drawSoldier(g, Math.round(u.x * SS) / SS, FY + Math.round(u.y * SS) / SS, { dead: true, cls: u.cls, skin: u.skin, face: u.face, wpn: u.wpn, arm: u.arm, man: manNo(u.sid) });
+  for (const u of us) if (u.dead) drawSoldier(g, Math.round(u.x * SS) / SS, FY + Math.round(u.y * SS) / SS, { dead: true, cls: u.cls, skin: u.skin, face: u.face, wpn: u.wpn, arm: u.arm, man: manNo(u.sid), nation: nationOf(u.origin) });
   for (const u of us) {
     if (u.dead) continue;
     const x = Math.round(u.x * SS) / SS, y = FY + Math.round(u.y * SS) / SS;
-    drawSoldier(g, x, y, { cls: u.cls, skin: u.skin, face: u.face, mode: u.mode, moving: u.moving, anim: u.anim * 2, swing: u.swing, flash: u.flash, hurt: u.hurt, t, level: u.cls === 'pike' && u.tgt && dist(u, u.tgt) < 44, wpn: u.wpn, arm: u.arm, man: manNo(u.sid) });
+    drawSoldier(g, x, y, { cls: u.cls, skin: u.skin, face: u.face, mode: u.mode, moving: u.moving, anim: u.anim * 2, swing: u.swing, flash: u.flash, hurt: u.hurt, t, level: u.cls === 'pike' && u.tgt && dist(u, u.tgt) < 44, wpn: u.wpn, arm: u.arm, man: manNo(u.sid), nation: nationOf(u.origin) });
     if (!u.routing) {
       g.fillStyle = INK; g.fillRect(x - 5, y - 27, 11, 3); g.fillStyle = PAL.paperHi; g.fillRect(x - 4, y - 26, 9, 1);
       g.fillStyle = (SKINS[u.skin] || SKINS.own).coat; g.fillRect(x - 4, y - 26, Math.max(1, Math.round(9 * u.hp / u.max)), 1);
@@ -381,11 +383,11 @@ function landscape(g: CanvasRenderingContext2D, W: number, H: number, seed: numb
 // A man of the company on his card: standing in his arms and armour, or abed. gear tries other levels than he has, for a card to show what buying them would make of him.
 function soldierArt(s: Soldier, gear?: Partial<Pick<Soldier, 'wpn' | 'arm'>>) {
   const seed = s.id % 5, pose = s.wound ? 'lie' : 'stand', wpn = gear && gear.wpn != null ? gear.wpn : s.wpn, arm = gear && gear.arm != null ? gear.arm : s.arm;
-  return artURL('m' + s.id + s.cls + pose + wpn + arm, 48, 36, (g, W, H) => { landscape(g, W, H, seed); drawCamper(g, 24, H - 3, { cls: s.cls, skin: 'own', face: 1, mode: 'idle', anim: 0, pose, wpn, arm, man: s.id }); });
+  return artURL('m' + s.id + s.cls + pose + wpn + arm, 48, 36, (g, W, H) => { landscape(g, W, H, seed); drawCamper(g, 24, H - 3, { cls: s.cls, skin: 'own', face: 1, mode: 'idle', anim: 0, pose, wpn, arm, man: s.id, nation: nationOf(s.origin) }); });
 }
 // After a fight: how each man came out of it.
 function fateArt(l: ReportLine) {
-  const seed = l.id % 5, cls = l.cls, fate = l.fate, kit = { wpn: l.wpn, arm: l.arm, man: l.id };
+  const seed = l.id % 5, cls = l.cls, fate = l.fate, kit = { wpn: l.wpn, arm: l.arm, man: l.id, nation: nationOf(l.origin) };
   return artURL('f' + l.id + cls + fate + l.wpn + l.arm, 48, 36, (g, W, H) => {
     landscape(g, W, H, seed);
     if (fate === 'killed' || fate === 'struck down') drawCamper(g, 24, H - 3, { cls, skin: 'own', pose: 'lie', bandage: fate !== 'killed', ...kit });
@@ -407,9 +409,10 @@ function stanceArt(s: Stance) {
   return artURL('t' + s, 60, 36, (g, W, H) => {
     landscape(g, W, H, s.length + 1);
     const y = H - 3, o = (cls: TroopClass, x: number, m: Partial<SoldierLook>) => drawSoldier(g, x, y - (x % 3 === 0 ? 1 : 0), Object.assign({ cls, skin: 'own', face: 1, mode: 'idle', anim: 0 }, m));
-    if (s === 'hold') { o('pike', 12, {}); o('shot', 29, { mode: 'aim', flash: 1 }); o('pike', 46, {}); }
-    else if (s === 'advance') { o('pike', 10, { moving: true, anim: 0 }); o('sabre', 27, { moving: true, anim: 1 }); o('shot', 44, { moving: true, anim: 0 }); }
-    else { o('pike', 8, { moving: true, anim: 1, level: true }); o('sabre', 36, { mode: 'fight', moving: true, anim: 0 }); o('sabre', 51, { mode: 'fight', moving: true, anim: 1, swing: 1 }); }
+    // a company is of many nations: these are of the ones it is likely to have
+    if (s === 'hold') { o('pike', 12, { nation: 'scot' }); o('shot', 29, { mode: 'aim', flash: 1, nation: 'cossack' }); o('pike', 46, { nation: 'german' }); }
+    else if (s === 'advance') { o('pike', 10, { moving: true, anim: 0, nation: 'pole' }); o('sabre', 27, { moving: true, anim: 1, nation: 'magyar' }); o('shot', 44, { moving: true, anim: 0, nation: 'swede' }); }
+    else { o('pike', 8, { moving: true, anim: 1, level: true, nation: 'german' }); o('sabre', 36, { mode: 'fight', moving: true, anim: 0, nation: 'cossack' }); o('sabre', 51, { mode: 'fight', moving: true, anim: 1, swing: 1, nation: 'tatar' }); }
   });
 }
 function supplyArt(k: Supply) {
@@ -429,9 +432,9 @@ function questArt(q: Quest, frac?: number) {
   return artURL('q' + q.id, 72, 36, (g, W, H) => {
     landscape(g, W, H, q.id.length);
     if (q.transport === 'raft') { drawCargo(g, 'raft', 16, H - 6, 1, false); return; }
-    if (q.transport === 'herd') { drawCargo(g, 'herd', 6, H - 6, 1, false); drawSoldier(g, 66, H - 3, { cls: 'sabre', skin: 'own', face: -1, mode: 'idle', anim: 0 }); return; }
+    if (q.transport === 'herd') { drawCargo(g, 'herd', 6, H - 6, 1, false); drawSoldier(g, 66, H - 3, { cls: 'sabre', skin: 'own', face: -1, mode: 'idle', anim: 0, nation: 'cossack' }); return; }
     drawCargo(g, q.transport, 22, H - 8, 0.8, false);
-    drawSoldier(g, 8, H - 3, { cls: q.transport === 'chest' ? 'shot' : 'pike', skin: 'own', face: 1, mode: 'idle', anim: 0 });
+    drawSoldier(g, 8, H - 3, { cls: q.transport === 'chest' ? 'shot' : 'pike', skin: 'own', face: 1, mode: 'idle', anim: 0, nation: q.transport === 'chest' ? 'pole' : 'german' });
   });
 }
 // A corner of the camp at night, for the cards of camp events.
@@ -443,8 +446,8 @@ function eventArt() {
     F(0, 18, W, 14, '#2b3446'); F(0, 23, W, 9, '#3b3325');
     const gr = g.createRadialGradient(48, 24, 2, 48, 24, 26); gr.addColorStop(0, 'rgba(240,170,60,.55)'); gr.addColorStop(1, 'rgba(240,170,60,0)'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
     F(40, 21, 4, 1, '#d8642a'); F(52, 21, 4, 1, '#d8642a');
-    drawCamper(g, 36, 27, { cls: 'sabre', skin: 'own', pose: 'sit', face: 1, prop: 'bandura' });
-    drawCamper(g, 61, 27, { cls: 'pike', skin: 'own', pose: 'sit', face: -1 });
+    drawCamper(g, 36, 27, { cls: 'sabre', skin: 'own', pose: 'sit', face: 1, prop: 'bandura', nation: 'cossack' });
+    drawCamper(g, 61, 27, { cls: 'pike', skin: 'own', pose: 'sit', face: -1, nation: 'scot' });
     F(46, 26, 6, 2, '#4b3420'); F(46, 22, 6, 4, '#c2412b'); F(47, 20, 4, 4, PAL.flash); F(48, 18, 2, 2, PAL.flash); F(48, 23, 2, 2, '#fff3c4');
   });
 }
@@ -578,7 +581,7 @@ function drawCamp(v: CampView | null, st: Campaign | null, sel: number | null, d
   }
   const draw = (gg: CanvasRenderingContext2D, p: CampFigure, x: number, y: number) => {
     const c = v.pos[p.id]!, s = p.s;
-    const me = { cls: s.cls, skin: 'own' as const, wpn: s.wpn, arm: s.arm, man: s.id };
+    const me = { cls: s.cls, skin: 'own' as const, wpn: s.wpn, arm: s.arm, man: s.id, nation: nationOf(s.origin) };
     if (c.moving) return drawCamper(gg, x, y, { ...me, face: c.face, mode: 'idle', moving: true, anim: c.anim });
     if (p.k === 'abed') return drawCamper(gg, x, y, { ...me, face: p.f, pose: 'lie' });
     if (p.k === 'rest') return drawCamper(gg, x, y, { ...me, face: p.f, pose: 'sit', prop: p.prop, strum: Math.floor(t * 5) % 2 });

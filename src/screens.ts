@@ -118,6 +118,13 @@ function cardHTML(o: CardSpec) {
   }
   return h + '</span></' + tag + '>';
 }
+/** The colours of a man's country as a little flag, in stripes, to stand before the name of his nation. */
+function flagHTML(origin: string) {
+  const f = flagOf(origin);
+  if (!f) return '';
+  const n = f.length, stops = f.map((c, i) => c + ' ' + (100 * i / n).toFixed(1) + '% ' + (100 * (i + 1) / n).toFixed(1) + '%').join(',');
+  return '<i class="flag" aria-hidden="true" style="background:linear-gradient(' + stops + ')"></i>';
+}
 function sectHTML(title: string, aside?: string) { return '<h2 class="sect"><span>' + title + '</span>' + (aside ? '<small>' + aside + '</small>' : '') + '</h2>'; }
 
 /* ---------- the bar along the top: where, when, and what the company has ---------- */
@@ -154,7 +161,7 @@ function barHTML() {
 function gearHTML(s: Soldier, k: GearSlot) {
   const names = k === 'wpn' ? WPN[s.cls] : ARM, t = s[k], what = k === 'wpn' ? 'arms' : 'armour', fresh = !!ui.fresh && ui.fresh.id === s.id && ui.fresh.k === k;
   const rungs = '<span class="rungs" role="img" aria-label="' + esc(names[t] + ', ' + (t + 1) + ' of 4') + '">' + names.map((n, i) =>
-    '<span class="rung ' + (i < t ? 'was' : i === t ? 'now' + (fresh ? ' fresh' : '') : i === t + 1 ? 'next' : 'far') + '" title="' + esc(n + (i === t ? ', his now' : i === t + 1 ? ', ' + gearPrice(G!, t) + ' thalers' : '')) + '"><img src="' + gearArt(k, s.cls, i) + '" alt=""></span>').join('') + '</span>';
+    '<span class="rung ' + (i < t ? 'was' : i === t ? 'now' + (fresh ? ' fresh' : '') : i === t + 1 ? 'next' : 'far') + '" title="' + esc(n + (i === t ? ', his now' : i === t + 1 ? ', ' + gearPrice(G!, t) + ' thalers' : '')) + '"><img src="' + gearArt(k, s.cls, i, nationOf(s.origin)) + '" alt=""></span>').join('') + '</span>';
   const head = '<span class="gname">' + ic(k === 'wpn' ? s.cls : 'cuirass') + '<span>' + esc(names[t]) + '</span></span>';
   if (t >= 3) return '<span class="gear" data-slot="' + k + '">' + head + rungs + '<span class="best" title="The best there is">' + ic('star', 'The best there is') + '</span></span>';
   const p = gearPrice(G!, t), shop = has(G!, 'market');
@@ -183,7 +190,7 @@ function soldierCard(s: Soldier, where: 'roll' | 'camp') {
   body += '<span class="gears">' + gearHTML(s, 'wpn') + gearHTML(s, 'arm') + '</span>';
   if (where === 'roll') body += '<button class="link" data-act="dismiss" data-id="' + s.id + '">Strike from the roll</button>';
   return cardHTML({
-    cls: 'soldier' + (s.promos ? ' gilt' : '') + (where === 'camp' ? ' side-card' : ''), attrs: ' aria-label="' + esc(s.name) + '"', title: esc(s.name) + '<small>' + esc(s.origin) + '</small>',
+    cls: 'soldier' + (s.promos ? ' gilt' : '') + (where === 'camp' ? ' side-card' : ''), attrs: ' aria-label="' + esc(s.name) + '"', title: esc(s.name) + '<small>' + flagHTML(s.origin) + esc(s.origin) + '</small>',
     art: soldierArt(s), artCls: (s.wound ? 'hurt' : '') + (ui.fresh && ui.fresh.id === s.id ? ' fresh' : ''), badges, body,
     type: { look: LOOK[s.cls], text: c.name, coin: wageOf(s), coinLabel: 'Wage, thalers a month', lvl: roman(s.level) }
   });
@@ -193,7 +200,7 @@ function recruitCard(r: Recruit, i: number, full: boolean) {
   const badges = T ? '<span class="badge' + (T.good ? '' : ' bad') + '" title="' + esc(T.desc) + '">' + ic(T.good ? 'star' : 'warn') + esc(s.trait) + '</span>' : '';
   return cardHTML({
     tag: 'button', cls: 'buy', attrs: ' data-act="hire" data-i="' + i + '"' + (off ? ' disabled' : '') + ' aria-label="' + esc('Hire ' + s.name + ', ' + s.origin + ' ' + c.name.toLowerCase() + ', level ' + s.level + (s.trait ? ', ' + s.trait.toLowerCase() : '') + ', for ' + r.price + ' thalers') + '"',
-    title: esc(s.name) + '<small>' + esc(s.origin) + '</small>', art: soldierArt(s), badges,
+    title: esc(s.name) + '<small>' + flagHTML(s.origin) + esc(s.origin) + '</small>', art: soldierArt(s), badges,
     body: '<span class="strip">' + stat('heart', s.vig, 'Vigour') + stat(s.cls, s.cls === 'shot' ? s.aim : s.mel, c.skill) + stat('shield', s.grd, 'Guard') + '</span>' +
       '<span class="line">' + ic('coin') + '<span>Wage ' + wageOf(s) + ' a month</span></span>',
     type: { look: LOOK[s.cls], text: c.name + ' · ' + roman(s.level), coin: r.price, coinLabel: 'Price to hire, thalers' }

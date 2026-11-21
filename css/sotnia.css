@@ -115,6 +115,7 @@ button.trip:hover { border-color: var(--gilt); color: var(--cream); }
 .card .face { display: flex; flex-direction: column; gap: 7px; height: 100%; padding: 7px 7px 8px; background: var(--parchment); border: 1px solid var(--gilt-lo); border-radius: 8px; }
 .card .banner { display: block; padding: 4px 10px 5px; text-align: center; background: var(--parchment-hi); border: 1.5px solid var(--ink); border-radius: 999px; font: 700 17px/1.08 var(--caps); letter-spacing: .02em; text-wrap: balance; }
 .card .banner small { display: block; font: italic 12.5px/1.15 var(--body); letter-spacing: 0; color: var(--ink-soft); }
+.flag { display: inline-block; width: 15px; height: 10px; margin-right: 6px; border: 1px solid var(--ink); border-radius: 1px; vertical-align: -1px; }
 .card .art { position: relative; display: block; flex: none; border: 1.5px solid var(--ink); overflow: hidden; background: var(--paper-hi); line-height: 0; }
 .card .art img { display: block; width: 100%; aspect-ratio: 48 / 34; object-fit: cover; object-position: center bottom; image-rendering: pixelated; }
 .card .art.wide img { aspect-ratio: 72 / 30; }

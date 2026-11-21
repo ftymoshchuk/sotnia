@@ -58,7 +58,7 @@ const MAT = {
   felt: '#2c2926', feltHi: '#4a443d', fur: PAL.fur, furHi: '#735339',
   cord: '#a99f86', ember: '#f08a2c', blood: '#7c1824'
 } as const;
-/** The hair a man may have, by his number (see SoldierLook.man): black, brown, chestnut, fair, grey. */
+/** The hair a man may have, by his number (see SoldierLook.man), when his nation has no hair of its own: black, brown, chestnut, fair, grey. */
 const HAIR = ['#2a1c12', '#4a3220', '#7b5b33', '#a8803e', '#77736b'] as const;
 const SHADOW = 'rgba(28,26,23,.22)';
 
@@ -66,18 +66,86 @@ const SHADOW = 'rgba(28,26,23,.22)';
 const gearLv = (n?: number) => (n ? clamp(Math.floor(n), 0, 3) : 0);
 /** The number that settles a man's looks (his hair and moustache) from the id of a soldier, or the 'e3' of a foe. */
 const manNo = (sid: number | string) => (typeof sid === 'number' ? sid : 5 + (parseInt(String(sid).slice(1), 10) || 0) * 2);
+/** A colour (as #rrggbb) with its channels multiplied by k, for the light on a boot or a cap. */
+function glow(hex: string, k: number) {
+  const key = 'g' + hex + k;
+  if (tinted[key]) return tinted[key];
+  const n = parseInt(hex.slice(1), 16), mix = (v: number) => Math.round(clamp(v * k, 0, 255));
+  return (tinted[key] = '#' + ((1 << 24) | (mix(n >> 16) << 16) | (mix((n >> 8) & 255) << 8) | mix(n & 255)).toString(16).slice(1));
+}
+
+/* ---------- the nations ---------- */
+/** The peoples a man is drawn as: the origins of the company, and the foes who have a dress of their own. */
+type NationId = OriginId | 'imperial' | 'muscovite';
+/** What a man wears on his head: the morion of a pikeman, the broad hat of a musketeer, the kolpak of a sabreur, the taller kalpak of the Hungarians, a Scot's bonnet, a Tatar's turban. */
+type HeadKind = 'morion' | 'hat' | 'kolpak' | 'kalpak' | 'bonnet' | 'tatar';
+/** The one thing in a nation's dress that no other has: a Scot's plaid, the sleeve a Pole throws back, a Croat's cravat, a Hungarian's braid, a German's slashed sleeves. */
+type NationalMark = 'plaid' | 'hanging' | 'cravat' | 'braid' | 'slashes';
+interface Nation {
+  coat: string; trim: string; // what a man of the company of this nation wears; a foe wears the colours of his skin
+  hose?: string | readonly [string, string]; boot?: string; // his legs (one colour, or the back leg's and the front leg's) and his boots
+  head?: Partial<Record<TroopClass, HeadKind>>; // what he wears on his head where it is not his class's own
+  bag?: string; plume?: string; // the cloth of his cap, and his feather
+  mark?: NationalMark;
+  hair?: readonly string[]; mus?: readonly number[]; // how his people wear their hair, and their moustaches (0 none, 1 short, 2 long)
+  flag: readonly string[]; // the colours of his country, which a card shows beside his name
+}
+/**
+ * Every man of the company is dressed as his nation, in its colours, and wears the company's red sash over them; so a Swede of the
+ * company and a Swedish foe, who have the same colours, are told apart by the sash. A foe takes his coat and trim from his skin, and
+ * the rest (his legs, his cap, his feather, his mark) from his nation, if his skin has one (see NATION_OF_SKIN).
+ */
+const NATIONS: Record<NationId, Nation> = {
+  cossack: { coat: '#3f78c4', trim: '#e3b93c', hose: '#26416e', boot: '#d2a63a', head: { pike: 'kolpak', shot: 'kolpak' }, bag: '#b3262f',
+    hair: ['#1e140d', '#2a1c12', '#4a3220'], mus: [2, 2, 1], flag: ['#3f78c4', '#e3b93c'] },
+  pole: { coat: '#a3222f', trim: '#f1ece0', boot: '#6d2a22', bag: '#a3222f', plume: '#f1ece0', mark: 'hanging',
+    hair: ['#4a3220', '#7b5b33', '#2a1c12', '#77736b'], mus: [1, 2, 2], flag: ['#f1ece0', '#a3222f'] },
+  german: { coat: '#2f2d33', trim: '#d6aa3a', hose: ['#2e2a27', '#a8232f'], plume: '#a8232f', mark: 'slashes',
+    hair: ['#a8803e', '#7b5b33', '#4a3220'], mus: [0, 1, 0], flag: ['#2f2d33', '#b02a30', '#d6aa3a'] },
+  swede: { coat: '#dcb040', trim: '#2d4b70', hose: '#2d4b70', plume: '#dcb040',
+    hair: ['#d9b45a', '#a8803e', '#c99a52'], mus: [0, 0, 1], flag: ['#2d4b70', '#dcb040'] },
+  scot: { coat: '#2f4f86', trim: '#f1ece0', hose: '#a8232f', head: { pike: 'bonnet', shot: 'bonnet' }, bag: '#1f3a63', mark: 'plaid',
+    hair: ['#b0552b', '#7b5b33', '#a8803e', '#4a3220'], mus: [0, 1], flag: ['#2f4f86', '#f1ece0'] },
+  magyar: { coat: '#3f7a4e', trim: '#f1ece0', hose: '#a8232f', head: { pike: 'kalpak', shot: 'kalpak', sabre: 'kalpak' }, bag: '#a8232f', plume: '#f1ece0', mark: 'braid',
+    hair: ['#1e140d', '#2a1c12'], mus: [2, 2, 1], flag: ['#a8232f', '#f1ece0', '#3f7a4e'] },
+  croat: { coat: SKINS.croat.coat, trim: SKINS.croat.trim, head: { sabre: 'hat' }, plume: '#c0392b', mark: 'cravat',
+    hair: ['#2a1c12', '#4a3220'], mus: [1, 2], flag: ['#c0392b', '#f1ece0', '#2f4f86'] },
+  tatar: { coat: SKINS.tatar.coat, trim: SKINS.tatar.trim, head: { pike: 'tatar', shot: 'tatar', sabre: 'tatar' }, bag: '#3b9a86',
+    hair: ['#1a1210', '#2a1c12'], mus: [1, 0], flag: ['#2b7d78', '#f1ece0'] },
+  imperial: { coat: SKINS.imperial.coat, trim: SKINS.imperial.trim, flag: ['#1c1a17', '#b98a2b'] },
+  muscovite: { coat: SKINS.muscovite.coat, trim: SKINS.muscovite.trim, head: { pike: 'kolpak', shot: 'kolpak', sabre: 'kolpak' }, flag: ['#f1ece0', '#2d4b70', '#a8232f'] }
+};
+/** The foes whose skins are the dress of a people. */
+const NATION_OF_SKIN: Partial<Record<Skin, NationId>> = { swede: 'swede', imperial: 'imperial', muscovite: 'muscovite', tatar: 'tatar', croat: 'croat' };
+/** What each class wears on its head, if its nation has no custom of its own. */
+const CLASS_HEAD: Record<TroopClass, HeadKind> = { pike: 'morion', shot: 'hat', sabre: 'kolpak' };
+/** The nation of a man of the company, from the label of his Origin (such as 'Polish'). */
+const nationOf = (label?: string): NationId | undefined => { const o = ORIGINS.find(x => x.label === label); return o && o.id; };
+/** The colours of the country of a man of the company, from the label of his Origin, for a card to show. */
+const flagOf = (label?: string): readonly string[] | null => { const id = nationOf(label); return id ? NATIONS[id].flag : null; };
 
 /** What a figure wears, worked out once for each drawing. */
 interface Dress {
   c: string; cd: string; cl: string; // the coat, in shade and in light (white for the moment after a hit)
   t: string; // the trim
+  sash: string; // the sash round his waist: the company's red on a man of the company; on a foe the colour of his coat, over armour only; else none
+  hoseB: string; hoseF: string; boot: string; // the colours of his back leg, his front leg and his boots
+  head: HeadKind; bag: string; plume: string; // what is on his head, the cloth of it, and its feather
+  mark: NationalMark | undefined; // the one thing his nation wears that no other does
   arm: number; wpn: number; // the gear levels
   hair: string; mus: number; // his hair, and his moustache: 0 none, 1 short, 2 long
   hit: boolean;
 }
 function dressFor(o: SoldierLook): Dress {
-  const sk = SKINS[o.skin] || SKINS.own, hit = o.hurt! > 0.1, n = o.man || 0, c = hit ? PAL.white : sk.coat;
-  return { c, cd: tint(c, 0.74), cl: tint(c, 1.2), t: sk.trim, arm: gearLv(o.arm), wpn: gearLv(o.wpn), hair: HAIR[n % HAIR.length], mus: Math.floor(n / HAIR.length) % 3, hit };
+  const own = o.skin === 'own', id = o.nation || NATION_OF_SKIN[o.skin], N = id ? NATIONS[id] : null, sk = own && N ? N : SKINS[o.skin] || SKINS.own;
+  const hit = o.hurt! > 0.1, n = o.man || 0, c = hit ? PAL.white : sk.coat, arm = gearLv(o.arm), hose = N && N.hose ? N.hose : MAT.hose;
+  return {
+    c, cd: tint(c, 0.74), cl: tint(c, 1.2), t: sk.trim, sash: hit ? PAL.white : own ? PAL.red : arm ? sk.coat : '',
+    hoseB: typeof hose === 'string' ? hose : hose[0], hoseF: typeof hose === 'string' ? hose : hose[1], boot: N && N.boot || MAT.boot,
+    head: N && N.head && N.head[o.cls] || CLASS_HEAD[o.cls], bag: N && N.bag || c, plume: N && N.plume || sk.trim, mark: N ? N.mark : undefined,
+    arm, wpn: gearLv(o.wpn), hair: N && N.hair ? N.hair[n % N.hair.length] : HAIR[n % HAIR.length],
+    mus: N && N.mus ? N.mus[(n >> 1) % N.mus.length] : Math.floor(n / HAIR.length) % 3, hit
+  };
 }
 
 /** A painter for figure pixels, with the figure's feet at x, y of the scene (see SS), mirrored for one who faces left. */
@@ -126,18 +194,31 @@ const PLUMES: readonly (readonly string[])[] = [
 function plume(U: Painter, x: number, y: number, size: number, c: string) { bmp(U, x, y, PLUMES[size], { p: c, P: tint(c, 1.35), q: tint(c, 0.7), w: PAL.white }); }
 
 /* ---------- the man: legs, coat and armour, head ---------- */
-// step: -1 standing, 0 mid-stride, 1 passing
-function legs(R: Painter, step: number) {
-  const hose = MAT.hose, boot = MAT.boot, hi = MAT.bootHi, K = MAT.ink;
+// step: -1 standing, 0 mid-stride, 1 passing. d gives the colours of the legs and the boots.
+function legs(R: Painter, step: number, d: Pick<Dress, 'hoseB' | 'hoseF' | 'boot'>) {
+  const hb = d.hoseB, hf = d.hoseF, boot = d.boot, hi = glow(boot, 1.55), K = MAT.ink;
   if (step === 0) {
-    R(-4, -11, 4, 3, hose); R(-6, -8, 4, 3, hose); R(-8, -5, 4, 3, boot); R(-8, -5, 4, 1, hi); R(-9, -2, 6, 2, boot); R(-9, -1, 6, 1, K);
-    R(1, -11, 4, 3, hose); R(2, -8, 4, 3, hose); R(4, -5, 4, 3, boot); R(4, -5, 4, 1, hi); R(4, -2, 8, 2, boot); R(4, -1, 8, 1, K);
+    R(-4, -11, 4, 3, hb); R(-6, -8, 4, 3, hb); R(-8, -5, 4, 3, boot); R(-8, -5, 4, 1, hi); R(-9, -2, 6, 2, boot); R(-9, -1, 6, 1, K);
+    R(1, -11, 4, 3, hf); R(2, -8, 4, 3, hf); R(4, -5, 4, 3, boot); R(4, -5, 4, 1, hi); R(4, -2, 8, 2, boot); R(4, -1, 8, 1, K);
   } else if (step === 1) {
-    R(-3, -9, 3, 3, hose); R(-2, -6, 3, 3, boot);
-    R(0, -11, 4, 5, hose); R(0, -6, 4, 3, boot); R(0, -6, 4, 1, hi); R(0, -3, 7, 3, boot); R(0, -1, 7, 1, K);
+    R(-3, -9, 3, 3, hb); R(-2, -6, 3, 3, boot);
+    R(0, -11, 4, 5, hf); R(0, -6, 4, 3, boot); R(0, -6, 4, 1, hi); R(0, -3, 7, 3, boot); R(0, -1, 7, 1, K);
   } else {
-    R(-4, -11, 4, 5, hose); R(-4, -6, 4, 3, boot); R(-4, -6, 4, 1, hi); R(-4, -3, 5, 3, boot); R(-4, -1, 5, 1, K);
-    R(1, -11, 4, 5, hose); R(1, -6, 4, 3, boot); R(1, -6, 4, 1, hi); R(1, -3, 7, 3, boot); R(1, -1, 7, 1, K);
+    R(-4, -11, 4, 5, hb); R(-4, -6, 4, 3, boot); R(-4, -6, 4, 1, hi); R(-4, -3, 5, 3, boot); R(-4, -1, 5, 1, K);
+    R(1, -11, 4, 5, hf); R(1, -6, 4, 3, boot); R(1, -6, 4, 1, hi); R(1, -3, 7, 3, boot); R(1, -1, 7, 1, K);
+  }
+}
+/** The legs of the hired hands, who have no nation. */
+const PLAIN_LEGS = { hoseB: MAT.hose, hoseF: MAT.hose, boot: MAT.boot };
+/** What hangs behind a man's back: the plaid a Scot wears, and the sleeve a Pole throws over his shoulder. */
+function behind(U: Painter, d: Dress) {
+  if (d.mark === 'plaid') {
+    // tartan, in red crossed with green and navy: a cloak from the shoulders to the knee
+    U(-12, -25, 6, 17, '#a8232f'); U(-10, -25, 1, 17, '#2f6a45'); U(-12, -21, 6, 1, '#2f6a45'); U(-12, -15, 6, 1, '#2f6a45'); U(-12, -18, 6, 1, '#1f3a63'); U(-12, -12, 6, 1, '#1f3a63'); U(-8, -25, 1, 17, '#1f3a63');
+    U(-12, -8, 6, 1, '#6d1a22'); U(-12, -25, 6, 1, '#d8b25a');
+  } else if (d.mark === 'hanging') {
+    // a kontusz sleeve, empty, thrown back from the shoulder and hanging to the hip, lined in white
+    U(-10, -24, 4, 11, d.c); U(-10, -24, 1, 11, d.t); U(-10, -14, 4, 1, d.t); U(-9, -13, 2, 2, d.cd);
   }
 }
 /**
@@ -147,11 +228,14 @@ function legs(R: Painter, step: number) {
  */
 function torso(U: Painter, d: Dress) {
   const { c, cd, cl, arm } = d, K = MAT.ink, white = (x: string) => (d.hit ? PAL.white : x);
+  behind(U, d);
   const body = arm ? white(MAT.buff) : c, lo = arm ? MAT.buffLo : cd, hi = arm ? MAT.buffHi : cl;
   U(-6, -14, 13, 4, body); U(-4, -19, 9, 3, body); U(-5, -25, 11, 6, body);
   U(-6, -14, 1, 4, lo); U(-4, -19, 1, 3, lo); U(-5, -25, 1, 6, lo); U(-6, -11, 13, 1, lo);
   U(4, -24, 1, 5, hi);
   if (!arm) { U(-1, -26, 4, 1, MAT.linen); U(1, -25, 1, 2, MAT.linen); U(3, -22, 1, 1, hi); U(0, -20, 1, 1, cd); }
+  if (!arm && d.mark === 'hanging') { U(-1, -25, 5, 9, d.t); U(-1, -25, 1, 9, tint(d.t, 0.8)); for (let i = 0; i < 3; i++) U(1, -23 + i * 3, 1, 1, MAT.gilt); }
+  if (!arm && d.mark === 'braid') { for (let i = 0; i < 3; i++) { U(-3, -24 + i * 2, 7, 1, d.t); U(0, -24 + i * 2, 1, 2, d.t); } U(-6, -12, 13, 1, d.t); }
   else { U(2, -24, 1, 8, lo); U(-1, -14, 1, 3, lo); U(3, -14, 1, 3, lo); for (let i = 0; i < 3; i++) U(1, -23 + i * 2, 1, 1, MAT.buffHi); }
   U(-4, -16, 9, 2, MAT.leather); U(2, -16, 2, 2, arm > 1 ? MAT.gilt : MAT.steel);
   if (arm > 1) {
@@ -161,7 +245,7 @@ function torso(U: Painter, d: Dress) {
     U(-4, -24, 9, 1, arm > 2 ? MAT.gilt : sl); U(-2, -26, 5, 1, s); U(-2, -26, 5, 1, s);
     if (arm > 2) { U(-3, -21, 1, 1, MAT.giltHi); U(3, -21, 1, 1, MAT.giltHi); U(-3, -18, 1, 1, MAT.giltHi); U(3, -18, 1, 1, MAT.giltHi); U(-2, -26, 5, 1, MAT.gilt); }
   }
-  if (arm) { U(-5, -17, 11, 2, d.c); U(-5, -17, 11, 1, d.cl); U(2, -16, 2, 2, arm > 1 ? MAT.gilt : MAT.steel); U(-8, -17, 3, 3, d.c); U(-8, -14, 2, 6, d.c); U(-6, -14, 2, 4, d.cd); U(-8, -9, 2, 1, d.cd); }
+  if (d.sash) { const sc = d.sash, sl = tint(sc, 0.74), sh = tint(sc, 1.25); U(-5, -17, 11, 2, sc); U(-5, -17, 11, 1, sh); U(2, -16, 2, 2, arm > 1 ? MAT.gilt : MAT.steel); U(-8, -17, 3, 3, sc); U(-8, -14, 2, 6, sc); U(-6, -14, 2, 4, sl); U(-8, -9, 2, 1, sl); }
   if (arm > 2) {
     const s = '#a9b2b6', sl = '#6f7a80';
     for (let i = 0; i < 3; i++) { U(-5, -14 + i * 2, 10 + i, 1, i % 2 ? '#c2cacd' : s); U(-5, -13 + i * 2, 10 + i, 1, sl); }
@@ -178,34 +262,69 @@ function head(U: Painter, d: Dress) {
   U(-1, -30, 1, 2, MAT.skinLo); U(2, -31, 1, 1, MAT.ink); U(1, -32, 2, 1, d.hair); U(4, -31, 1, 2, MAT.skin);
   if (d.mus === 1) U(2, -29, 3, 1, d.hair);
   else if (d.mus === 2) { U(2, -29, 3, 1, d.hair); U(4, -28, 1, 2, d.hair); U(1, -28, 1, 1, d.hair); }
+  if (d.mark === 'cravat') { U(-2, -27, 6, 2, '#c0392b'); U(0, -27, 1, 2, PAL.white); U(2, -27, 1, 2, PAL.white); U(1, -25, 3, 3, '#c0392b'); U(2, -25, 1, 3, PAL.white); }
 }
 /**
- * What he wears on his head, by his class and his armour. A pikeman's morion grows a comb, a brass band and at last a plume. A
- * musketeer's broad felt hat gains a plume and a brooch. A sabreur's fur cap gains a clasp and a feather.
+ * What he wears on his head, by his nation (see Dress.head), which is his class's own where his nation has no custom, and how it grows
+ * with his armour. A morion gains a brass band and a plume. A broad hat gains a plume and a brooch. A kolpak gains a clasp and a
+ * feather, a kalpak has its feather from the first, a Scot's bonnet has its tuft and gains a feather, and a turban a jewel.
  */
-function hat(U: Painter, d: Dress, cls: TroopClass) {
-  const a = d.arm;
-  if (cls === 'pike') {
-    const s = a > 2 ? '#a9b2b6' : MAT.steel, hi = MAT.steelHi, lo = MAT.steelLo;
-    U(-5, -35, 11, 1, lo); U(-4, -39, 9, 4, s); U(-2, -41, 5, 2, s); U(-3, -38, 1, 2, hi); U(-1, -41, 2, 1, hi); U(-4, -36, 9, 1, lo);
-    U(-6, -36, 1, 2, lo); U(6, -36, 1, 2, lo);
-    if (a > 0) { U(-4, -37, 9, 1, MAT.giltLo); U(-3, -33, 2, 4, lo); }
-    if (a > 1) { U(-4, -37, 9, 1, MAT.gilt); U(0, -37, 1, 1, MAT.giltHi); U(5, -33, 1, 3, lo); }
-    if (a > 2) { U(-2, -42, 5, 1, MAT.gilt); plume(U, -9, -50, 1, d.t); }
-  } else if (cls === 'shot') {
-    const f = MAT.felt, fh = MAT.feltHi;
-    U(-4, -39, 9, 5, f); U(-3, -40, 7, 1, f); U(-7, -35, 15, 2, f); U(-8, -36, 1, 1, f); U(8, -36, 1, 1, f); U(-4, -39, 1, 4, fh); U(-6, -35, 12, 1, fh);
-    U(-4, -36, 9, 1, d.t);
-    if (a > 1) plume(U, -8, -50, a > 2 ? 2 : 1, d.t); else plume(U, -7, -46, 0, d.t);
-    if (a > 1) { U(2, -37, 2, 2, MAT.gilt); U(2, -37, 1, 1, MAT.giltHi); }
-    if (a > 2) U(0, -36, 5, 1, MAT.gilt);
-  } else {
-    U(-4, -40, 9, 7, MAT.fur); U(-3, -41, 7, 1, MAT.fur); U(-3, -40, 2, 1, MAT.furHi); U(0, -38, 2, 1, MAT.furHi); U(2, -36, 2, 1, MAT.furHi); U(-4, -34, 9, 1, tint(MAT.fur, 0.7));
-    U(-6, -41, 3, 7, d.c); U(-2, -42, 6, 1, d.c); U(-6, -41, 1, 7, d.cd);
-    if (a > 0) { U(-4, -35, 1, 1, MAT.furHi); }
-    if (a > 1) { U(3, -39, 2, 3, MAT.gilt); U(3, -39, 1, 1, MAT.giltHi); seg(U, 4, -39, 6, -46, 1, PAL.white); }
-    if (a > 2) { seg(U, 4, -39, 6, -50, 2, PAL.white); U(3, -37, 2, 2, d.t); U(3, -40, 2, 1, MAT.giltHi); }
-  }
+function hat(U: Painter, d: Dress) {
+  if (d.head === 'morion') morion(U, d);
+  else if (d.head === 'hat') felt(U, d);
+  else if (d.head === 'kolpak') kolpak(U, d, 0);
+  else if (d.head === 'kalpak') kolpak(U, d, 2);
+  else if (d.head === 'bonnet') bonnet(U, d);
+  else turban(U, d);
+}
+function morion(U: Painter, d: Dress) {
+  const a = d.arm, s = a > 2 ? '#a9b2b6' : MAT.steel, hi = MAT.steelHi, lo = MAT.steelLo;
+  U(-5, -35, 11, 1, lo); U(-4, -39, 9, 4, s); U(-2, -41, 5, 2, s); U(-3, -38, 1, 2, hi); U(-1, -41, 2, 1, hi); U(-4, -36, 9, 1, lo);
+  U(-6, -36, 1, 2, lo); U(6, -36, 1, 2, lo);
+  if (a > 0) { U(-4, -37, 9, 1, MAT.giltLo); U(-3, -33, 2, 4, lo); }
+  if (a > 1) { U(-4, -37, 9, 1, MAT.gilt); U(0, -37, 1, 1, MAT.giltHi); U(5, -33, 1, 3, lo); }
+  if (a > 2) { U(-2, -42, 5, 1, MAT.gilt); plume(U, -9, -50, 1, d.plume); }
+}
+function felt(U: Painter, d: Dress) {
+  const a = d.arm, f = MAT.felt, fh = MAT.feltHi;
+  U(-4, -39, 9, 5, f); U(-3, -40, 7, 1, f); U(-7, -35, 15, 2, f); U(-8, -36, 1, 1, f); U(8, -36, 1, 1, f); U(-4, -39, 1, 4, fh); U(-6, -35, 12, 1, fh);
+  U(-4, -36, 9, 1, d.t);
+  if (a > 1) plume(U, -8, -50, a > 2 ? 2 : 1, d.plume); else plume(U, -7, -46, 0, d.plume);
+  if (a > 1) { U(2, -37, 2, 2, MAT.gilt); U(2, -37, 1, 1, MAT.giltHi); }
+  if (a > 2) U(0, -36, 5, 1, MAT.gilt);
+}
+/** A tall cap of fur with its cloth bag hanging behind: tall is how much taller than a kolpak, which a kalpak is, and fea the feather it wears. */
+function kolpak(U: Painter, d: Dress, tall: number) {
+  const a = d.arm, T = tall, fea = tall || d.mark === 'hanging' ? Math.max(a, 1) : a;
+  U(-4, -40 - T, 9, 7 + T, MAT.fur); U(-3, -41 - T, 7, 1, MAT.fur); U(-3, -40 - T, 2, 1, MAT.furHi); U(0, -38 - T, 2, 1, MAT.furHi); U(2, -36, 2, 1, MAT.furHi); U(-4, -34, 9, 1, tint(MAT.fur, 0.7));
+  U(-6, -41 - T, 3, 7 + T, d.bag); U(-2, -42 - T, 6, 1, d.bag); U(-6, -41 - T, 1, 7 + T, tint(d.bag, 0.74));
+  if (T) U(-4, -37, 9, 1, d.t);
+  if (a > 0 && !T) U(-4, -35, 1, 1, MAT.furHi);
+  if (fea > 1) { U(3, -39 - T, 2, 3, MAT.gilt); U(3, -39 - T, 1, 1, MAT.giltHi); seg(U, 4, -39 - T, 6, -46 - T, 1, PAL.white); }
+  if (fea > 2) { seg(U, 4, -39 - T, 6, -50 - T, 2, PAL.white); U(3, -37, 2, 2, d.t); U(3, -40 - T, 2, 1, MAT.giltHi); }
+  if (fea === 1) { U(3, -40 - T, 2, 3, MAT.gilt); seg(U, 4, -40 - T, 6, -47 - T, 1, PAL.white); }
+}
+/** A Scot's flat blue bonnet, with a diced band of red and white round it and a red tuft on top. */
+function bonnet(U: Painter, d: Dress) {
+  const a = d.arm, b = d.bag, hi = glow(b, 1.45), lo = tint(b, 0.7);
+  for (let y = -35; y <= -34; y++) for (let i = 0; i < 8; i++) U(-3 + i, y, 1, 1, (i + y) % 2 ? PAL.white : '#b3262f');
+  U(-5, -36, 11, 1, b); U(-6, -37, 13, 1, b); U(-5, -38, 11, 1, b); U(-3, -39, 7, 1, b);
+  U(-5, -38, 4, 1, hi); U(-6, -37, 2, 1, hi); U(3, -36, 3, 1, lo); U(4, -37, 3, 1, lo);
+  U(0, -41, 2, 2, '#b3262f'); U(0, -40, 2, 1, tint('#b3262f', 0.7));
+  if (a > 1) { U(3, -39, 1, 1, PAL.white); seg(U, 3, -39, 5, -44, 1, PAL.white); }
+  if (a > 2) { U(2, -38, 2, 2, MAT.gilt); U(2, -38, 1, 1, MAT.giltHi); }
+}
+/** A Tatar's turban: a bulb of cloth wound in bands, wider than his head, with a fold across it, and a jewel and a feather as his kit improves. */
+function turban(U: Painter, d: Dress) {
+  const a = d.arm, b = d.bag, hi = glow(b, 1.3), lo = tint(b, 0.66);
+  // the dome from the crest down, each row a turn of the cloth, alternately light and plain
+  const dome: readonly (readonly [number, number])[] = [[-1, 3], [-2, 5], [-3, 7], [-4, 9], [-5, 11], [-5, 11], [-5, 11]];
+  dome.forEach(([x, w], i) => U(x, -41 + i, w, 1, i % 2 ? b : hi));
+  U(-4, -34, 9, 1, lo); U(-5, -35, 1, 1, lo); U(5, -35, 1, 1, lo);
+  for (let k = 0; k < 3; k++) U(0 + k * 2, -39 + k, 2, 1, lo);
+  if (a > 0) { U(3, -37, 2, 2, MAT.gilt); U(3, -37, 1, 1, MAT.giltHi); }
+  if (a > 1) seg(U, 4, -38, 6, -45, 1, PAL.white);
+  if (a > 2) { seg(U, 4, -38, 7, -49, 2, PAL.white); U(0, -42, 2, 1, MAT.giltHi); }
 }
 
 /* ---------- the weapons, four of each kind, from the worst a man may carry to the best ---------- */
@@ -306,7 +425,12 @@ function sabreArt(R: Painter, hx: number, hy: number, ang: number, curve: number
 /** An arm: a sleeve in the coat's colour from the shoulder sx, sy by the elbow ex, ey to the wrist hx, hy, and a hand there. */
 function limb(U: Painter, d: Dress, sx: number, sy: number, ex: number, ey: number, hx: number, hy: number) { sleeve(U, d, sx, sy, ex, ey, hx, hy); hand(U, hx, hy); }
 /** The sleeve of an arm alone, for a weapon to be drawn over it. */
-function sleeve(U: Painter, d: Dress, sx: number, sy: number, ex: number, ey: number, hx: number, hy: number) { seg(U, sx, sy, ex, ey, 3, d.c); seg(U, ex, ey, hx, hy, 3, d.c); }
+function sleeve(U: Painter, d: Dress, sx: number, sy: number, ex: number, ey: number, hx: number, hy: number) {
+  seg(U, sx, sy, ex, ey, 3, d.c); seg(U, ex, ey, hx, hy, 3, d.c);
+  // a German's sleeve is slashed to show the colour under it; a Pole's and a Hungarian's have a cuff
+  if (d.mark === 'slashes') for (const [x0, y0, x1, y1] of [[sx, sy, ex, ey], [ex, ey, hx, hy]]) for (const k of [0.3, 0.7]) U(Math.round(x0 + (x1 - x0) * k), Math.round(y0 + (y1 - y0) * k), 1, 2, d.t);
+  if (d.mark === 'hanging' || d.mark === 'braid') { const n = Math.max(Math.abs(hx - ex), Math.abs(hy - ey), 1); U(Math.round(hx - (hx - ex) / n * 2) - 1, Math.round(hy - (hy - ey) / n * 2) - 1, 3, 2, d.t); }
+}
 /** A hand, centred on hx, hy. */
 function hand(U: Painter, hx: number, hy: number) { U(hx - 1, hy - 1, 3, 3, MAT.skin); U(hx - 1, hy + 1, 3, 1, MAT.skinLo); }
 /** The arm that stays behind the man, in the shade of his body. */
@@ -323,55 +447,55 @@ function drawSoldier(g: CanvasRenderingContext2D, x: number, y: number, o: Soldi
   R(-8, -1, 17, 2, SHADOW);
   const step = o.moving ? Math.floor(o.anim!) % 2 : -1, b = step === 1 ? -2 : 0;
   const U: Painter = (dx, dy, w, h, c) => R(dx, dy + b, w, h, c);
-  legs(R, step);
+  legs(R, step, d);
   const m = o.flash! > 0 ? 'aim' : o.mode, sw = o.swing! > 0, cls = o.cls;
   if (m === 'rout') {
-    limb(U, d, -3, -24, -6, -29, -7, -35); torso(U, d); head(U, d); hat(U, d, cls); pauldrons(U, d); limb(U, d, 3, -24, 6, -29, 7, -35);
+    limb(U, d, -3, -24, -6, -29, -7, -35); torso(U, d); head(U, d); hat(U, d); pauldrons(U, d); limb(U, d, 3, -24, 6, -29, 7, -35);
     return;
   }
   if (cls === 'pike') {
     if (m === 'fight' || o.level) {
       const t = sw ? 6 : 0;
-      torso(U, d); head(U, d); hat(U, d, cls); pauldrons(U, d);
+      torso(U, d); head(U, d); hat(U, d); pauldrons(U, d);
       pikeArt(axial(U, -8 + t, -19, false), d.wpn, 44, d);
       limb(U, d, -3, -23, -3 + t, -20, 0 + t, -18); limb(U, d, 3, -24, 7 + t, -22, 11 + t, -19);
     } else {
-      backArm(U, d, -6, -17); torso(U, d); head(U, d); hat(U, d, cls); pauldrons(U, d);
+      backArm(U, d, -6, -17); torso(U, d); head(U, d); hat(U, d); pauldrons(U, d);
       pikeArt(axial(U, 8, -3, true), d.wpn, 43, d);
       limb(U, d, 3, -24, 4, -18, 8, -20);
     }
   } else if (cls === 'shot') {
     const L = MUSKET_LEN[d.wpn];
     if (m === 'aim') {
-      backArm(U, d, -6, -18); torso(U, d); head(U, d); hat(U, d, cls); pauldrons(U, d);
+      backArm(U, d, -6, -18); torso(U, d); head(U, d); hat(U, d); pauldrons(U, d);
       musketArt(axial(U, -3, -26, false), d.wpn);
       limb(U, d, 3, -24, 7, -20, 13, -23); U(1, -23, 4, 2, MAT.skin);
       if (o.flash! > 0) bmp(R, -3 + L, -31, ['...y..y...', '.yyyyyyyy.', 'yyywwwwyyy', 'yyywwwwyyy', '.yyyyyyyy.', '...y..y...'], { y: PAL.flash, w: PAL.white });
     } else if (m === 'reload') {
-      backArm(U, d, -6, -17); torso(U, d); head(U, d); hat(U, d, cls); pauldrons(U, d);
+      backArm(U, d, -6, -17); torso(U, d); head(U, d); hat(U, d); pauldrons(U, d);
       const up = Math.floor((o.t || 0) * 5) % 2 * 2;
       musketArt(axial(U, 8, -3, true), d.wpn);
       ramrod(U, 9, -3 - L, up);
       limb(U, d, 3, -24, 6, -28, 9, -31);
     } else if (m === 'fight') {
       const t = sw ? 6 : 0;
-      torso(U, d); head(U, d); hat(U, d, cls); pauldrons(U, d);
+      torso(U, d); head(U, d); hat(U, d); pauldrons(U, d);
       musketArt(axial(U, -2 + t, -19, false), d.wpn);
       limb(U, d, -3, -23, 0 + t, -20, 4 + t, -17); limb(U, d, 3, -24, 7 + t, -22, 11 + t, -18);
     } else {
-      backArm(U, d, -6, -17); torso(U, d); bandolier(U, d); head(U, d); hat(U, d, cls); pauldrons(U, d);
+      backArm(U, d, -6, -17); torso(U, d); bandolier(U, d); head(U, d); hat(U, d); pauldrons(U, d);
       sleeve(U, d, 3, -24, 7, -16, 17, -18);
       musketArt(slanted(U, 2, -20, 5), d.wpn);
       hand(U, 17, -19); hand(U, 8, -19);
     }
   } else {
     if (m === 'fight' || sw) {
-      backArm(U, d, -6, -17); torso(U, d); head(U, d); hat(U, d, cls); pauldrons(U, d);
+      backArm(U, d, -6, -17); torso(U, d); head(U, d); hat(U, d); pauldrons(U, d);
       if (sw) { sabreArt(U, 9, -23, -0.12, 0.05, 24, d); seg(U, 14, -33, 30, -28, 1, 'rgba(244,240,228,.7)'); seg(U, 22, -36, 36, -24, 1, 'rgba(244,240,228,.5)'); }
       else sabreArt(U, 8, -21, -0.8, 0.02, 22, d);
       limb(U, d, 3, -24, 6, -20, sw ? 9 : 8, sw ? -23 : -21);
     } else {
-      backArm(U, d, -6, -17); torso(U, d); head(U, d); hat(U, d, cls); pauldrons(U, d);
+      backArm(U, d, -6, -17); torso(U, d); head(U, d); hat(U, d); pauldrons(U, d);
       sabreArt(U, 6, -22, -1.15, 0.035, 22, d);
       limb(U, d, 3, -24, 5, -19, 6, -22);
     }
@@ -390,7 +514,7 @@ function bandolier(U: Painter, d: Dress) {
 function fallen(R: Painter, d: Dress, cls: TroopClass) {
   const white = (x: string) => (d.hit ? PAL.white : x);
   R(-15, -1, 31, 2, MAT.blood); R(-11, 0, 23, 1, PAL.red);
-  R(-20, -5, 10, 4, MAT.hose); R(-23, -5, 4, 4, MAT.boot); R(-23, -4, 3, 1, MAT.bootHi);
+  R(-20, -5, 10, 4, d.hoseF); R(-23, -5, 4, 4, d.boot); R(-23, -4, 3, 1, glow(d.boot, 1.55));
   const body = d.arm ? white(MAT.buff) : d.c, lo = d.arm ? MAT.buffLo : d.cd;
   R(-10, -9, 16, 8, body); R(-10, -9, 16, 1, lo); R(-10, -2, 16, 1, lo); R(-10, -9, 1, 8, lo);
   if (d.arm > 1) { R(-3, -9, 9, 8, d.arm > 2 ? '#a9b2b6' : MAT.steel); R(-3, -9, 9, 1, MAT.steelHi); R(-3, -2, 9, 1, MAT.steelLo); R(0, -8, 1, 5, MAT.steelHi); if (d.arm > 2) R(-3, -9, 1, 8, MAT.gilt); }
@@ -405,8 +529,8 @@ function fallen(R: Painter, d: Dress, cls: TroopClass) {
 function drawSeated(R: Painter, d: Dress, o: CamperLook) {
   const U: Painter = (dx, dy, w, h, c) => R(dx, dy + 4, w, h, c);
   // the thigh runs forward along the log, the shin down from the knee
-  R(-1, -9, 11, 4, MAT.hose); R(8, -6, 4, 4, MAT.hose); R(8, -4, 4, 2, MAT.boot); R(8, -3, 8, 3, MAT.boot); R(8, -1, 8, 1, MAT.ink);
-  backArm(U, d, -6, -16); torso(U, d); head(U, d); hat(U, d, o.cls); pauldrons(U, d);
+  R(-1, -9, 11, 4, d.hoseF); R(8, -6, 4, 4, d.hoseF); R(8, -4, 4, 2, d.boot); R(8, -3, 8, 3, d.boot); R(8, -1, 8, 1, MAT.ink);
+  backArm(U, d, -6, -16); torso(U, d); head(U, d); hat(U, d); pauldrons(U, d);
   if (o.prop === 'bandura') {
     R(1, -16, 10, 8, MAT.wood); R(2, -17, 8, 1, MAT.wood); R(1, -9, 10, 1, MAT.woodLo); R(2, -16, 8, 1, MAT.woodHi); R(5, -14, 3, 3, MAT.ink);
     R(10, -20, 2, 5, MAT.wood); R(9, -26, 2, 7, MAT.wood); R(8, -29, 4, 3, MAT.woodLo); R(9, -26, 1, 7, MAT.woodHi);
@@ -422,13 +546,13 @@ function drawLying(R: Painter, d: Dress, o: CamperLook) {
   R(-17, -4, 37, 4, MAT.woodLo); R(-17, -4, 37, 1, MAT.wood);
   R(-14, -9, 25, 6, d.arm ? MAT.buff : d.c); R(-14, -9, 25, 1, d.arm ? MAT.buffHi : d.cl); R(-14, -4, 25, 1, d.arm ? MAT.buffLo : d.cd);
   R(-4, -10, 24, 7, PAL.drab); R(-4, -10, 24, 1, tint(PAL.drab, 1.25)); R(-4, -4, 24, 1, tint(PAL.drab, 0.7)); R(2, -9, 1, 5, tint(PAL.drab, 0.8)); R(10, -9, 1, 5, tint(PAL.drab, 0.8));
-  R(16, -10, 6, 8, MAT.boot); R(16, -10, 6, 1, MAT.bootHi);
+  R(16, -10, 6, 8, d.boot); R(16, -10, 6, 1, glow(d.boot, 1.55));
   R(-17, -11, 7, 7, MAT.skin); R(-17, -5, 7, 1, MAT.skinLo); R(-18, -11, 2, 5, d.hair); R(-12, -8, 1, 1, MAT.ink); R(-11, -8, 1, 2, MAT.skin);
   if (o.bandage !== false) { R(-18, -12, 8, 2, PAL.white); R(-19, -11, 1, 4, PAL.white); R(-14, -12, 2, 2, PAL.red); }
   if (d.mus) R(-12, -6, 3, 1, d.hair);
 }
 function drawForaging(R: Painter, U: Painter, d: Dress, o: CamperLook) {
-  limb(U, d, -3, -24, -4, -19, -3, -16); torso(U, d); head(U, d); hat(U, d, o.cls); pauldrons(U, d);
+  limb(U, d, -3, -24, -4, -19, -3, -16); torso(U, d); head(U, d); hat(U, d); pauldrons(U, d);
   limb(U, d, 3, -24, 6, -19, 9, -16);
   U(6, -15, 11, 7, MAT.wood); U(6, -15, 11, 1, MAT.ink); U(6, -8, 11, 1, MAT.woodLo); U(8, -17, 7, 2, PAL.green); U(9, -18, 3, 1, tint(PAL.green, 1.3));
   for (let i = 0; i < 4; i++) U(7 + i * 3, -13, 1, 4, MAT.woodLo);
@@ -449,7 +573,7 @@ function drawCamper(g: CanvasRenderingContext2D, x: number, y: number, o: Camper
   if (o.pose === 'sit') { drawSeated(R, d, o); return; }
   const step = Math.floor(o.anim || 0) % 2, b = step === 1 ? -2 : 0, U: Painter = (dx, dy, w, h, c) => R(dx, dy + b, w, h, c);
   R(-8, -1, 17, 2, SHADOW);
-  legs(R, step);
+  legs(R, step, d);
   drawForaging(R, U, d, o);
 }
 
@@ -457,7 +581,7 @@ function drawCamper(g: CanvasRenderingContext2D, x: number, y: number, o: Camper
 function drawCivilian(g: CanvasRenderingContext2D, x: number, y: number, k: StaffId, face?: 1 | -1) {
   const f = face || 1, L = STAFF_LOOK[k], R = figurePainter(g, x, y, f), K = MAT.ink;
   R(-8, -1, 17, 2, SHADOW);
-  legs(R, -1);
+  legs(R, -1, PLAIN_LEGS);
   R(-6, -14, 13, 4, L.coat); R(-4, -19, 9, 3, L.coat); R(-5, -25, 11, 6, L.coat); R(-6, -14, 1, 4, tint(L.coat === K ? '#3a3631' : L.coat, 0.7)); R(-5, -25, 1, 6, tint(L.coat === K ? '#3a3631' : L.coat, 0.7)); R(-6, -11, 13, 1, tint(L.coat === K ? '#3a3631' : L.coat, 0.7));
   R(-4, -16, 9, 2, MAT.leather);
   R(-3, -33, 2, 6, HAIR[1]); R(-2, -33, 6, 6, MAT.skin); R(-2, -28, 6, 1, MAT.skinLo); R(-1, -27, 3, 1, MAT.skinLo); R(2, -31, 1, 1, K); R(4, -31, 1, 2, MAT.skin);
@@ -473,13 +597,14 @@ function drawCivilian(g: CanvasRenderingContext2D, x: number, y: number, k: Staf
 const gearCache: Record<string, string> = {};
 /**
  * A picture of one thing a man can buy, drawn as it is worn: his weapon (slot 'wpn', for his class) or his armour (slot 'arm'), at
- * level tier, 0 to 3. It is the address of an image 44 by 32 figure pixels, which the cards show pixel for pixel (see sceneCanvas).
+ * level tier, 0 to 3, in the colours of nation if there is one. It is the address of an image 44 by 32 figure pixels, which the cards show
+ * pixel for pixel (see sceneCanvas).
  */
-function gearArt(slot: GearSlot, cls: TroopClass, tier: number) {
-  const key = slot + (slot === 'wpn' ? cls : '') + tier;
+function gearArt(slot: GearSlot, cls: TroopClass, tier: number, nation?: NationId) {
+  const key = slot + (slot === 'wpn' ? cls : '') + tier + (nation || '');
   if (gearCache[key]) return gearCache[key];
   // the origin is the middle of the picture
-  const c = sceneCanvas(22, 16), g = c.getContext('2d')!, d = dressFor({ cls, skin: 'own', wpn: tier, arm: tier }), R = figurePainter(g, 11, 8, 1);
+  const c = sceneCanvas(22, 16), g = c.getContext('2d')!, d = dressFor({ cls, skin: 'own', wpn: tier, arm: tier, nation }), R = figurePainter(g, 11, 8, 1);
   if (slot === 'arm') {
     const U: Painter = (dx, dy, w, h, col) => R(dx, dy + 19, w, h, col);
     U(-8, -26, 5, 8, d.c); U(5, -26, 4, 8, d.c); torso(U, d); pauldrons(U, d);

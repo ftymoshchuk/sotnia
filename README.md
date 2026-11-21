@@ -38,7 +38,7 @@ npm run typecheck   # check the types without writing anything
 | `src/journey.ts` | The rules of the road, with no DOM: the calendar, the lands, places and roads of 1633, quests, travel days, cargo, ambushes, selling and delivery |
 | `src/geo.ts` | Coastlines and rivers for the map (drawing data only) |
 | `src/art.ts` | Palette, the woodcut backdrop, the battlefield and its particles, the camp at night, the pictures on the cards, and the map |
-| `src/figures.ts` | Every man, hired hand and foe, drawn at twice the pixels of the scene around him and dressed in the weapon and armour he has bought; the pictures of gear for the cards; and the call that puts a scene on the screen |
+| `src/figures.ts` | Every man, hired hand and foe, drawn at twice the pixels of the scene around him and dressed in the colours of his nation and the weapon and armour he has bought; the pictures of gear for the cards; and the call that puts a scene on the screen |
 | `src/music.ts` | The music engine, which knows nothing of the game: it reads a score, composes as it plays and synthesises every note with Web Audio (there are no recordings) |
 | `src/score.ts` | The game's music, written out: the journey's pieces, the muster, the fight and the flourishes after it |
 | `src/audio.ts` | Sound effects, and starting the right music for each screen |
@@ -67,6 +67,7 @@ Keep `src/core.ts` and `src/journey.ts` free of DOM access. The scouts' odds com
 - **Camp events:** add entries to `EVENTS` in `src/core.ts`. Give each choice an `fx` list of `[icon, amount, what]` as well as its `hint`: the dialog shows those as chips, and falls back to the hint where there are none.
 - **The look:** every man, recruit, supply, job, member of the baggage train, opening order and fallen man is a card, built by `cardHTML()` in `src/screens.ts`: a name banner, a picture, the body, and a type bar coloured by kind, with the price or wage on a coin at its left. Icons stand in for words wherever a number says enough; the word stays for screen readers and on hover.
 - **Kit:** each man has a weapon level and an armour level, `wpn` and `arm`, from 0 to 3. Their names are `WPN` (for each class) and `ARM`, their prices `GEAR_COST`, and `upgrade()` buys the next level. The levels change what he does in a fight (`wpn` adds to the damage of his blows, `arm` to the armour that turns them) and what he looks like: see [Figures](#figures). A card shows each slot as a ladder of its four pieces (`gearHTML()` in `src/screens.ts`), and shows the man in the next piece while its button is under the pointer. Foes wear the gear of their tier.
+- **Nations:** every man of the company is dressed as his nation, the `Origin` he was raised from. `NATIONS` in `src/figures.ts` gives each its colours, its legs and boots, what it wears on its head, and the one thing in its dress that no other nation has (see [Figures](#figures)). The same table dresses the foes who are a people of their own, by their skins: `swede`, `imperial`, `muscovite`, `tatar` and `croat`. A card shows the colours of a man's country as a little flag before the name of his nation (`flagOf()`).
 - **The camp:** `campPlan()` in `src/art.ts` puts each man where his order sends him (by the fire to rest, the drill yard, out foraging, or abed by the tent), and `drawCamp()` draws the night, the fire and the men walking between places. The slots are in `CAMP`.
 - **Music:** what plays is in `src/score.ts`: each piece's ground, tunes and figures, and the cues that say which pieces play on which screen and how loud each cue is against the others. `MUSIC_LEVEL` in `src/audio.ts` sets the loudness of all of it, and the instruments are `SOUNDS` in `src/music.ts`. See [Music](#music).
 - **Saves:** the state built by `newGame()` is a `Campaign` (in `src/journey.ts`) and carries `v: 2`, and `loadSave()` ignores any other version. Bump it when the shape of `Campaign` changes, so old saves are dropped instead of loading broken.
@@ -98,6 +99,7 @@ It also plays every cue for ten minutes against `tests/webaudio-stub.js`, a stan
 `tests/figures.test.js` loads the figures against a canvas that records each rectangle painted, which is enough to check that:
 
 - every level of weapon and of armour changes a man's picture, in every class and in every pose where the weapon is in his hand;
+- every nation dresses a man differently, the company's red sash is on every man of it, and a foe of the same people has none;
 - every pose, in every kit, fits the frame the cards and the field leave for it;
 - a man who faces left is exactly the mirror of one who faces right, and the same man is drawn the same each time;
 - the pictures of gear differ at every level, and a battle unit and a line of the report carry the gear the picture shows.
@@ -160,7 +162,24 @@ What each level looks like:
 | 2 | Breastplate and gorget, a brass belt buckle | Partisan: a broad blade with lugs, and a tassel | Dutch musket: the longest, in walnut with brass | Karabela: a brighter blade, the bird's-head pommel |
 | 3 | Cuirass, shoulder plates and tassets, and the plume of the finest hat | Master's halberd: an axe blade, a spike and a beak, gilt | Wheel-lock: shorter, black and gilt, a steel wheel and no match | Damascened sabre: streaked steel, a gilt hilt and a tassel |
 
-Hats grow with the armour too: a pikeman's morion gains a brass band and, at the top, a plume; a musketeer's hat a bigger plume, a brooch and a gilt band; a sabreur's cap a clasp and a feather. A musketeer in armour wears a flask of powder where a lighter man has his bandolier.
+Hats grow with the armour too (a nation's cap grows the same way): a pikeman's morion gains a brass band and, at the top, a plume; a musketeer's hat a bigger plume, a brooch and a gilt band; a sabreur's cap a clasp and a feather. A musketeer in armour wears a flask of powder where a lighter man has his bandolier.
+
+### Nations
+
+A man of the company is dressed as his nation, in its colours, and wears the company's red sash over them. The sash is the field sign: it tells a Swede of the company from a Swedish foe, who has the same colours. A foe takes his coat and trim from his skin, and the rest of his dress from his people, if his skin is one (`NATION_OF_SKIN`).
+
+| Nation | Colours | Head | And |
+| --- | --- | --- | --- |
+| Zaporozhian | blue and yellow | kolpak with a red bag, in every class | yellow boots, dark blue hose, usually a long moustache |
+| Polish | crimson and white | morion; broad hat with a white plume; kolpak with a heron's feather | the kontusz sleeve thrown back, the white żupan showing, white cuffs, red boots |
+| German | black and gold | morion; broad hat with a red plume | slashed sleeves, one leg red and the other dark |
+| Swedish | yellow and blue | morion; broad hat with a yellow plume | blue hose |
+| Scottish | navy and white | blue bonnet with a diced band and a red tuft | a tartan plaid hung from the shoulders, red hose |
+| Hungarian | green and white | kalpak with a red bag and a white feather | white braid, red hose |
+| Croat | brown and red | broad hat with a red plume | a red cravat |
+| Lipka Tatar | teal and white | turban | |
+
+The foes with a dress of their own are the Swedes, the Imperials, the Muscovites, the Tatars and the Croats. The Tatar raiders and the Croat horse used to share one livery, and now each has its own. Armour hides the coat, so from the buff coat up a nation is carried by its sleeves, its legs, its cap and its mark.
 
 To add a level or change one, edit the part for its class (`musketArt()`, `pikeArt()` or `sabreArt()` in the frame of the weapon itself: `a` runs along it from the butt and `c` across it, so one drawing serves a musket held level and held upright) or `torso()`. To add a pose, add a branch to `drawSoldier()`; the figure tests then draw it in every kit and check that it fits. `gearArt()` draws the pictures of weapons and armour that the cards show in their ladders, from the same code. Open `docs/figures.html` to see everything at once.
 
