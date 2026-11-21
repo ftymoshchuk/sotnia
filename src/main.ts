@@ -99,7 +99,7 @@ function act(a: string, d: ActData) {
       if (!panelsHere().includes(d.k as TabId)) return;
       ui.panel = d.k as TabId; if (d.post) ui.post = d.post as CommandView; break;
     }
-    case 'panelClose': { const k = ui.panel; ui.panel = null; render(); if (k) { const b = $('.dock [data-act="panel"][data-k="' + k + '"]'); if (b) b.focus(); } return; }
+    case 'panelClose': { const k = ui.panel; ui.panel = null; render(); if (k) { const b = $('.menu [data-act="panel"][data-k="' + k + '"]'); if (b) b.focus(); } return; }
     case 'card': ui.open = +d.id; ui.panel = 'roll'; ui.scrollCard = +d.id; break;
     case 'newsClose': ui.news = null; break;
     case 'codex': if (ui.modal || ui.screen === 'battle' || ui.screen === 'codex') return; ui.codexFrom = ui.screen; ui.screen = 'codex'; codexAddress(true); break;
@@ -126,7 +126,7 @@ function act(a: string, d: ActData) {
     case 'payoff': if (!payOff(G!, d.k as 'coin' | 'cargo')) return; ui.modal = null; break;
     case 'fightambush': {
       const c = G!.ambush; if (!c) return;
-      ui.c = c; ui.pick = defaultPick(G!, c); ui.stance = null; ui.modal = null; ui.screen = 'muster'; queueOdds(); break;
+      ui.c = c; ui.pick = defaultPick(G!, c); ui.stance = null; ui.modal = null; ui.panel = null; ui.screen = 'muster'; queueOdds(); break;
     }
     case 'muster': { const c = G!.contracts.find(x => x.id === +d.id); if (!c) return; ui.c = c; ui.pick = defaultPick(G!, c); ui.stance = null; ui.screen = 'muster'; queueOdds(); break; }
     case 'pick': {
@@ -139,7 +139,7 @@ function act(a: string, d: ActData) {
     case 'fight': {
       if (!ui.pick.length) return;
       ui.b = battleFor(G!, ui.c!, ui.pick, ui.stance || (ui.odds ? ui.odds.best : 'advance'), true);
-      ui.speed = 1; ui.overT = 0; ui.verdict = false; acc = 0; ui.screen = 'battle'; sfx('drum'); break;
+      ui.speed = 1; ui.overT = 0; ui.verdict = false; acc = 0; ui.panel = null; ui.screen = 'battle'; sfx('drum'); break;
     }
     case 'cmd': setStance(d.s as Stance); return;
     case 'captain': if (ui.b && giveOrder(ui.b)) { sfx('call'); paintHud(); } return;
@@ -171,6 +171,8 @@ function act(a: string, d: ActData) {
 document.addEventListener('click', e => {
   // a click on the dimmed ground round a page of the business puts it away
   if ((e.target as HTMLElement).classList.contains('pveil')) { act('panelClose', {}); return; }
+  // and a click on the bare scene puts away the card of the man picked
+  if ((e.target as HTMLElement).id === 'camp' && ui.open != null && !ui.modal) { ui.open = null; render(); return; }
   // A click on the map picks the place nearest it as the course.
   if ((e.target as HTMLElement).id === 'map' && G && ui.screen === 'camp' && !ui.modal) { const id = placeAt(e.target as HTMLCanvasElement, e.offsetX, e.offsetY); if (id) act('course-pick', { v: id }); return; }
   const el = (e.target as HTMLElement).closest<HTMLButtonElement | HTMLSelectElement>('[data-act]'); if (el && !el.disabled && el.getAttribute('aria-disabled') !== 'true') act(el.dataset.act!, el.dataset as ActData);

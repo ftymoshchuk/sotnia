@@ -40,6 +40,7 @@
 <!-- The same scripts, in the same order, as index.html. -->
 <script src="../js/core.js"></script>
 <script src="../js/journey.js"></script>
+<script src="../js/command.js"></script>
 <script src="../js/geo.js"></script>
 <script src="../js/art.js"></script>
 <script src="../js/figures.js"></script>
@@ -125,12 +126,24 @@ for (const lv of [0, 3]) {
 }
 // 4. The camp
 {
-  const d = section('In camp', 'Sitting on a log (with a bandura, a pipe, or nothing), abed, foraging, bandaged, and the four hired hands of the baggage train.');
+  const d = section('In camp', 'Sitting on a log (with a bandura, a pipe, or nothing), abed, foraging, bandaged, and the four posts of the command as the camp draws them when it knows no more of the man.');
   const row = document.createElement('div'); row.className = 'row'; d.appendChild(row);
   const camper = o => (g, w, h) => drawCamper(g, Math.round(w / 2), h - 3, Object.assign({ skin: 'own', face: 1 }, o));
   for (const [name, o] of [['sits', { cls: 'sabre', pose: 'sit', arm: 1, man: 2 }], ['plays', { cls: 'sabre', pose: 'sit', prop: 'bandura', arm: 2, man: 6 }], ['smokes', { cls: 'pike', pose: 'sit', prop: 'pipe', arm: 3, man: 9 }], ['abed', { cls: 'shot', pose: 'lie', arm: 2 }], ['forages', { cls: 'pike', pose: 'forage', anim: 0 }], ['bandaged', { cls: 'shot', bandage: true, arm: 1, wpn: 1 }]])
     cell(row, name, '', 32, 38, NIGHT, camper(o));
   for (const k of ['surgeon', 'drill', 'qm', 'chaplain']) cell(row, STAFF[k].name, '', 32, 38, NIGHT, (g, w, h) => drawCivilian(g, Math.round(w / 2), h - 3, k, 1));
+}
+// 4b. The command: the captains, the officers of each post, the retainers
+{
+  const d = section('The command', 'The captain stands apart from the line, in the dress of his nation and gilt where the men wear red. Each kind of officer is told by his coat, his hat and what he carries; a retainer likewise.');
+  const r1 = document.createElement('div'); r1.className = 'row'; d.appendChild(r1);
+  for (const [id, c] of Object.entries(CAPTAINS)) cell(r1, c.title, c.perk.name + ' / ' + c.flaw.name, 34, 40, NIGHT, (g, w, h) => drawCamper(g, Math.round(w / 2), h - 3, { cls: c.cls, skin: 'own', face: 1, mode: 'idle', wpn: 2, arm: 2, man: id.length, nation: c.origin, rank: 'captain' }));
+  for (const k of STATIONS) {
+    const r = document.createElement('div'); r.className = 'row'; d.appendChild(r);
+    for (const kind of Object.keys(SPECIALTIES).filter(x => SPECIALTIES[x].station === k)) cell(r, SPECIALTIES[kind].title, STAFF[k].name, 34, 40, NIGHT, (g, w, h) => drawPerson(g, Math.round(w / 2), h - 3, OFFICER_LOOK[kind], 1));
+  }
+  const r2 = document.createElement('div'); r2.className = 'row'; d.appendChild(r2);
+  for (const [id, t] of Object.entries(RETAINERS)) cell(r2, t.title, 'retainer', 34, 40, NIGHT, (g, w, h) => drawPerson(g, Math.round(w / 2), h - 3, RETAINER_LOOK[id], 1));
 }
 // 5. The liveries
 {

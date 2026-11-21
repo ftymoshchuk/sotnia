@@ -243,9 +243,19 @@ button.trip:hover { border-color: var(--gilt); color: var(--cream); }
 .scene { position: relative; width: 100%; margin: 0 auto; line-height: 0; }
 .scene canvas { display: block; width: 100%; aspect-ratio: 320 / 151; image-rendering: pixelated; background: var(--night); border-radius: 12px; box-shadow: 0 0 0 1px var(--walnut-line), 0 14px 30px rgba(0, 0, 0, .5); }
 @media (min-width: 880px) and (min-height: 600px) {
-  body.hubmode .sheet { height: 100dvh; min-height: 0; padding-bottom: 12px; gap: 12px; }
-  .stage { flex: 1 1 0; min-height: 0; container-type: size; display: grid; place-items: center; }
+  body.hubmode .sheet { height: 100dvh; min-height: 0; max-width: 1800px; padding-bottom: 12px; gap: 12px; }
+  .hub { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; column-gap: 12px; }
+  .menu { grid-area: 1 / 1; flex-direction: column; flex-wrap: nowrap; justify-content: center; gap: 6px; }
+  .menu button { flex-direction: column; justify-content: center; gap: 4px; width: 76px; padding: 9px 4px 8px; border-radius: 12px; font-size: 13px; letter-spacing: .04em; }
+  .menu button .i { font-size: 24px; }
+  .menu .count { position: absolute; top: 3px; right: 5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--madder); color: var(--parchment-hi); font: 700 11.5px/18px var(--body); text-align: center; font-style: normal; }
+  .stage { grid-area: 1 / 2; min-height: 0; container-type: size; display: grid; place-items: center; }
   .scene { width: min(100cqw, calc(100cqh * 320 / 151)); }
+  .dock { grid-column: 1 / -1; }
+}
+@media (min-width: 880px) and (min-height: 600px) and (max-height: 760px) {
+  .menu button { width: 52px; padding: 8px 2px; }
+  .menu button span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 .spot { position: absolute; padding: 0; margin: 0; border: 0; background: transparent; cursor: pointer; border-radius: 6px; line-height: 1; color: var(--parchment); }
 .spot:hover, .spot:focus-visible { background: rgba(232, 196, 106, .1); outline: 2px dashed rgba(232, 196, 106, .8); outline-offset: -2px; }
@@ -300,12 +310,14 @@ body.passing .spot, body.passing .camper .plate { visibility: hidden; }
 .delta.down { color: var(--alarm); }
 @keyframes deltaRise { 0% { opacity: 0; transform: translateY(7px); } 10% { opacity: 1; transform: none; } 72% { opacity: 1; } 100% { opacity: 0; transform: translateY(-5px); } }
 .dock { display: flex; flex-direction: column; gap: 10px; padding: 10px 14px 12px; background: var(--walnut); border: 1px solid var(--walnut-line); border-top: 3px solid var(--weld); border-radius: 12px; }
-.menu { display: flex; flex-wrap: wrap; gap: 6px; }
-.menu button { display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px 8px; border: 1px solid var(--walnut-line); border-radius: 999px; background: var(--walnut-hi); color: var(--cream); font: 15px/1 var(--caps); letter-spacing: .05em; cursor: pointer; }
+.menu { order: 2; display: flex; flex-wrap: wrap; gap: 6px; }
+.menu button { position: relative; display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px 8px; border: 1px solid var(--walnut-line); border-radius: 999px; background: var(--walnut); color: var(--cream); font: 15px/1 var(--caps); letter-spacing: .05em; cursor: pointer; }
 .menu button .i { font-size: 18px; color: var(--gilt); }
-.menu button:hover { border-color: var(--gilt); }
+.menu button:hover { border-color: var(--gilt); background: var(--walnut-hi); }
 .menu button[aria-expanded="true"] { background: var(--thaler); border-color: var(--gilt-hi); color: var(--ink); }
 .menu button[aria-expanded="true"] .i { color: var(--ink); }
+.stage { order: 1; }
+.dock { order: 3; }
 .doing { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px 14px; }
 .tally { display: flex; flex-direction: column; justify-content: center; gap: 6px; padding-right: 16px; border-right: 1px solid var(--walnut-line); }
 .tally .chips { display: flex; gap: 6px; }

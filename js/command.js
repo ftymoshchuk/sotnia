@@ -73,7 +73,7 @@ const CAPTAINS = {
     hauptmann: { title: 'A Hauptmann of the old school', origin: 'german', cls: 'pike', blurb: 'Twenty years under six banners, he knows every hiring hall from the Baltic to the Danube and eats well at all of them.',
         perk: { name: 'Knows the hiring halls', mods: [{ k: 'hire', v: -0.12 }] }, flaw: { name: 'Likes his table', mods: [{ k: 'eat', v: 1 }] }, order: 'volley' },
     colonel: { title: 'A colonel of the Swedish war', origin: 'scot', cls: 'pike', blurb: 'Fought under Gustavus at Breitenfeld, and has not forgiven his old regiment for owing him two years’ pay.',
-        perk: { name: 'Pikes in the old style', mods: [{ k: 'guard', cls: 'pike', v: 1 }, { k: 'edge', cls: 'pike', v: 1 }] }, flaw: { name: 'Pays are slow', mods: [{ k: 'pay', v: -0.08 }] }, order: 'stand' },
+        perk: { name: 'Pikes in the old style', mods: [{ k: 'guard', cls: 'pike', v: 1 }, { k: 'edge', cls: 'pike', v: 1 }] }, flaw: { name: 'Poor bargainer', mods: [{ k: 'pay', v: -0.08 }] }, order: 'stand' },
     hussar: { title: 'A Hungarian hussar', origin: 'magyar', cls: 'sabre', blurb: 'Rode with the Imperial light horse and the Transylvanian princes, and knows a road from a trap by the smell of it.',
         perk: { name: 'Reads the road', mods: [{ k: 'ambush', v: -0.25 }] }, flaw: { name: 'Cannot abide a pike', mods: [{ k: 'drill', cls: 'pike', v: -0.2 }] }, order: 'charge' },
     swede: { title: 'A cashiered Swedish captain', origin: 'swede', cls: 'shot', blurb: 'Drilled his musketeers in the new manner until the colonel drilled him out of the army over a dead man’s purse.',

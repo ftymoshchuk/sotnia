@@ -179,7 +179,7 @@ function act(a, d) {
             ui.panel = null;
             render();
             if (k) {
-                const b = $('.dock [data-act="panel"][data-k="' + k + '"]');
+                const b = $('.menu [data-act="panel"][data-k="' + k + '"]');
                 if (b)
                     b.focus();
             }
@@ -296,6 +296,7 @@ function act(a, d) {
             ui.pick = defaultPick(G, c);
             ui.stance = null;
             ui.modal = null;
+            ui.panel = null;
             ui.screen = 'muster';
             queueOdds();
             break;
@@ -340,6 +341,7 @@ function act(a, d) {
             ui.overT = 0;
             ui.verdict = false;
             acc = 0;
+            ui.panel = null;
             ui.screen = 'battle';
             sfx('drum');
             break;
@@ -441,6 +443,12 @@ document.addEventListener('click', e => {
     // a click on the dimmed ground round a page of the business puts it away
     if (e.target.classList.contains('pveil')) {
         act('panelClose', {});
+        return;
+    }
+    // and a click on the bare scene puts away the card of the man picked
+    if (e.target.id === 'camp' && ui.open != null && !ui.modal) {
+        ui.open = null;
+        render();
         return;
     }
     // A click on the map picks the place nearest it as the course.

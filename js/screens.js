@@ -386,14 +386,18 @@ function courseBlock(off) {
         h += '<span class="warn">' + ic('warn') + 'Bread for ' + plural(fed, 'day', 'days') + '; first market ' + md + ' days on</span>';
     return h + '</div>';
 }
+/** The company's pages as a column of buttons beside the scene (along the foot of it, where there is no room), for the keyboard and for the phone as much as for the mouse. */
+function menuHTML() {
+    return '<nav class="menu" aria-label="The company’s business">' + panelsHere().map(k => {
+        const P = PANELS[k], n = panelCount(k);
+        return '<button data-act="panel" data-k="' + k + '" aria-haspopup="dialog" aria-expanded="' + (ui.panel === k) + '" title="' + esc(P.title) + '">' + ic(P.icon) + '<span>' + P.short + '</span>' + (n ? '<i class="count">' + n + '</i>' : '') + '</button>';
+    }).join('') + '</nav>';
+}
 function dockHTML() {
     const q = questOf(G), nobody = !G.roster.length, off = nobody ? ' disabled' : '', need = breadDue(G);
     const t = { drill: 0, rest: 0, forage: 0, abed: 0 };
     G.roster.forEach(s => t[s.wound ? 'abed' : s.order]++);
-    let h = '<div class="dock"><nav class="menu" aria-label="The company’s business">' + panelsHere().map(k => {
-        const P = PANELS[k], n = panelCount(k);
-        return '<button data-act="panel" data-k="' + k + '" aria-haspopup="dialog" aria-expanded="' + (ui.panel === k) + '" title="' + esc(P.title) + '">' + ic(P.icon) + P.short + (n ? '<span class="count">' + n + '</span>' : '') + '</button>';
-    }).join('') + '</nav><div class="doing"><div class="tally"><span class="k">Tonight</span><span class="chips">' +
+    let h = '<div class="dock"><div class="doing"><div class="tally"><span class="k">Tonight</span><span class="chips">' +
         [['drill', 'drill', 'at drill'], ['rest', 'moon', 'resting'], ['forage', 'forage', 'foraging'], ['abed', 'cross', 'abed']].map(x => '<span class="tchip" title="' + x[2] + '">' + ic(x[1]) + '<b>' + t[x[0]] + '</b>' + sr(' ' + x[2]) + '</span>').join('') +
         '</span><span class="meta">' + ic('coin') + wagesDue(G) + ' pay on ' + dateText(G.payDue, true) + '</span></div>';
     if (atEnd(G)) {
@@ -458,7 +462,7 @@ function panelBody(k) {
     return '<ol class="log">' + G.log.map(l => '<li><span class="d">' + (l.n != null ? dateText(l.n, true) : 'Day ' + l.d) + '</span><span>' + esc(l.t) + '</span></li>').join('') + '</ol>';
 }
 /** The camp: the scene, with everything in it that can be clicked, and the dock beneath with the day's orders. A page of the business opens over it (see panelHTML). */
-function campHTML() { return '<main class="hub"><section class="stage">' + campScene() + '</section>' + dockHTML() + '</main>'; }
+function campHTML() { return '<main class="hub">' + menuHTML() + '<section class="stage">' + campScene() + '</section>' + dockHTML() + '</main>'; }
 /** The page open over the camp: a drawer under the bar, so that the ledger stays in view, with the page in it. */
 function panelHTML() {
     const k = ui.panel;
@@ -499,6 +503,7 @@ function musterHTML() {
         '<span class="chips">' + stat('men', ui.pick.length + ' of ' + cap, 'chosen') + (cur ? stat((c.duel ? DUEL_STANCE : STANCE)[cur].icon, (c.duel ? DUEL_STANCE : STANCE)[cur].name, 'opening order') : '') + (c.duel ? '' : stat('horn', G.powder, 'powder')) + '</span>' +
         (G.powder < 1 && shots && !c.duel ? '<span class="warn">' + ic('horn') + 'No powder: muskets fight with the butt</span>' : '') +
         '<span class="meta">' + ic(c.ambush ? 'warn' : 'sun') + (c.ambush ? 'They are on the train. No going back.' : 'Fighting takes the whole day.') + '</span>' +
+        (c.duel ? '' : '<span class="meta">' + ic('flag') + esc(G.captain.name.split(' ')[0]) + ' can call ' + esc(ORDERS[CAPTAINS[G.captain.type].order].name.toLowerCase()) + ' once; the scouts do not count on it.</span>') +
         '<button class="btn go huge" data-act="fight"' + (ui.pick.length ? '' : ' disabled') + '>' + ic('swords') + 'To arms</button>' +
         (c.ambush ? '' : '<button class="btn ghost" data-act="back">' + ic('tent') + 'Back to camp</button>') + '</aside></div>';
     h += '<section class="who">' + sectHTML('Who fights', ui.pick.length + ' of ' + cap + ' chosen') + '<div class="tokens" role="group" aria-label="Who fights">' + G.roster.map(s => tokenHTML(s, ui.pick.includes(s.id))).join('') + '</div></section>';
@@ -649,7 +654,7 @@ function titleHTML() {
     return '<div class="hero"><div><div class="plate field"><canvas id="field" role="img" aria-label="A skirmish between two small companies"></canvas></div>' +
         '<p class="caption">A true likeness of how such affairs are settled: pike, shot and sabre.</p></div>' +
         '<div class="intro"><p class="lede">The German war is in its fifteenth year, and every prince between the Rhine and the Dnieper is hiring. You have a banner, a handful of men, and a long road.</p>' +
-        '<ol class="how">' + [['flag', 'Take a commission', 'Carry a cargo across the lands of 1633 by the day it names.'], ['road', 'Choose the road', 'March steady or forced; rest, drill and buy bread.'], ['men', 'Keep the roll', 'Hire pike, shot and sabre; pay them; fight what falls on the train.']]
+        '<ol class="how">' + [['flag', 'Take a commission', 'Carry a cargo across the lands of 1633 by the day it names.'], ['star', 'Choose a captain', 'Each has a gift, a flaw and an order to call once in a fight.'], ['road', 'Choose the road', 'March steady or forced; rest, drill and buy bread.'], ['men', 'Keep the roll', 'Hire pike, shot and sabre; engage officers in the towns; pay them; fight what falls on the train.']]
         .map(x => '<li><span class="disc">' + ic(x[0]) + '</span><span><b>' + x[1] + '</b>' + x[2] + '</span></li>').join('') + '</ol>' +
         '<div class="actions">' + (sv ? '<button class="btn go big" data-act="continue">' + ic('tent') + 'Continue: ' + esc(cap1(PLACES[sv.at].name)) + ', ' + dateText(sv.date, true) + '</button>' : '') +
         '<button class="btn big" data-act="codex">' + ic('book') + 'Encyclopedia</button></div></div></div>' +
@@ -687,11 +692,12 @@ function modalHTML() {
     }
     else {
         inner = '<h2 class="banner" id="mt">Standing orders</h2><div class="rules">' + [
+            ['tent', 'The camp', 'Everything in the camp can be clicked. The tents, the wagon, the noticeboard, the signpost and the banner open the company’s business in a page over the camp, and Esc puts it away; pick a man to give him his order for the day; the fire rests a day. The same pages are the buttons beside the scene.'],
             ['road', 'The road', 'A commission names a cargo, a destination and a day. Each road takes as many days as the distance needs at the pace of the cargo. A forced march gets there sooner, but costs cargo and wears the men down. Arriving late is never the end of it, but the price falls every day. Set a course to march several legs at once: the company keeps going until something needs you.'],
             ['men', 'The company', 'Every man eats a loaf a day, and wages fall due once a month. Unpaid or hungry men lose spirit, and men without spirit desert. Buy bread before empty country: there are no markets in the Wild Fields. A day in camp lets each man drill, rest or forage: you see where each one goes.'],
             ['warn', 'Trouble on the road', 'Raiders fall on the train. Fight them, or pay them off in cargo or coin. Beaten, or sounding the retreat, costs cargo. Towns post paid work; a fight there takes the day.'],
             ['swords', 'The three arms', 'Pikemen hold a line and keep sabres off. Musketeers kill from afar, burn powder, and die quickly in a brawl. Sabreurs are fast and hunt musketeers.'],
-            ['flag', 'The fight', 'One order to the whole company, changed at any moment: keys 1, 2 and 3, and space to pause. Men whose spirit breaks run. Sounding the retreat saves lives, but costs the fee, or in an ambush, cargo.'],
+            ['flag', 'The fight', 'One order to the whole company, changed at any moment: keys 1, 2 and 3, and space to pause. O calls the captain’s order, once. Men whose spirit breaks run. Sounding the retreat saves lives, but costs the fee, or in an ambush, cargo.'],
             ['cross', 'Afterwards', 'A man struck down either dies or lies abed for days. Promotions, better arms and a good surgeon keep them alive longer.'],
             ['flag', 'Command', 'The captain you chose calls one order in every fight. In the towns you can engage officers for four posts, a surgeon, a drillmaster, a quartermaster and a chaplain, three to choose from for each; the places open with renown. Now and then someone asks to ride with the train.']
         ].map(x => '<p>' + ic(x[0]) + '<span><b>' + x[1] + '.</b> ' + x[2] + '</span></p>').join('') +
@@ -733,8 +739,8 @@ function fitBar() { const bar = $('.bar'); if (bar)
     document.documentElement.style.setProperty('--bar-h', bar.offsetHeight + 'px'); }
 function render() {
     const a = document.activeElement, key = a && a.dataset && a.dataset.act ? '[data-act="' + a.dataset.act + '"]' + ['id', 'k', 'o', 's', 'i', 'v', 'r', 'f', 'n', 'q', 'post'].map(k => (a.dataset[k] != null ? '[data-' + k + '="' + a.dataset[k] + '"]' : '')).join('') : null;
-    if (ui.panel && (ui.screen !== 'camp' || !G || !panelsHere().includes(ui.panel)))
-        ui.panel = null;
+    if (ui.panel && (!G || (ui.screen === 'camp' && !panelsHere().includes(ui.panel))))
+        ui.panel = null; // a page stays open through the muster, and is put away where there is no such business
     let h = barHTML();
     if (ui.screen === 'title')
         h += titleHTML();
@@ -757,6 +763,9 @@ function render() {
     $('#view').innerHTML = h;
     document.body.classList.toggle('hubmode', ui.screen === 'camp');
     fitBar();
+    const hubEl = $('.hub');
+    if (hubEl)
+        hubEl.toggleAttribute('inert', !!ui.panel); // with a page open over the camp, the camp beneath is out of reach of the keyboard
     ui.view = null;
     ui.camp = null;
     if (ui.screen === 'battle') {

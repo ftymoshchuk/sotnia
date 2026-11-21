@@ -39,6 +39,7 @@
 <!-- The same scripts, in the same order, as index.html. -->
 <script src="../js/core.js"></script>
 <script src="../js/journey.js"></script>
+<script src="../js/command.js"></script>
 <script src="../js/geo.js"></script>
 <script src="../js/art.js"></script>
 <script src="../js/figures.js"></script>
@@ -100,6 +101,18 @@ const LANDS_ALL = Object.keys(LANDS), W = 600 * ZOOM, H = 248 * ZOOM;
     g.drawImage(skylineOf(land, 1, 320), 0, 28, 640, 112); g.fillStyle = '#221c15'; g.fillRect(0, 132, 640, 8);
     cell(d, LANDS[land].name, '', night, 640 * ZOOM, 140 * ZOOM);
   }
+}
+// 5. The camp through a day
+{
+  const d = section('The camp through a day', 'The camp is drawn at night. Resting a day, or marching, plays the day over it: the sky, the sun and the moon are painted afresh each frame (<code>campSky()</code>), and the light lifts what the night left dark and warms it at dawn and dusk (<code>lightAt()</code>). These are eight hours of one day.');
+  const st = newGame('oxen'); st.at = 'kamianets'; arrive(st);
+  const mk = () => { const cv = document.createElement('canvas'), buf = sceneCanvas(CW, CH); return { cv, ctx: cv.getContext('2d'), buf, g: buf.getContext('2d'), sel: sceneCanvas(44, 44), back: null, key: '', pos: {}, parts: [], t: 0, btns: null }; };
+  const hours = ['midnight', 'before dawn', 'dawn', 'morning', 'noon', 'afternoon', 'dusk', 'night'];
+  hours.forEach((name, i) => {
+    const v = mk(), u = i / 8;
+    drawCamp(v, st, null, 0, true, u === 0 ? null : { kind: 'rest', days: 1, t: u, dur: 1, res: { lines: [], event: null }, ledger: ledgerOf(st), oldBack: null, swapped: false });
+    cell(d, name, 'q = ' + u.toFixed(3), v.buf, 320 * 2 * ZOOM, 151 * 2 * ZOOM);
+  });
 }
 </script>
 </body>
