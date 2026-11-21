@@ -30,6 +30,10 @@ const WPN: Record<TroopClass, readonly string[]> = {
 };
 const ARM: readonly string[] = ['Linen shirt', 'Buff coat', 'Breastplate', 'Cuirass and tassets'];
 const GEAR_COST: readonly number[] = [22, 40, 65];
+/** What each level of weapon adds to a blow (WPN_BLOW) and to a musket ball (WPN_BALL), and what each level of armour takes off a blow (ARM_PLATE; a ball loses half as much). */
+const WPN_BLOW = 2, WPN_BALL = 3, ARM_PLATE = 1.5;
+/** The least and the most a musket ball does, before the weapon, the range and the armour change it. */
+const BALL_DMG: readonly [number, number] = [19, 30];
 // Foes come in tiers 0 to 3, by how well drilled and armed they are. COST is what a unit of each tier adds to a contract's strength.
 const TIER: readonly string[] = ['rabble', 'trained', 'veteran', 'elite'];
 const COST: readonly number[] = [0.5, 1, 1.6, 2.4];
@@ -176,8 +180,10 @@ function enemyUnit(cls: TroopClass, tier: number, skin: Skin): Foe {
 
 /* ---------- economy ---------- */
 const priceMul = (st: Campaign) => (st.staff.qm ? 0.85 : 1);
-const breadPrice = (st: Campaign) => Math.round(4 * priceMul(st));
-const powderPrice = (st: Campaign) => Math.round(14 * priceMul(st));
+/** What ten loaves and ten charges of powder cost, before the quartermaster's discount. */
+const BREAD_COST = 4, POWDER_COST = 14;
+const breadPrice = (st: Campaign) => Math.round(BREAD_COST * priceMul(st));
+const powderPrice = (st: Campaign) => Math.round(POWDER_COST * priceMul(st));
 const gearPrice = (st: Campaign, tier: number) => Math.round(GEAR_COST[tier] * priceMul(st));
 function wagesDue(st: Campaign) {
   let w = 0;
@@ -403,7 +409,7 @@ function toUnit(o: Fighter, side: Side, sid: number | string): BattleUnit {
   return {
     sid, side, name: o.name || '', cls: o.cls, skin: side === 0 ? 'own' : (o.skin || 'bandit'), tier: o.tier || 0, origin: side === 0 && o.origin || '',
     x: 0, y: 0, hx: 0, hy: 0, hp: o.hp != null ? o.hp : o.vig, max: o.vig, mel: o.mel, aim: o.aim, grd: o.grd,
-    wpn: o.wpn, arm: o.arm, armv: c.arm + o.arm * 1.5, spd: c.spd * (o.trait === 'Fleet' ? 1.15 : 1), mor: o.morale,
+    wpn: o.wpn, arm: o.arm, armv: c.arm + o.arm * ARM_PLATE, spd: c.spd * (o.trait === 'Fleet' ? 1.15 : 1), mor: o.morale,
     trait: o.trait, face: side ? -1 : 1, cd: rnd(0, 0.5), loaded: true, rl: 0, aimT: 0, aimNeed: rnd(0.5, 1),
     tgt: null, ret: 0, anim: rnd(0, 1), moving: false, swing: 0, flash: 0, hurt: 0, kills: 0,
     dead: false, fled: false, routing: false, mode: 'idle', run: 0
@@ -541,7 +547,7 @@ function strike(b: Battle, u: BattleUnit, t: BattleUnit, d: number) {
   p *= 0.82 + 0.18 * (clamp(u.mor, 0, 100) / 100);
   p = clamp(p, 0.15, 0.95);
   if (chance(p)) {
-    let dmg = ri(c.dmg[0], c.dmg[1]) + u.wpn * 2 + (u.trait === 'Brawler' ? 2 : 0);
+    let dmg = ri(c.dmg[0], c.dmg[1]) + u.wpn * WPN_BLOW + (u.trait === 'Brawler' ? 2 : 0);
     if (impact) { dmg *= 1.5; t.mor -= 6; }
     hurt(b, t, Math.max(1, Math.round(dmg - t.armv)), u, 'steel');
   } else fxp(b, { k: 'parry', x: (u.x + t.x) / 2, y: (u.y + t.y) / 2 });
@@ -559,7 +565,7 @@ function fire(b: Battle, u: BattleUnit, t: BattleUnit, d: number) {
   if (t.cls === 'sabre' && t.moving) p *= 0.8;
   p = clamp(p, 0.08, 0.92);
   if (chance(p)) {
-    let dmg = ri(19, 30) + u.wpn * 3;
+    let dmg = ri(BALL_DMG[0], BALL_DMG[1]) + u.wpn * WPN_BALL;
     if (d < 40) dmg *= 1.25;
     hurt(b, t, Math.max(4, Math.round(dmg - t.armv / 2)), u, 'ball');
   } else fxp(b, { k: 'miss', x: t.x + rnd(-7, 7), y: t.y + rnd(-3, 3) });

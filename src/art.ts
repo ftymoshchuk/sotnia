@@ -368,7 +368,8 @@ function artURL(key: string, W: number, H: number, fn: (g: CanvasRenderingContex
   const c = sceneCanvas(W, H), g = c.getContext('2d')!; fn(g, W, H);
   return (artCache[key] = c.toDataURL());
 }
-function landscape(g: CanvasRenderingContext2D, W: number, H: number, seed: number) {
+/** The backdrop of a card: hills and dust, and, for some seeds, a small tree on the far ridge (bare leaves it out and the rest the same, for pictures with men to show). */
+function landscape(g: CanvasRenderingContext2D, W: number, H: number, seed: number, bare = false) {
   const r = mulberry(seed * 977 + 13), hz = H - 7, a = r() * 6, b = r() * 6;
   g.fillStyle = PAL.paperHi; g.fillRect(0, 0, W, H);
   for (let i = 0; i < 2; i++) { const cx = r() * (W - 16) | 0, cy = 3 + (r() * 7 | 0), w = 8 + (r() * 10 | 0); g.fillStyle = PAL.hill; g.fillRect(cx, cy + 2, w, 1); g.fillRect(cx + 2, cy, w - 5, 1); }
@@ -376,7 +377,7 @@ function landscape(g: CanvasRenderingContext2D, W: number, H: number, seed: numb
     const y = Math.round(hz - 6 - 3 * Math.sin(x * 0.11 + a) - 2 * Math.sin(x * 0.29 + b));
     g.fillStyle = PAL.hill; g.fillRect(x, y, 1, hz - y); g.fillStyle = INK; g.fillRect(x, y, 1, 1);
   }
-  if (r() < 0.6) { const px = 4 + (r() * (W - 8) | 0), py = Math.round(hz - 8 - 3 * Math.sin(px * 0.11 + a) - 2 * Math.sin(px * 0.29 + b)); g.fillStyle = INK; g.fillRect(px, py - 6, 1, 6); g.fillRect(px - 1, py - 4, 3, 3); }
+  if (r() < 0.6) { const px = 4 + (r() * (W - 8) | 0), py = Math.round(hz - 8 - 3 * Math.sin(px * 0.11 + a) - 2 * Math.sin(px * 0.29 + b)); if (!bare) { g.fillStyle = INK; g.fillRect(px, py - 6, 1, 6); g.fillRect(px - 1, py - 4, 3, 3); } }
   g.fillStyle = PAL.ground; g.fillRect(0, hz, W, H - hz); g.fillStyle = INK; g.fillRect(0, hz, W, 1);
   for (let i = 0; i < 6; i++) { g.fillStyle = 'rgba(28,26,23,.35)'; g.fillRect(r() * W | 0, hz + 2 + (r() * (H - hz - 3) | 0), 2 + (r() * 5 | 0), 1); }
 }
@@ -437,6 +438,38 @@ function questArt(q: Quest, frac?: number) {
     drawSoldier(g, 8, H - 3, { cls: q.transport === 'chest' ? 'shot' : 'pike', skin: 'own', face: 1, mode: 'idle', anim: 0, nation: q.transport === 'chest' ? 'pole' : 'german' });
   });
 }
+/* ---------- the pictures of the encyclopedia: men of a nation, a class or a people standing together ---------- */
+/** Men standing together on a card's landscape: each is where he stands along the picture (scene pixels, from the left) and what he looks like. */
+function squadArt(key: string, W: number, seed: number, men: readonly (readonly [x: number, look: SoldierLook])[]) {
+  return artURL(key, W, 36, (g, w, h) => { landscape(g, w, h, seed, true); for (const [x, look] of men) drawSoldier(g, x, h - 3, look); });
+}
+/** The classes a nation fields, each once, in the order its Origin lists them. */
+const classesOf = (o: Origin) => o.cls.filter((c, i) => o.cls.indexOf(c) === i);
+// A nation of the company: one man of each class it fields, side by side, in the better kit a man comes to.
+function nationArt(o: Origin) {
+  const cs = classesOf(o), at = cs.length === 1 ? [36] : cs.length === 2 ? [20, 50] : [14, 36, 58];
+  return squadArt('cn' + o.id, 72, o.id.length, cs.map((cls, i): [number, SoldierLook] => [at[i], { cls, skin: 'own', nation: o.id, face: 1, mode: 'idle', anim: 0, wpn: i ? 2 : 1, arm: i ? 2 : 1, man: 3 + i * 2 }]));
+}
+// One unit of a nation: the worst kit a man of it starts with and the best he may come to, side by side.
+function unitArt(o: Origin, cls: TroopClass) {
+  const look = (lv: number, man: number): SoldierLook => ({ cls, skin: 'own', nation: o.id, face: 1, mode: 'idle', anim: 0, wpn: lv, arm: lv, man });
+  return squadArt('cu' + o.id + cls, 72, o.id.length + 1, [[22, look(0, 3)], [52, look(3, 8)]]);
+}
+// A class: four men of the nations that field it, from the worst kit to the best.
+function classArt(cls: TroopClass) {
+  const from = ORIGINS.filter(o => o.cls.includes(cls)).slice(0, 4);
+  return squadArt('cc' + cls, 100, cls.length, from.map((o, i): [number, SoldierLook] => [14 + i * 24, { cls, skin: 'own', nation: o.id, face: 1, mode: 'idle', anim: 0, wpn: i, arm: i, man: 3 + i * 2 }]));
+}
+// The armours: one sabreur in each of the four, worst to best.
+function armourArt() {
+  return squadArt('car', 100, 5, [0, 1, 2, 3].map((lv): [number, SoldierLook] => [14 + lv * 24, { cls: 'sabre', skin: 'own', nation: 'pole', face: 1, mode: 'idle', anim: 0, wpn: 1, arm: lv, man: 3 + lv * 2 }]));
+}
+// A people met on the road: a man of each class it fields, facing the company, in the gear its degree of drill carries (see TIER).
+function peopleArt(skin: Skin, classes: readonly TroopClass[], tier: number) {
+  const at = classes.length === 1 ? [40] : classes.length === 2 ? [26, 54] : [20, 42, 64], gear = Math.max(0, tier - 1);
+  return squadArt('cp' + skin + classes.join('') + tier, 72, skin.length, classes.map((cls, i): [number, SoldierLook] => [at[i], { cls, skin, face: -1, mode: 'idle', anim: 0, wpn: gear, arm: gear, man: 2 + i * 3 }]));
+}
+
 // A corner of the camp at night, for the cards of camp events.
 function eventArt() {
   return artURL('night', 96, 32, (g, W, H) => {

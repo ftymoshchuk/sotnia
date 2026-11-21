@@ -44,10 +44,11 @@ npm run typecheck   # check the types without writing anything
 | `src/audio.ts` | Sound effects, and starting the right music for each screen |
 | `src/icons.ts` | The icon set (`ICON`, drawn on a 24-unit square) and `ic()`, which writes one as markup |
 | `src/screens.ts` | Shared state (`G` is the campaign, `ui` is the interface), saving, the card component, and the HTML for every screen |
+| `src/encyclopedia.ts` | The encyclopedia: the nations, the units with their weapons and armour, the foes and the baggage train, read out of the game's own tables, with the few words those tables do not hold |
 | `src/main.ts` | Click and key handling, the frame loop and boot |
 | `js/` | The scripts the page loads, one for each file in `src/`, written by `npm run build`. Generated: never edited by hand |
 | `package.json`, `tsconfig.json` | TypeScript, the only dependency, and the compiler settings: strict, with every file a script (see below) |
-| `tests/` | Headless tests of the rules, the music and the figures (they load the compiled `js/`), and the guard that keeps every workflow action pinned |
+| `tests/` | Headless tests of the rules, the music, the figures and the encyclopedia (they load the compiled `js/`), and the guard that keeps every workflow action pinned |
 | `.github/` | CI, which ends in the `ci-passed` check, and Dependabot for the action pins and TypeScript |
 | `docs/figures.html` | A sheet of every figure, weapon and piece of armour, drawn by the game's own scripts: open it after `npm run build`, or with `?zoom=6` for larger pixels |
 | `docs/default-branch.ruleset.json` | The branch rules for `main` |
@@ -68,6 +69,7 @@ Keep `src/core.ts` and `src/journey.ts` free of DOM access. The scouts' odds com
 - **The look:** every man, recruit, supply, job, member of the baggage train, opening order and fallen man is a card, built by `cardHTML()` in `src/screens.ts`: a name banner, a picture, the body, and a type bar coloured by kind, with the price or wage on a coin at its left. Icons stand in for words wherever a number says enough; the word stays for screen readers and on hover.
 - **Kit:** each man has a weapon level and an armour level, `wpn` and `arm`, from 0 to 3. Their names are `WPN` (for each class) and `ARM`, their prices `GEAR_COST`, and `upgrade()` buys the next level. The levels change what he does in a fight (`wpn` adds to the damage of his blows, `arm` to the armour that turns them) and what he looks like: see [Figures](#figures). A card shows each slot as a ladder of its four pieces (`gearHTML()` in `src/screens.ts`), and shows the man in the next piece while its button is under the pointer. Foes wear the gear of their tier.
 - **Nations:** every man of the company is dressed as his nation, the `Origin` he was raised from. `NATIONS` in `src/figures.ts` gives each its colours, its legs and boots, what it wears on its head, and the one thing in its dress that no other nation has (see [Figures](#figures)). The same table dresses the foes who are a people of their own, by their skins: `swede`, `imperial`, `muscovite`, `tatar` and `croat`. A card shows the colours of a man's country as a little flag before the name of his nation (`flagOf()`).
+- **The encyclopedia:** `codexHTML()` in `src/encyclopedia.ts` builds its four tabs (nations, units, foes, train and goods) out of the tables the rules run on (`ORIGINS`, `CLS`, `WPN`, `ARM`, `GEAR_COST`, `TRAITS`, `AMBUSHES`, `TEMPLATES`, `TIER`, `STAFF`, `QUESTS`, and `NATIONS` for dress), so a nation, a weapon or a foe added to a table turns up on its page by itself. The words the tables lack are `NATION_TEXT` and `FOE_TEXT`, `Record`s over the ids, so one left out fails to compile. The numbers of the gear rules are named constants in `src/core.ts` (`WPN_BLOW`, `WPN_BALL`, `ARM_PLATE`, `BALL_DMG`) that the battle and the page both read, so they cannot disagree. Its pictures are `nationArt()`, `unitArt()`, `classArt()`, `armourArt()` and `peopleArt()` in `src/art.ts`. It opens from the title's button or the book in the top bar (never in a battle); Esc or its back button return to the screen it was opened from, and `#encyclopedia`, `#encyclopedia-units`, `-foes` and `-goods` link to a tab.
 - **The camp:** `campPlan()` in `src/art.ts` puts each man where his order sends him (by the fire to rest, the drill yard, out foraging, or abed by the tent), and `drawCamp()` draws the night, the fire and the men walking between places. The slots are in `CAMP`.
 - **Music:** what plays is in `src/score.ts`: each piece's ground, tunes and figures, and the cues that say which pieces play on which screen and how loud each cue is against the others. `MUSIC_LEVEL` in `src/audio.ts` sets the loudness of all of it, and the instruments are `SOUNDS` in `src/music.ts`. See [Music](#music).
 - **Saves:** the state built by `newGame()` is a `Campaign` (in `src/journey.ts`) and carries `v: 2`, and `loadSave()` ignores any other version. Bump it when the shape of `Campaign` changes, so old saves are dropped instead of loading broken.
@@ -103,6 +105,16 @@ It also plays every cue for ten minutes against `tests/webaudio-stub.js`, a stan
 - every pose, in every kit, fits the frame the cards and the field leave for it;
 - a man who faces left is exactly the mirror of one who faces right, and the same man is drawn the same each time;
 - the pictures of gear differ at every level, and a battle unit and a line of the report carry the gear the picture shows.
+
+`tests/encyclopedia.test.js` loads the screens and the encyclopedia against the same kind of canvas, builds each tab as text and checks that:
+
+- every nation, class, weapon, piece of armour, trait, foe, degree of drill, hired hand, supply and commission is on its page, with the lands, prices and numbers the game gives it, and nothing reads `undefined` or `NaN`;
+- what it says of armour is what the battle does with it, and the classes are named in the plural as people say it;
+- every nation, unit and people has a picture of its own;
+- the ink on a bar in the colour of a nation can be read (contrast of at least 4.5), and the colour is kept as near itself as that allows;
+- the way into it is on every screen but the battle, and the way out of it is worded for each screen it can be opened from.
+
+Its clicks, Escape and addresses (`act()` and `start()` in `src/main.ts`) need a page, so these tests do not cover them.
 
 `main` carries the same branch ruleset as the Sigrix public repositories (see `docs/new-repository.md` in `sigrix-io/actions`):
 
@@ -199,6 +211,6 @@ The next commit split that file into separate files without changing the code. A
 
 Then the scripts became TypeScript: written in `src/` under `strict`, and compiled to the `js/` files the page loads. Nothing a player can see was meant to change, and three checks say nothing did. Each compiled script has the same syntax tree as the JavaScript it replaced (the comparison ignores layout and comments, but not a single name, operator or literal). Every comment of the original survives into `js/`. And a browser run that clicked through 1,600 steps of the old game, with fights, marches, trading and the map, is reproduced step for step by the new one. The last hand-written JavaScript is at `git show bca68a2:js/core.js`, and likewise for the other nine scripts.
 
-After that the men were redrawn at twice the pixels, and dressed in the weapon and armour they have bought: until then the rules had levels of gear but the picture never showed them. See [Figures](#figures).
+After that the men were redrawn at twice the pixels, and dressed in the weapon and armour they have bought: until then the rules had levels of gear but the picture never showed them. See [Figures](#figures). Then each was dressed in the colours of his nation (see [Nations](#nations)), and the encyclopedia was added: one place to see every nation, unit, weapon, foe and good of the game.
 
 `src/main.ts` still checks for `window.claude.hot`. That only exists inside the Claude artifact runtime, where it keeps the campaign across hot reloads. Everywhere else it is absent and the game boots normally.

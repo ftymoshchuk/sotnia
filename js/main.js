@@ -59,6 +59,13 @@ function setStance(s) {
             }
     paintHud();
 }
+/** Keeps the address in step with the encyclopedia (#encyclopedia-units), so that a page of it can be linked to; where the page may not touch its address, nothing happens. */
+function codexAddress(open) {
+    try {
+        history.replaceState(null, '', open ? '#encyclopedia-' + ui.codex : location.pathname + location.search);
+    }
+    catch (e) { /* no address to keep */ }
+}
 function act(a, d) {
     wake();
     switch (a) {
@@ -92,6 +99,22 @@ function act(a, d) {
         }
         case 'tab':
             ui.tab = d.k;
+            break;
+        case 'codex':
+            if (ui.modal || ui.screen === 'battle' || ui.screen === 'codex')
+                return;
+            ui.codexFrom = ui.screen;
+            ui.screen = 'codex';
+            codexAddress(true);
+            break;
+        case 'codexTab':
+            ui.codex = d.k;
+            codexAddress(true);
+            break;
+        // back to where it was opened from, which is the title if that is gone (the camp has no campaign to show)
+        case 'codexBack':
+            ui.screen = ui.codexFrom === 'camp' && !G ? 'title' : ui.codexFrom;
+            codexAddress(false);
             break;
         case 'sel':
             ui.open = +d.id;
@@ -304,6 +327,8 @@ function act(a, d) {
     }
     render();
     ui.fresh = null;
+    if (a.slice(0, 5) === 'codex')
+        window.scrollTo(0, 0);
 }
 document.addEventListener('click', e => {
     // A click on the map picks the place nearest it as the course.
@@ -351,6 +376,10 @@ document.addEventListener('change', e => { const el = e.target; if (el.dataset &
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && ui.modal && ui.modal.type === 'help') {
         act('close', {});
+        return;
+    }
+    if (e.key === 'Escape' && ui.screen === 'codex' && !ui.modal) {
+        act('codexBack', {});
         return;
     }
     if (ui.screen !== 'battle' || ui.modal || !ui.b)
@@ -447,6 +476,14 @@ function start(data) {
     if (data && data.G && data.G.v === 2) {
         G = data.G;
         ui.screen = G.over ? 'end' : 'camp';
+    }
+    // a link to #encyclopedia, or to one of its tabs, opens it, with the way back to wherever the game was
+    const link = new RegExp('^#encyclopedia(?:-(' + CODEX_TABS.map(t => t[0]).join('|') + '))?$').exec(location.hash);
+    if (link) {
+        ui.codexFrom = ui.screen;
+        ui.screen = 'codex';
+        if (link[1])
+            ui.codex = link[1];
     }
     render();
     requestAnimationFrame(frame);

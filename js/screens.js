@@ -25,7 +25,7 @@ const roman = (n) => ROMAN[n] || String(n);
 // The campaign in play: null until one is raised or continued, so on the title screen. The screens after it are built only with a
 // campaign in hand, which is why they write G!; save(), barHTML() and the frame loop are what look.
 let G = null;
-const ui = { screen: 'title', tab: 'market', course: null, open: null, c: null, pick: [], stance: null, odds: null, b: null, speed: 1, rep: null, modal: null, news: null, sound: true, music: true, view: null, camp: null, campPos: {}, demo: null, overT: 0, verdict: false, fresh: null };
+const ui = { screen: 'title', tab: 'market', course: null, open: null, c: null, pick: [], stance: null, odds: null, b: null, speed: 1, rep: null, modal: null, news: null, sound: true, music: true, view: null, camp: null, campPos: {}, demo: null, overT: 0, verdict: false, fresh: null, codex: 'nations', codexFrom: 'title' };
 /* ---------- saving ---------- */
 const SAVE = 'sotnia-save-2';
 function save() { try {
@@ -74,7 +74,7 @@ function cardHTML(o) {
     h += o.body || '';
     if (o.type) {
         const t = o.type;
-        h += '<span class="type ' + (t.look || 'ink') + (t.coin != null ? ' coined' : '') + (t.lvl ? ' levelled' : '') + (t.end ? ' ended' : '') + '">' + (t.coin != null ? '<span class="coin" title="' + esc(t.coinLabel || '') + '">' + t.coin + sr(' ' + (t.coinLabel || '')) + '</span>' : '') +
+        h += '<span class="type ' + (t.look || 'ink') + (t.coin != null ? ' coined' : '') + (t.lvl ? ' levelled' : '') + (t.end ? ' ended' : '') + '"' + (t.style ? ' style="' + t.style + '"' : '') + '>' + (t.coin != null ? '<span class="coin" title="' + esc(t.coinLabel || '') + '">' + t.coin + sr(' ' + (t.coinLabel || '')) + '</span>' : '') +
             '<span class="tt">' + t.text + '</span>' + (t.lvl ? '<span class="lvl" title="Level">' + t.lvl + sr(' level') + '</span>' : '') + (t.end || '') + '</span>';
     }
     return h + '</span></' + tag + '>';
@@ -91,13 +91,14 @@ function sectHTML(title, aside) { return '<h2 class="sect"><span>' + title + '</
 /* ---------- the bar along the top: where, when, and what the company has ---------- */
 function toolsHTML() {
     return '<div class="tools">' +
+        (ui.screen === 'battle' || ui.screen === 'codex' ? '' : '<button class="tool" data-act="codex" aria-label="Encyclopedia" title="Encyclopedia">' + ic('book') + '</button>') +
         '<button class="tool" data-act="help" aria-label="Standing orders" title="Standing orders">' + ic('scroll') + '</button>' +
         '<button class="tool' + (ui.music ? '' : ' off') + '" data-act="music" aria-pressed="' + ui.music + '" aria-label="Music" title="Music">' + ic('note') + '</button>' +
         '<button class="tool' + (ui.sound ? '' : ' off') + '" data-act="sound" aria-pressed="' + ui.sound + '" aria-label="Sound" title="Sound">' + ic('speaker') + '</button></div>';
 }
 function barHTML() {
     let h = '<header class="bar"><h1 class="logo">Sotnia</h1>';
-    if (!G || ui.screen === 'title' || ui.screen === 'end')
+    if (!G || ui.screen === 'title' || ui.screen === 'end' || ui.screen === 'codex')
         return h + '<p class="strap">A free company · Anno 1633</p><span class="grow"></span>' + toolsHTML() + '</header>';
     const q = questOf(G), left = daysLeft(G), done = Math.round(100 * progress(G)), camp = ui.screen === 'camp';
     const due = left >= 0 ? plural(left, 'day', 'days') + ' until ' + q.until : plural(-left, 'day', 'days') + ' late: the price is falling';
@@ -510,14 +511,15 @@ function endHTML() {
     return h + '<div><button class="btn go huge" data-act="title">' + ic('flag') + 'Raise a new banner</button></div></section>';
 }
 /* ---------- the title: the commissions of 1633 ---------- */
-function questCard(q) {
+// button: whether the card has the button that raises the banner; the encyclopedia shows the commissions without it.
+function questCard(q, button = true) {
     const days = daysToGo({ quest: q.id, at: q.from }), worth = q.kind === 'commission' ? q.fee : q.cargo.n * q.price;
     return cardHTML({
         cls: 'quest', attrs: ' aria-label="' + esc(q.title) + '"', title: esc(q.title), art: questArt(q), artCls: 'wide',
         badges: '<span class="badge">' + (q.kind === 'commission' ? 'Commission' : 'Venture') + '</span><span class="badge gold right" title="Playing time">' + ic('hourglass') + esc(q.play) + '</span>',
         body: '<span class="route">' + esc(cap1(PLACES[q.from].name)) + ic('road') + esc(PLACES[q.to].name) + '</span><span class="who">' + esc(q.who) + '</span><span class="flavour">' + esc(q.text) + '</span>' +
             '<span class="strip">' + stat('calendar', dateText(q.start, true) + '–' + dateText(q.deadline, true), 'from and by') + stat('boot', '~' + days + 'd', 'on the road, ' + (q.deadline - q.start) + ' to spare them') + stat(q.kind === 'commission' ? 'coin' : 'barrel', q.cargo.n, q.cargo.unit) + stat('wagon', esc(TRANSPORT[q.transport].name), 'how it travels') + '</span>',
-        type: { look: 'ink', text: '', coin: worth, coinLabel: q.kind === 'commission' ? 'Fee, thalers' : 'Worth at the destination, thalers', end: '<button class="btn go sm" data-act="new" data-q="' + q.id + '">' + ic('flag') + 'Raise the banner</button>' }
+        type: { look: 'ink', text: button ? '' : cap1(q.cargo.many), coin: worth, coinLabel: q.kind === 'commission' ? 'Fee, thalers' : 'Worth at the destination, thalers', end: button ? '<button class="btn go sm" data-act="new" data-q="' + q.id + '">' + ic('flag') + 'Raise the banner</button>' : undefined }
     });
 }
 function titleHTML() {
@@ -527,8 +529,9 @@ function titleHTML() {
         '<div class="intro"><p class="lede">The German war is in its fifteenth year, and every prince between the Rhine and the Dnieper is hiring. You have a banner, a handful of men, and a long road.</p>' +
         '<ol class="how">' + [['flag', 'Take a commission', 'Carry a cargo across the lands of 1633 by the day it names.'], ['road', 'Choose the road', 'March steady or forced; rest, drill and buy bread.'], ['men', 'Keep the roll', 'Hire pike, shot and sabre; pay them; fight what falls on the train.']]
         .map(x => '<li><span class="disc">' + ic(x[0]) + '</span><span><b>' + x[1] + '</b>' + x[2] + '</span></li>').join('') + '</ol>' +
-        (sv ? '<button class="btn go big" data-act="continue">' + ic('tent') + 'Continue: ' + esc(cap1(PLACES[sv.at].name)) + ', ' + dateText(sv.date, true) + '</button>' : '') + '</div></div>' +
-        '<section>' + sectHTML('Commissions for the year 1633', 'choose one to raise the banner') + '<div class="cards wide quests">' + QUESTS.map(questCard).join('') + '</div></section>';
+        '<div class="actions">' + (sv ? '<button class="btn go big" data-act="continue">' + ic('tent') + 'Continue: ' + esc(cap1(PLACES[sv.at].name)) + ', ' + dateText(sv.date, true) + '</button>' : '') +
+        '<button class="btn big" data-act="codex">' + ic('book') + 'Encyclopedia</button></div></div></div>' +
+        '<section>' + sectHTML('Commissions for the year 1633', 'choose one to raise the banner') + '<div class="cards wide quests">' + QUESTS.map(q => questCard(q)).join('') + '</div></section>';
 }
 /* ---------- dialogs ---------- */
 function choiceHTML(attrs, label, fx, hint, off) {
@@ -593,6 +596,8 @@ function render() {
         h += battleHTML();
     else if (ui.screen === 'report')
         h += reportHTML();
+    else if (ui.screen === 'codex')
+        h += codexHTML();
     else
         h += endHTML();
     h += '<p class="foot">A prototype. A commission takes from a few weeks to a few months of the year 1633 on the road, and from a quarter of an hour to an hour to play. Your place is kept in this browser. Music and sound are made in the browser as you play.</p>';

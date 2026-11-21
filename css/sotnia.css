@@ -461,3 +461,31 @@ kbd { font: 11px/1 var(--body); padding: 2px 4px; border: 1px solid currentColor
   .dialog .banner { font-size: 25px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* ---------- the encyclopedia ---------- */
+.codex { display: grid; gap: 18px; }
+.codex-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; }
+.codex-title { font: 900 40px/0.95 var(--display); color: var(--gilt); }
+.codex-sub { max-width: 64ch; margin-top: 5px; font: italic 16px/1.35 var(--body); color: var(--mute); }
+.type.nation { background: var(--n, var(--ink)); color: var(--nt, var(--parchment-hi)); }
+@media (min-width: 960px) { .cards.wide > .cxclass { grid-row: span 2; } }
+.card .art.squad img { aspect-ratio: 72 / 36; }
+.card .art.strip4 img { aspect-ratio: 100 / 36; }
+.colours { display: flex; align-items: center; gap: 9px; padding: 0 3px; }
+.colours .flag { margin: 0; width: 19px; height: 13px; }
+.swatches { display: inline-flex; gap: 4px; }
+.sw { display: inline-block; width: 17px; height: 17px; border: 1px solid var(--ink); border-radius: 3px; }
+.facts { display: flex; flex-wrap: wrap; gap: 3px 13px; padding: 0 3px; font-size: 13.5px; color: var(--ink-soft); }
+.facts b { color: var(--ink); font-variant-numeric: lining-nums tabular-nums; }
+.gearhead { padding: 2px 3px 0; font: 12.5px/1 var(--caps); letter-spacing: .1em; color: var(--ink-soft); }
+.gearrows { display: grid; gap: 4px; }
+.gearrow { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 2px 7px 2px 2px; border: 1px solid var(--rule); border-radius: 6px; }
+.gearrow img { display: block; width: 44px; height: 32px; margin: 1px; background: var(--paper-hi); border-radius: 3px; image-rendering: pixelated; }
+.gearrow b { display: block; font-size: 14px; line-height: 1.15; }
+.gearrow small { display: block; font-size: 12.5px; line-height: 1.2; color: var(--ink-soft); }
+.gearrow .cost { display: inline-flex; align-items: center; gap: 3px; font: 700 14px/1 var(--body); font-variant-numeric: lining-nums tabular-nums; }
+.gearrow .cost .i { color: #8a6a2a; }
+.traits { display: grid; gap: 8px; }
+.card .traits .line .i { color: #8a6a2a; }
+.card .traits .line.bad .i { color: var(--madder); }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }

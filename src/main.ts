@@ -40,6 +40,10 @@ function setStance(s: Stance) {
   if (s === 'hold') for (const u of b.units) if (u.side === 0) { u.hx = u.x; u.hy = u.y; }
   paintHud();
 }
+/** Keeps the address in step with the encyclopedia (#encyclopedia-units), so that a page of it can be linked to; where the page may not touch its address, nothing happens. */
+function codexAddress(open: boolean) {
+  try { history.replaceState(null, '', open ? '#encyclopedia-' + ui.codex : location.pathname + location.search); } catch (e) { /* no address to keep */ }
+}
 /** The data- attributes of the element that was clicked, which hold what its action needs (the HTML that sets them is in screens.ts). */
 type ActData = Record<string, string>;
 function act(a: string, d: ActData) {
@@ -54,6 +58,10 @@ function act(a: string, d: ActData) {
       break;
     }
     case 'tab': ui.tab = d.k as TabId; break;
+    case 'codex': if (ui.modal || ui.screen === 'battle' || ui.screen === 'codex') return; ui.codexFrom = ui.screen; ui.screen = 'codex'; codexAddress(true); break;
+    case 'codexTab': ui.codex = d.k as CodexTab; codexAddress(true); break;
+    // back to where it was opened from, which is the title if that is gone (the camp has no campaign to show)
+    case 'codexBack': ui.screen = ui.codexFrom === 'camp' && !G ? 'title' : ui.codexFrom; codexAddress(false); break;
     case 'sel': ui.open = +d.id; break;
     case 'order': { const s = man(+d.id); if (s) s.order = d.o as CampOrder; break; }
     case 'promo': promote(G!, +d.id, d.k as Promo); G!.odds = {}; break;
@@ -110,6 +118,7 @@ function act(a: string, d: ActData) {
   }
   render();
   ui.fresh = null;
+  if (a.slice(0, 5) === 'codex') window.scrollTo(0, 0);
 }
 document.addEventListener('click', e => {
   // A click on the map picks the place nearest it as the course.
@@ -136,6 +145,7 @@ document.addEventListener('mouseout', tryOff); document.addEventListener('focuso
 document.addEventListener('change', e => { const el = e.target as HTMLSelectElement; if (el.dataset && el.dataset.act === 'course-pick') act('course-pick', { v: el.value }); });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && ui.modal && ui.modal.type === 'help') { act('close', {}); return; }
+  if (e.key === 'Escape' && ui.screen === 'codex' && !ui.modal) { act('codexBack', {}); return; }
   if (ui.screen !== 'battle' || ui.modal || !ui.b) return;
   const k = ({ '1': 'hold', '2': 'advance', '3': 'charge' } as Partial<Record<string, Stance>>)[e.key];
   if (k && !(ui.c!.duel && k === 'hold')) setStance(k);
@@ -180,6 +190,9 @@ interface Window {
 /* ---------- boot ---------- */
 function start(data: HotState) {
   if (data && data.G && data.G.v === 2) { G = data.G; ui.screen = G.over ? 'end' : 'camp'; }
+  // a link to #encyclopedia, or to one of its tabs, opens it, with the way back to wherever the game was
+  const link = new RegExp('^#encyclopedia(?:-(' + CODEX_TABS.map(t => t[0]).join('|') + '))?$').exec(location.hash);
+  if (link) { ui.codexFrom = ui.screen; ui.screen = 'codex'; if (link[1]) ui.codex = link[1] as CodexTab; }
   render();
   requestAnimationFrame(frame);
   if (document.fonts && document.fonts.load) document.fonts.load("12px 'Alegreya SC'").catch(() => {});
