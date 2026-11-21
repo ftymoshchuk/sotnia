@@ -67,6 +67,7 @@ Keep `src/core.ts` and `src/journey.ts` free of DOM access. The scouts' odds com
 - **The camp:** `campPlan()` in `src/art.ts` puts each man where his order sends him (by the fire to rest, the drill yard, out foraging, or abed by the tent), and `drawCamp()` draws the night, the fire and the men walking between places. The slots are in `CAMP`.
 - **Music:** what plays is in `src/score.ts`: each piece's ground, tunes and figures, and the cues that say which pieces play on which screen and how loud each cue is against the others. `MUSIC_LEVEL` in `src/audio.ts` sets the loudness of all of it, and the instruments are `SOUNDS` in `src/music.ts`. See [Music](#music).
 - **Saves:** the state built by `newGame()` is a `Campaign` (in `src/journey.ts`) and carries `v: 2`, and `loadSave()` ignores any other version. Bump it when the shape of `Campaign` changes, so old saves are dropped instead of loading broken.
+- **Types:** each shape the game passes around is named beside the code that builds it: `Soldier`, `Battle`, `Contract` and `CampEvent` in `src/core.ts`; `Place`, `Road`, `Quest` and the saved `Campaign` in `src/journey.ts`; the interface's `UiState` in `src/screens.ts`; the format of a `Score` in `src/score.ts`. Ids are unions of strings and the lookup tables are `Record`s over them, so a misspelt place, land or troop class fails to compile. The campaign global `G` is `Campaign | null`, since it is null on the title screen, which is why the screens write `G!`.
 
 ## Checks and branch rules
 
