@@ -57,7 +57,9 @@ const ICON = {
   qm: 'M5 3.5h14v17H5zM8.5 8h7M8.5 12h7M8.5 16h4',
   chaplain: 'M12 3v18M7 8h10'
 };
+// The name of an icon, which is what ic() takes: each is a key of ICON, so a misspelt one is a type error.
+type IconName = keyof typeof ICON;
 // An icon as markup: decorative unless given a label, and sized by the font around it.
-function ic(name, label) {
+function ic(name: IconName, label?: string): string {
   return '<svg class="i" viewBox="0 0 24 24"' + (label ? ' role="img" aria-label="' + label + '"' : ' aria-hidden="true"') + '><path d="' + (ICON[name] || '') + '"/></svg>';
 }

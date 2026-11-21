@@ -34,7 +34,7 @@ const MUSIC = (() => {
         return 0; let k; do
         k = Math.floor(r() * n);
     while (k === last); return k; };
-    const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+    const hz = (m) => 440 * Math.pow(2, (m - 69) / 12);
     /* ---------- notation ---------- */
     const LETTER = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
     function pcOf(name) {
@@ -51,7 +51,7 @@ const MUSIC = (() => {
         return 12 * (+m[3] + 1) + LETTER[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0);
     }
     // One note or several sounded together: 'D4', or '[D3,A3,F#4]'.
-    const notesOf = w => (w[0] === '[' ? w.slice(1, -1).split(',').map(noteOf) : [noteOf(w)]);
+    const notesOf = (w) => (w[0] === '[' ? w.slice(1, -1).split(',').map(noteOf) : [noteOf(w)]);
     // Bars of 'what:beats', with '|' between bars and 'r' for a rest. Each bar must fill its metre
     // exactly. Answers, for each bar, [beat, what, beats] for all but the rests.
     function barsOf(text, meter, read, where) {
@@ -136,7 +136,7 @@ const MUSIC = (() => {
         for (let m = lo; m <= hi; m++)
             if (m % 12 === pc && (best === null || Math.abs(m - prev) < Math.abs(best - prev)))
                 best = m;
-        return best;
+        return best; // null only for a range too narrow to hold the pitch, which the score's ranges never are
     }
     /* ---------- variations ---------- */
     // A tune as it comes round again. 'orn' adds a grace to some bars, as players did: a passing note
@@ -146,7 +146,7 @@ const MUSIC = (() => {
     // `lead` is a raised leading tone (C sharp in D minor) that only ever graces the tonic.
     function vary(tune, how, mode, shift, r) {
         const out = tune.map(bar => bar.map(([at, ms, d]) => [at, ms.map(m => m + shift), d]));
-        const pc = m => ((m % 12) + 12) % 12, diatonic = m => mode.diatonic.includes(pc(m));
+        const pc = (m) => ((m % 12) + 12) % 12, diatonic = (m) => mode.diatonic.includes(pc(m));
         if (how === 'thin') {
             return out.map(bar => {
                 const kept = [];
@@ -470,11 +470,11 @@ const MUSIC = (() => {
     }
     /* ---------- reading a score ---------- */
     const COMPILED = new WeakMap();
-    const readFig = w => { if (!/^(B|B5|B8|C|[1-4])$/.test(w))
+    const readFig = (w) => { if (!/^(B|B5|B8|C|[1-4])$/.test(w))
         throw new Error('Not a figure step: ' + w); return w; };
     // Drum strokes: a note for the part's own drum, X for the frame drum's boom and x for its rim.
-    const readStroke = ins => w => (w === 'X' ? [['frame', 43]] : w === 'x' ? [['tap', 79]] : notesOf(w).map(m => [ins, m]));
-    const notes = text => text.trim().split(/\s+/).map(noteOf);
+    const readStroke = (ins) => (w) => (w === 'X' ? [['frame', 43]] : w === 'x' ? [['tap', 79]] : notesOf(w).map(m => [ins, m]));
+    const notes = (text) => text.trim().split(/\s+/).map(noteOf);
     // Checks a score and puts it in the form the composing uses, once for each score. A mistake in
     // the score (a bar that does not add up, a tune longer than its ground) is an error here.
     function compile(score) {
@@ -487,6 +487,7 @@ const MUSIC = (() => {
                 throw new Error(name + ': a scale needs its seven notes');
             // The first seven notes are the mode; an eighth a semitone under the tonic is its raised leading tone.
             const lead = scale.slice(7).find(x => x === (scale[0] + 11) % 12);
+            // Built in two steps: the fields that only a suite piece has, or only a loop piece has, are added below.
             const P = { name, meter, bpm: p.bpm, ground: groundOf(p.ground, meter), mode: { tonic: scale[0], diatonic: scale.slice(0, 7), lead: lead === undefined ? null : lead, meter }, tunes: {} };
             const one = (text, read, where) => { const b = barsOf(text, meter, read, name + ' ' + where); if (b.length !== 1)
                 throw new Error(name + ' ' + where + ' should be one bar'); return b[0]; };
@@ -498,6 +499,8 @@ const MUSIC = (() => {
             if (p.sections) {
                 P.parts = {};
                 for (const [k, d] of Object.entries(p.parts)) {
+                    // A copy of the definition whose text fields (pat, turn, fig, thin, notes) are replaced below by the bars and notes they
+                    // read as, so it is not of the definition's type, nor yet of the part's.
                     const part = Object.assign({}, d, { key: k });
                     if (d.kind === 'perc') {
                         part.pat = barsOf(d.pat, meter, readStroke(d.ins), name + ' ' + k);
@@ -560,7 +563,7 @@ const MUSIC = (() => {
     // One bar of a pass, as events: { ins, m, at (beats into the bar), d (beats), sec (or seconds), v, off (seconds early or late) }.
     function buildBar(P, pass, i, st, r) {
         const ev = [], segs = P.ground[i], last = i === pass.to - 1;
-        const segAt = at => { let k = 0; while (k + 1 < segs.length && segs[k + 1][0] <= at + 1e-9)
+        const segAt = (at) => { let k = 0; while (k + 1 < segs.length && segs[k + 1][0] <= at + 1e-9)
             k++; return k; };
         for (const part of pass.parts) {
             if (!part)
@@ -662,7 +665,7 @@ const MUSIC = (() => {
         };
         const sparse = () => ({ kind: 'figure', ins: 'lute', key: 'lute', figs: P.sparse, cadence: P.cadence, win: P.win, strum: 0.03, level: 0.9 });
         const drone = () => (P.drone && r() < P.droneOdds ? { kind: 'drone', ins: 'drone', notes: P.drone } : null);
-        const bass = odds => (r() < odds ? { kind: 'bass', ins: 'bassviol', key: 'bass' } : null);
+        const bass = (odds) => (r() < odds ? { kind: 'bass', ins: 'bassviol', key: 'bass' } : null);
         const drum = () => (P.perc && r() < 0.7 ? { kind: 'perc', ins: 'frame', pat: P.perc, level: 0.8 } : null);
         const tune = (key, how, avoid) => {
             for (let tries = 0; tries < 8; tries++) {
@@ -725,6 +728,7 @@ const MUSIC = (() => {
                 const opening = !st.played && o.opening && cue.first, avoid = st.played ? st.piece : o.avoid;
                 const pool = cue.suite.filter(p => p !== avoid), p = opening ? cue.first : choose(pool.length ? pool : cue.suite, r);
                 st.piece = p;
+                // (A cue's suite names suite pieces, and a cue's loop a loop piece.)
                 queue.push(...suite(S.pieces[p], st, r, !!opening, cue));
                 queue.push({ rest: cue.rest[0] + r() * (cue.rest[1] - cue.rest[0]), piece: null });
                 st.played++;
@@ -756,7 +760,7 @@ const MUSIC = (() => {
         }
         let next = start;
         // Every bar that starts before `until`, in its turn.
-        const schedule = until => {
+        const schedule = (until) => {
             while (next < until) {
                 const bar = perf.next(), spb = 60 / (bar.bpm || 60);
                 for (const e of bar.events || [])

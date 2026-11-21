@@ -1,16 +1,18 @@
 "use strict";
 /* ===== SOTNIA core rules: no DOM in this block ===== */
+// st, in most of the functions below, is the campaign: its type, Campaign, is declared in journey.ts above newGame().
 const rnd = (a, b) => a + Math.random() * (b - a);
 const ri = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
-const pick = a => a[Math.floor(Math.random() * a.length)];
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-const chance = p => Math.random() < p;
+const chance = (p) => Math.random() < p;
 const ROSTER_MAX = 8;
 const CLS = {
     pike: { name: 'Pikeman', skill: 'Pike', vig: 66, mel: 9, aim: 0, grd: 7, spd: 15, reach: 19, cd: 1.5, dmg: [9, 14], arm: 3 },
     shot: { name: 'Musketeer', skill: 'Aim', vig: 48, mel: 5, aim: 9, grd: 4, spd: 17, reach: 8, cd: 1.3, dmg: [4, 7], arm: 0 },
     sabre: { name: 'Sabreur', skill: 'Blade', vig: 55, mel: 11, aim: 0, grd: 9, spd: 27, reach: 9, cd: 0.85, dmg: [7, 11], arm: 1 }
 };
+// Weapon and armour names by gear level, 0 to 3. GEAR_COST[n] is the price of raising either one from level n.
 const WPN = {
     pike: ['Ash pike', 'Ironbound pike', 'Partisan', "Master's halberd"],
     shot: ['Old arquebus', 'Matchlock musket', 'Dutch musket', 'Wheel-lock'],
@@ -18,6 +20,7 @@ const WPN = {
 };
 const ARM = ['Linen shirt', 'Buff coat', 'Breastplate', 'Cuirass and tassets'];
 const GEAR_COST = [22, 40, 65];
+// Foes come in tiers 0 to 3, by how well drilled and armed they are. COST is what a unit of each tier adds to a contract's strength.
 const TIER = ['rabble', 'trained', 'veteran', 'elite'];
 const COST = [0.5, 1, 1.6, 2.4];
 const ORIGINS = [
@@ -74,7 +77,6 @@ const STAFF = {
     qm: { name: 'Quartermaster', fee: 30, wage: 3, desc: 'The company eats a quarter less. Market prices fall 15%.' },
     chaplain: { name: 'Field chaplain', fee: 25, wage: 3, desc: 'Spirits rise a little every day.' }
 };
-/* ---------- soldiers ---------- */
 function applyPromo(s, k) {
     if (k === 'vig') {
         s.vig += 8;
@@ -97,7 +99,7 @@ function makeSoldier(st, cls, level, origin) {
         level: 1, xp: 0, vig: c.vig + ri(-4, 4), mel: c.mel + ri(-1, 1), aim: c.aim ? c.aim + ri(-1, 1) : 0,
         grd: c.grd + ri(-1, 1), wpn: 0, arm: 0, morale: ri(55, 72), trait: null, order: 'drill',
         wound: 0, kills: 0, promos: 0, scars: [], fought: false
-    };
+    }; // hp follows, once vig is settled
     if (chance(0.6))
         s.trait = pick(Object.keys(TRAITS));
     if (s.trait === 'Keen-eyed' && cls !== 'shot')
@@ -112,9 +114,9 @@ function makeSoldier(st, cls, level, origin) {
     s.hp = s.vig;
     return s;
 }
-const xpNeed = level => 30 + level * 18;
-const wageOf = s => 3 + 2 * s.level + (s.trait === 'Grasping' ? 3 : 0); // thalers a month
-const rating = s => s.vig / 8 + s.mel + (s.cls === 'shot' ? s.aim : 0) + s.grd * 0.6 + s.wpn * 2 + s.arm * 2;
+const xpNeed = (level) => 30 + level * 18;
+const wageOf = (s) => 3 + 2 * s.level + (s.trait === 'Grasping' ? 3 : 0); // thalers a month
+const rating = (s) => s.vig / 8 + s.mel + (s.cls === 'shot' ? s.aim : 0) + s.grd * 0.6 + s.wpn * 2 + s.arm * 2;
 function levelUps(st, L) {
     for (const s of st.roster) {
         while (s.xp >= xpNeed(s.level)) {
@@ -144,9 +146,9 @@ function enemyUnit(cls, tier, skin) {
     };
 }
 /* ---------- economy ---------- */
-const priceMul = st => (st.staff.qm ? 0.85 : 1);
-const breadPrice = st => Math.round(4 * priceMul(st));
-const powderPrice = st => Math.round(14 * priceMul(st));
+const priceMul = (st) => (st.staff.qm ? 0.85 : 1);
+const breadPrice = (st) => Math.round(4 * priceMul(st));
+const powderPrice = (st) => Math.round(14 * priceMul(st));
 const gearPrice = (st, tier) => Math.round(GEAR_COST[tier] * priceMul(st));
 function wagesDue(st) {
     let w = 0;
@@ -157,7 +159,7 @@ function wagesDue(st) {
             w += STAFF[k].wage;
     return w;
 }
-const breadDue = st => Math.ceil(st.roster.length * (st.staff.qm ? 0.75 : 1));
+const breadDue = (st) => Math.ceil(st.roster.length * (st.staff.qm ? 0.75 : 1));
 function logLine(st, t) { st.log.unshift({ d: st.day, n: st.date, t }); if (st.log.length > 120)
     st.log.length = 120; }
 function genRecruits(st) {
@@ -230,7 +232,6 @@ function dismiss(st, id) {
     logLine(st, s.name + ' is struck from the roll and sent on his way.');
     st.odds = {};
 }
-/* ---------- contracts ---------- */
 const TEMPLATES = [
     { id: 'road', title: 'Road agents on the salt road', who: 'The salt-masters of Wieliczka',
         text: 'Cut-purses stop the carts between the mines and Kraków. Scatter them, and the salt-masters pay in coin.',
@@ -310,7 +311,7 @@ function genContracts(st) {
     const have = new Set(st.contracts.map(c => c.grade));
     const used = new Set(st.contracts.map(c => c.tpl));
     const tl = threat(st), land = here(st).land;
-    const fits = t => tl >= t.min && tl <= t.max && (!t.lands || t.lands.includes(land));
+    const fits = (t) => tl >= t.min && tl <= t.max && (!t.lands || t.lands.includes(land));
     for (const g of ['easy', 'fair', 'hard']) {
         if (have.has(g))
             continue;
@@ -328,8 +329,8 @@ function genContracts(st) {
 }
 /* ---------- battle ---------- */
 const BW = 300, BD = 44, PACE = 15.5, TLIMIT = 120;
-const alive = u => !u.dead && !u.fled;
-const fighting = u => !u.dead && !u.fled && !u.routing;
+const alive = (u) => !u.dead && !u.fled;
+const fighting = (u) => !u.dead && !u.fled && !u.routing;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 function toUnit(o, side, sid) {
     const c = CLS[o.cls];
@@ -381,7 +382,7 @@ function blog(b, s, side) { b.log.push({ t: b.t, s, side }); if (b.log.length > 
 function fxp(b, f) { if (b.vis)
     b.fx.push(f); }
 const uname = (b, u) => u.side === 0 ? u.name.split(' ')[0] : (b.duel ? 'the hired blade' : 'a ' + TIER[u.tier] + ' ' + CLS[u.cls].name.toLowerCase());
-const cap1 = s => s.charAt(0).toUpperCase() + s.slice(1);
+const cap1 = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 function pickTarget(b, u) {
     let best = null, bs = 1e9;
     for (const e of b.units) {
@@ -777,7 +778,7 @@ function estimateOdds(st, c, ids, n, stance) {
     return w / n;
 }
 function stanceOdds(st, c, ids, n) {
-    const o = {};
+    const o = {}; // best and p are filled in below
     for (const s of (c.duel ? ['advance', 'charge'] : ['hold', 'advance', 'charge']))
         o[s] = estimateOdds(st, c, ids, n || 12, s);
     o.best = Object.keys(o).reduce((a, k) => (o[k] > o[a] ? k : a));
@@ -792,7 +793,6 @@ const KIND = {
 function oddsWord(p) {
     return p >= 0.85 ? 'Easy pickings' : p >= 0.65 ? 'Favourable' : p >= 0.42 ? 'Even odds' : p >= 0.2 ? 'Hard' : 'Grim';
 }
-/* ---------- aftermath ---------- */
 function resolveBattle(st, c, b) {
     const won = b.winner === 0 && !b.retreated;
     const rep = { won, retreated: !!b.retreated, draw: !!b.draw, lines: [], pay: 0, loot: null, renown: 0, dead: [], title: c.title, final: !!c.final, duel: !!c.duel, ambush: !!c.ambush, foe: c.foe, cargoLost: 0, shots: b.shots, secs: Math.round(b.t) };
@@ -862,7 +862,7 @@ function resolveBattle(st, c, b) {
         const loot = { bread: ri(0, 3), powder: c.duel ? 0 : ri(0, 3) };
         if (c.bonus)
             for (const k in c.bonus)
-                loot[k] = (loot[k] || 0) + c.bonus[k];
+                loot[k] = (loot[k] || 0) + c.bonus[k]; // for...in gives plain strings
         st.bread += loot.bread;
         st.powder += loot.powder;
         rep.loot = loot;

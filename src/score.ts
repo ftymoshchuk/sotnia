@@ -1,4 +1,86 @@
 "use strict";
+
+/* ---------- the shape of a score (the engine reads it through these) ---------- */
+// What every piece has: its time (`meter` beats to a bar, `bpm` beats a minute), its mode (`scale`: the mode's
+// seven notes, then, if it has one, a raised leading tone), its `ground` (a chord a bar) and `tunes` over it,
+// each as many bars as the ground has.
+interface PieceDefBase {
+  meter: number;
+  bpm: number;
+  scale: string;
+  ground: string;
+  tunes: Record<string, string>;
+}
+// A piece of the suite, which is arranged afresh each time it comes round.
+interface SuitePieceDef extends PieceDefBase {
+  figures: string[];     // what the lute plays under a tune: a bar of it, repeated under every bar of a pass (a different figure each pass)
+  sparse: string[];      // thinner figures for the introduction and the echo, one picked at random for each bar
+  cadence: string;       // the figure that ends the echo, in the last bar of the ground
+  voices: PitchedName[]; // who may carry a tune
+  drone?: string;        // the drone's notes, which come in under a pass with the odds `droneOdds` (0.35 if not given)
+  droneOdds?: number;
+  perc?: string;         // a pattern for the frame drum, which plays in some of the passes
+  chords?: NoteRange;    // where the lute's chords lie (50 to 67 if not given)
+  intro: number;         // bars of introduction, and of interlude
+  coda: number;          // bars of the echo that ends it
+  sections?: undefined;  // (only a loop piece has these)
+}
+// A piece that goes on as long as it is wanted. It begins at the section `start` and moves on from section to section.
+interface LoopPieceDef extends PieceDefBase {
+  parts: Record<string, PartDef>;
+  start: string;
+  sections: Record<string, SectionDef>;
+}
+type PieceDef = SuitePieceDef | LoopPieceDef;
+
+// A section of a loop piece: the parts that play, for `bars` (as many as the ground has if not given) at `level` (1 if
+// not given), and where it may go next. A part is its name, 'horn' or, for a tune, 'horn:a'; a '+' after the tune
+// doubles it an octave down ('horn:a+'), and 'strings:thin' is a figure's thinner form.
+interface SectionDef {
+  parts: string[];
+  bars?: number;
+  level?: number;
+  next: string[];
+}
+// A part of a loop piece plays an instrument (`ins`), at a `level` against the other parts (1 if not given).
+interface PartDefBase { ins: SoundName; level?: number }
+// Held notes, sounded as a section begins: 'D2 A2'.
+interface DronePartDef extends PartDefBase { kind: 'drone'; notes: string }
+// Drum strokes (written as the note on drums at the head of the score says): a bar of `pat` for each bar of a section in turn,
+// round and round; `turn` takes the place of the section's last bar.
+interface PercPartDef extends PartDefBase { kind: 'perc'; pat: string; turn?: string }
+// The bass of each chord, within `win` (33 to 50 if not given).
+interface BassPartDef extends PartDefBase { kind: 'bass'; win?: NoteRange }
+// A tune of the piece, which a section asks for by name: 'horn:a'.
+interface TunePartDef extends PartDefBase { kind: 'tune'; ins: PitchedName }
+// `n` voices on each chord, voice-led within `win`.
+interface ChordsPartDef extends PartDefBase { kind: 'chords'; win: NoteRange; n: number }
+// A figure played under every bar, `thin` being its thinner form. Its bass lies within `low` (33 to 50 if not given), its
+// chord within `win` (50 to 67) and has `n` notes (3), strummed `strum` seconds apart (0.025).
+interface FigurePartDef extends PartDefBase { kind: 'figure'; fig: string; thin?: string; low?: NoteRange; win?: NoteRange; n?: number; strum?: number }
+// A drum roll on the last two beats of a section's last bar.
+interface RollPartDef extends PartDefBase { kind: 'roll' }
+type PartDef = DronePartDef | PercPartDef | BassPartDef | TunePartDef | ChordsPartDef | FigurePartDef | RollPartDef;
+
+// What plays when the game asks for a cue. It is either a suite of pieces, played in turn (never the same one twice
+// running, the music opening on `first`) with a rest of between `rest` seconds after each, or one piece that goes on
+// (a loop). `level` is how loud the cue is against the others (1 if not given), `tempo` a multiple of the piece's beats
+// a minute (1) and `transpose` a number of semitones (0).
+interface CueDefBase { level?: number; tempo?: number; transpose?: number }
+interface SuiteCueDef extends CueDefBase { suite: string[]; first?: string; rest: [min: number, max: number]; loop?: undefined }
+interface LoopCueDef extends CueDefBase { loop: string; suite?: undefined }
+type CueDef = SuiteCueDef | LoopCueDef;
+
+// A flourish played once: a bar of `meter` beats at `bpm`, in lines of an instrument and its notes.
+interface StingDef { bpm: number; meter: number; lines: [ins: SoundName, notes: string][] }
+
+// A score: its pieces, the cues that say which of them play when the game asks for music, and its flourishes.
+interface Score {
+  pieces: Record<string, PieceDef>;
+  cues: Record<string, CueDef>;
+  stings?: Record<string, StingDef>;
+}
+
 /* ===== SOTNIA music: what plays, written out as data. js/music.js composes and plays it. =====
  *
  * Notes are a name and how many beats they last: 'D5:1.5' is the D an octave above the one above
@@ -135,4 +217,7 @@ const SCORE = {
     // Lost: the lament's falling fourth, left open on A.
     lost: { bpm: 60, meter: 5, lines: [['horn', 'D4:1 C4:1 Bb3:1 A3:2'], ['bassviol', 'D2:1 C2:1 Bb1:1 A1:2'], ['timp', 'D2:3 A1:2'], ['choir', 'r:3 [A2,E3,A3]:2']] },
   },
-};
+} satisfies Score;
+// The cues the game can ask for, and the flourishes that end a fight: the names written above.
+type CueName = keyof typeof SCORE.cues;
+type StingName = keyof typeof SCORE.stings;

@@ -1,4 +1,34 @@
 "use strict";
+
+/* ---------- what a score and a caller say to the engine, and what comes back ---------- */
+// The instruments, the keys of SOUNDS below.
+type SoundName = 'pad' | 'bass' | 'pluck' | 'lute' | 'flute' | 'viol' | 'bassviol' | 'cello' | 'drone' | 'horn' | 'choir' | 'timp' | 'frame' | 'tap' | 'tabor';
+// The instruments that have a `range`, as all but the drums struck at no pitch do. A tune can only be given to one of these.
+type PitchedName = Exclude<SoundName, 'frame' | 'tap' | 'tabor'>;
+// The lowest and the highest note, as MIDI numbers (60 is middle C).
+type NoteRange = [lo: number, hi: number];
+interface PerformerOptions {
+  opening?: boolean;       // start a suite with the piece its cue names first, straight into its tune
+  avoid?: string | null;   // a piece not to start a suite with: the one that played last
+}
+interface PlayOptions extends PerformerOptions {
+  seed: number;            // the same seed always plays the same music
+  at?: number;             // when to start, in the context's seconds (a moment from now if not given)
+  fade?: number;           // seconds to fade in over
+  level?: number;          // how loud all the music is in this context
+}
+interface RenderOptions extends PlayOptions { rate?: number }   // `rate` is the sample rate (48000 if not given)
+// A cue that is playing: call tick() often with the context's time, stop() to fade it out and close() to silence what is left.
+interface MusicPlayer {
+  readonly piece: string | null;   // the piece most recently started, which is null until the first bar is scheduled
+  schedule(until: number): void;   // sets every bar that starts before `until` sounding
+  tick(now: number): void;         // schedules the bars about to start
+  stop(now: number, fade: number): void;   // fades out over `fade` seconds
+  close(): void;                   // silences whatever is left sounding
+}
+// A flourish that is playing: `end` is when it has finished, in the context's seconds.
+interface MusicSting { end: number; close(): void }
+
 /* ===== SOTNIA music: a small engine that composes as it plays and synthesises every note. =====
  *
  * It knows nothing of the game. Give it a score (js/score.js holds the game's) and any Web Audio
@@ -17,9 +47,11 @@
  * last bars slow to a close, and the music rests between pieces.
  */
 const MUSIC = (() => {
+  // A random number generator: each call answers the next number, from 0 up to 1.
+  type Random = () => number;
   /* ---------- numbers ---------- */
   // mulberry32: small, quick and the same everywhere, so one seed always plays the same music.
-  function rng(seed) {
+  function rng(seed: number): Random {
     let a = seed >>> 0;
     return () => {
       a = a + 0x6D2B79F5 | 0;
@@ -28,32 +60,35 @@ const MUSIC = (() => {
       return ((t ^ t >>> 14) >>> 0) / 4294967296;
     };
   }
-  const choose = (list, r) => list[Math.floor(r() * list.length)];
+  const choose = <T>(list: readonly T[], r: Random): T => list[Math.floor(r() * list.length)];
   // Any index but the last one, so a choice never comes twice running when there is another.
-  const other = (n, last, r) => { if (n < 2) return 0; let k; do k = Math.floor(r() * n); while (k === last); return k; };
-  const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+  const other = (n: number, last: number, r: Random): number => { if (n < 2) return 0; let k: number; do k = Math.floor(r() * n); while (k === last); return k; };
+  const hz = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
 
   /* ---------- notation ---------- */
-  const LETTER = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
-  function pcOf(name) {
+  const LETTER: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  function pcOf(name: string): number {
     const m = /^([A-G])(#|b)?$/.exec(name);
     if (!m) throw new Error('Not a pitch: ' + name);
     return (LETTER[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? 11 : 0)) % 12;
   }
   // 'C#4' is 61: octaves as in scientific pitch, where C4 is middle C.
-  function noteOf(name) {
+  function noteOf(name: string): number {
     const m = /^([A-G])(#|b)?(\d)$/.exec(name);
     if (!m) throw new Error('Not a note: ' + name);
     return 12 * (+m[3] + 1) + LETTER[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0);
   }
   // One note or several sounded together: 'D4', or '[D3,A3,F#4]'.
-  const notesOf = w => (w[0] === '[' ? w.slice(1, -1).split(',').map(noteOf) : [noteOf(w)]);
+  const notesOf = (w: string): number[] => (w[0] === '[' ? w.slice(1, -1).split(',').map(noteOf) : [noteOf(w)]);
+  // Something put in a bar: the beat it starts on, what it is, and the beats it lasts.
+  type Placed<T> = [at: number, what: T, beats: number];
+  type Bar<T> = Placed<T>[];
   // Bars of 'what:beats', with '|' between bars and 'r' for a rest. Each bar must fill its metre
   // exactly. Answers, for each bar, [beat, what, beats] for all but the rests.
-  function barsOf(text, meter, read, where) {
+  function barsOf<T>(text: string, meter: number, read: (what: string) => T, where: string): Bar<T>[] {
     return text.trim().split('|').map((bar, i) => {
       let at = 0;
-      const out = [];
+      const out: Bar<T> = [];
       for (const tok of bar.trim().split(/\s+/)) {
         const k = tok.lastIndexOf(':'), d = +tok.slice(k + 1);
         if (k < 1 || !(d > 0)) throw new Error(where + ', bar ' + (i + 1) + ': cannot read "' + tok + '"');
@@ -68,17 +103,22 @@ const MUSIC = (() => {
   /* ---------- chords ---------- */
   // Each kind of chord, as steps above its root: the root, the third and the fifth first, then
   // anything added. Pageant's sevenths and ninths are here so its bed can be written as a score.
-  const QUALITY = { '': [0, 4, 7], m: [0, 3, 7], 5: [0, 7], 7: [0, 4, 7, 10], m7: [0, 3, 7, 10], maj7: [0, 4, 7, 11], sus4: [0, 5, 7], add9: [0, 4, 7, 2], maj9: [0, 4, 7, 11, 2], m9: [0, 3, 7, 10, 2] };
+  const QUALITY: Record<string, number[]> = { '': [0, 4, 7], m: [0, 3, 7], 5: [0, 7], 7: [0, 4, 7, 10], m7: [0, 3, 7, 10], maj7: [0, 4, 7, 11], sus4: [0, 5, 7], add9: [0, 4, 7, 2], maj9: [0, 4, 7, 11, 2], m9: [0, 3, 7, 10, 2] };
+  // A chord as pitch classes (0 to 11, C being 0): the notes that make it up, the root first and then the third and the fifth,
+  // the note the bass plays, and the third on its own (null when the chord has none).
+  interface Chord { sym: string; root: number; pcs: number[]; bass: number; third: number | null }
   // 'Dm', 'A', 'Gm/Bb' (a G minor chord over B flat in the bass).
-  function chordOf(sym) {
+  function chordOf(sym: string): Chord {
     const m = /^([A-G](?:#|b)?)([^/]*)(?:\/([A-G](?:#|b)?))?$/.exec(sym);
     if (!m || !(m[2] in QUALITY)) throw new Error('Not a chord: ' + sym);
     const root = pcOf(m[1]), steps = QUALITY[m[2]];
     const third = steps.find(s => s === 3 || s === 4);
     return { sym, root, pcs: steps.map(s => (root + s) % 12), bass: m[3] ? pcOf(m[3]) : root, third: third === undefined ? null : (root + third) % 12 };
   }
+  // The chords of a piece, a bar at a time.
+  type Ground = Bar<Chord>[];
   // A chord a bar, or one for each half of it: 'Dm A Dm-A Dm'. Answers, for each bar, [beat, chord, beats].
-  const groundOf = (text, meter) => text.replace(/\|/g, ' ').trim().split(/\s+/).map(sym => {
+  const groundOf = (text: string, meter: number): Ground => text.replace(/\|/g, ' ').trim().split(/\s+/).map(sym => {
     const parts = sym.split('-');
     return parts.map((s, i) => [i * meter / parts.length, chordOf(s), meter / parts.length]);
   });
@@ -86,12 +126,12 @@ const MUSIC = (() => {
   // the way Pageant voices its pads by hand, worked out here for any ground. With fewer voices than
   // the chord has notes, the fifth goes first and then the root, which the bass sounds anyway. A
   // doubled third and a semitone between neighbours are avoided.
-  function voiceLead(ch, prev, lo, hi, n) {
+  function voiceLead(ch: Chord, prev: number[] | null | undefined, lo: number, hi: number, n: number): number[] {
     const keep = [ch.pcs[1], ...ch.pcs.slice(3), ch.pcs[0], ch.pcs[2]].filter(p => p !== undefined);
-    const need = keep.slice(0, Math.min(n, keep.length)), notes = [];
+    const need = keep.slice(0, Math.min(n, keep.length)), notes: number[] = [];
     for (let m = lo; m <= hi; m++) if (ch.pcs.includes(m % 12)) notes.push(m);
-    let best = null, cost = Infinity;
-    const pick = (from, v) => {
+    let best = null as number[] | null, cost = Infinity;
+    const pick = (from: number, v: number[]): void => {
       if (v.length === n) {
         const pcs = v.map(m => m % 12);
         if (!need.every(p => pcs.includes(p))) return;
@@ -109,35 +149,41 @@ const MUSIC = (() => {
     return best;
   }
   // The note of that pitch nearest the last bass note, within the range.
-  function bassNear(pc, prev, lo, hi) {
+  function bassNear(pc: number, prev: number, lo: number, hi: number): number {
     let best = null;
     for (let m = lo; m <= hi; m++) if (m % 12 === pc && (best === null || Math.abs(m - prev) < Math.abs(best - prev))) best = m;
-    return best;
+    return best!;   // null only for a range too narrow to hold the pitch, which the score's ranges never are
   }
 
+  // A tune, bar by bar: what sounds at each moment (several notes for a chord) as MIDI numbers.
+  type Tune = Bar<number[]>[];
+  // How a tune comes round: as written, ornamented, thinned, or an octave away ('oct': vary() only moves it by `shift`).
+  type Variation = 'plain' | 'orn' | 'thin' | 'oct';
+  // The mode of a piece: its tonic and the seven pitch classes of its scale, a raised leading tone if it has one, and its metre.
+  interface Mode { tonic: number; diatonic: number[]; lead: number | null; meter: number }
   /* ---------- variations ---------- */
   // A tune as it comes round again. 'orn' adds a grace to some bars, as players did: a passing note
   // through a third, or a quick turn down and back at the start of a long note. 'thin' drops the
   // quick notes off the beat. Either way the tune can move by an octave (`shift`, in semitones).
   // The graces keep to the mode's seven notes: `mode` is { tonic, diatonic, lead, meter }, where
   // `lead` is a raised leading tone (C sharp in D minor) that only ever graces the tonic.
-  function vary(tune, how, mode, shift, r) {
-    const out = tune.map(bar => bar.map(([at, ms, d]) => [at, ms.map(m => m + shift), d]));
-    const pc = m => ((m % 12) + 12) % 12, diatonic = m => mode.diatonic.includes(pc(m));
+  function vary(tune: Tune, how: Variation, mode: Mode, shift: number, r: Random): Tune {
+    const out: Tune = tune.map(bar => bar.map(([at, ms, d]) => [at, ms.map(m => m + shift), d]));
+    const pc = (m: number) => ((m % 12) + 12) % 12, diatonic = (m: number) => mode.diatonic.includes(pc(m));
     if (how === 'thin') {
       return out.map(bar => {
-        const kept = [];
+        const kept: Bar<number[]> = [];
         for (const n of bar) {
           const prev = kept[kept.length - 1];
           if (prev && n[2] <= 0.5 && n[0] % 1 && prev[1].length === 1) prev[2] += n[2];
-          else kept.push(n.slice());
+          else kept.push(n.slice() as Placed<number[]>);
         }
         return kept;
       });
     }
     if (how !== 'orn') return out;
     return out.map((bar, b) => {
-      const graces = [], following = out[b + 1] && out[b + 1][0];
+      const graces: [at: number, notes: Bar<number[]>][] = [], following = out[b + 1] && out[b + 1][0];
       bar.forEach(([at, ms, d], i) => {
         if (ms.length !== 1 || at % 1 || !diatonic(ms[0])) return;
         const m = ms[0], nx = bar[i + 1];
@@ -160,6 +206,33 @@ const MUSIC = (() => {
     });
   }
 
+  // How an instrument sounds (the fields are explained below). A tone has `partials` or `formants`, a drum has `drum`. Only `level`
+  // and `room` are on all of them: a held tone also has `attack` and `release` (and `fall`, if it has a `sustain`), and a struck
+  // or plucked one has `decay`.
+  type Formant = [hz: number, width: number, strength: number];
+  type NoiseSpec = [filter: BiquadFilterType, hz: number, q: number, gain: number, tau: number];
+  interface Instrument {
+    partials?: number[];                                              // the strength of each harmonic, the fundamental first
+    formants?: Formant[];                                             // or where a vowel lifts the harmonics of a voice
+    voices?: [cents: number, pan: number][];                          // one oscillator each, tuned apart and placed
+    attack?: number; release?: number;                                // seconds to swell in, and to fade once let go
+    sustain?: number; fall?: number;                                  // a held note falls to this share of its strength, with this time constant
+    decay?: number | ((hz: number) => number);                        // a struck or plucked note dies away with this time constant
+    damp?: number; ring?: number;                                     // plucked: damped with this time constant once let go, but not before it has rung for `ring` seconds
+    sweep?: [from: number, to: number, time: number];                 // a low-pass on each note, from one multiple of its pitch to another
+    lowpass?: number; pan?: number;                                   // on the whole instrument: the low-pass's Hz, and its place between -1 and 1
+    breath?: [rate: number, depth: number];                           // the slow swell of the whole: Hz, and the share of its level
+    vibrato?: [rate: number, cents: number, delay: number, from: number];   // Hz, depth, seconds before it begins, and the shortest note that has it
+    chiff?: [mul: number, q: number, gain: number, tau: number];      // a breath of noise as a note starts, around this multiple of its pitch
+    legato?: number;                                                  // the share of its length that a note is held
+    level: number; room: number;                                      // how loud it is, and how much of it goes to the room
+    oct?: number;                                                     // semitones that move a tune into its best octave
+    range?: NoteRange;                                                // where it can play
+    drum?: true;                                                      // struck: a body that falls in pitch, and the slap of a little noise
+    base?: number;                                                    // a multiple of the pitch to sound (a drum sounds below its note)
+    glide?: [from: number, time: number];                             // a drum starts at this multiple of its pitch and falls to it in `time` seconds
+    noise?: NoiseSpec;                                                // a slap of filtered noise
+  }
   /* ---------- the sounds ---------- */
   // Each sound is a few harmonics, given as the strength of each (the fundamental first), played by
   // one oscillator a voice; voices are [cents, pan]. A held sound swells over `attack`, falls to
@@ -167,7 +240,7 @@ const MUSIC = (() => {
   // `decay`, and is damped when let go. `sweep` moves a low-pass on each note from one multiple of
   // its pitch to another; `lowpass`, `pan` and `breath` (Pageant's slow swell) are on the whole
   // instrument, and `room` is how much of it goes to the room. `range` is where it can play.
-  const SOUNDS = {
+  const SOUNDS: Record<SoundName, Instrument> & Record<PitchedName, { range: NoteRange }> = {
     // Pageant's three, as music.py makes them.
     pad: { partials: [1, 0.28, 0.12, 0.05], voices: [[-6, -0.5], [0, 0], [6, 0.5]], attack: 1.6, release: 2.4, lowpass: 2600, breath: [0.07, 0.08], level: 0.16, room: 0.32, range: [36, 84] },
     bass: { partials: [1, 0.2], attack: 0.9, release: 2, lowpass: 400, level: 0.2, room: 0.32, range: [24, 52] },
@@ -198,12 +271,12 @@ const MUSIC = (() => {
     // A field drum for the rolls, kept soft.
     tabor: { drum: true, pan: 0.15, partials: [1], glide: [1.25, 0.04], decay: 0.04, noise: ['bandpass', 1100, 0.9, 1, 0.05], level: 0.14, room: 0.2 },
   };
-  const ONE = [[0, 0]];
+  const ONE: [cents: number, pan: number][] = [[0, 0]];
   const SWELL = new Float32Array(33).map((_, i) => Math.pow(Math.sin(i / 32 * Math.PI / 2), 2));
   // Harmonics for a sung vowel at f0: a buzz whose strength falls with each harmonic, lifted near
   // each formant, and kept at one power whatever the note.
-  function formantPartials(F, f0) {
-    const amps = [];
+  function formantPartials(F: Formant[], f0: number): number[] {
+    const amps: number[] = [];
     for (let k = 1; k * f0 < 4000 && k <= 40; k++) {
       let a = 0;
       for (const [fc, bw, g] of F) a += g / (1 + Math.pow((k * f0 - fc) / bw, 2));
@@ -214,29 +287,31 @@ const MUSIC = (() => {
   }
 
   /* ---------- playing ---------- */
-  const WAVES = new WeakMap(), BUSES = new WeakMap(), NOISE = new WeakMap();
-  function waveOf(ac, name, I, m) {
+  const WAVES = new WeakMap<BaseAudioContext, Record<string, PeriodicWave>>(), BUSES = new WeakMap<BaseAudioContext, Bus>(), NOISE = new WeakMap<BaseAudioContext, AudioBuffer>();
+  // The way out of one context: what the music goes into, and what goes to the room.
+  interface Bus { input: GainNode; room: GainNode }
+  function waveOf(ac: BaseAudioContext, name: SoundName, I: Instrument, m: number): PeriodicWave {
     let w = WAVES.get(ac);
     if (!w) WAVES.set(ac, (w = {}));
     const key = I.formants ? name + m : name;
     if (!w[key]) {
-      const amps = I.formants ? formantPartials(I.formants, hz(m)) : I.partials;
+      const amps = I.formants ? formantPartials(I.formants, hz(m)) : I.partials!;
       const real = new Float32Array(amps.length + 1), imag = new Float32Array(amps.length + 1);
       amps.forEach((a, k) => { imag[k + 1] = a; });
       w[key] = ac.createPeriodicWave(real, imag, { disableNormalization: true });
     }
     return w[key];
   }
-  function noiseOf(ac) {
+  function noiseOf(ac: BaseAudioContext): AudioBuffer {
     if (!NOISE.has(ac)) {
       const n = ac.sampleRate * 2, buf = ac.createBuffer(1, n, ac.sampleRate), d = buf.getChannelData(0), r = rng(11);
       for (let i = 0; i < n; i++) d[i] = r() * 2 - 1;
       NOISE.set(ac, buf);
     }
-    return NOISE.get(ac);
+    return NOISE.get(ac)!;
   }
   // Pageant's room: noise dying away by 60 dB over `seconds`, darkened above 5 kHz, after 12 ms of quiet.
-  function impulse(ac, seconds) {
+  function impulse(ac: BaseAudioContext, seconds: number): AudioBuffer {
     const rate = ac.sampleRate, n = Math.floor(seconds * rate), buf = ac.createBuffer(2, n, rate), r = rng(7);
     const pre = Math.floor(0.012 * rate), k = Math.exp(-2 * Math.PI * 5000 / rate);
     for (let c = 0; c < 2; c++) {
@@ -247,7 +322,7 @@ const MUSIC = (() => {
     return buf;
   }
   // The way out, one for each context: the room beside the music, then a gentle limiter.
-  function busOf(ac, level) {
+  function busOf(ac: BaseAudioContext, level?: number): Bus {
     let b = BUSES.get(ac);
     if (!b) {
       const input = ac.createGain(), limit = ac.createDynamicsCompressor(), room = ac.createGain(), hall = ac.createConvolver();
@@ -259,14 +334,20 @@ const MUSIC = (() => {
     if (level != null) b.input.gain.value = level;
     return b;
   }
+  interface Deck {
+    ac: BaseAudioContext;
+    dry: GainNode; wet: GainNode;                                // the way into the bus and into the room
+    chans: Record<string, GainNode>;                             // where each instrument's notes go in, made as it is first needed
+    live: [node: AudioScheduledSourceNode, stops: number][];     // what has been set sounding, and when each stops
+  }
   // A deck plays one cue: its own way into the bus and the room, so it can fade on its own, and a
   // list of what it has set sounding, so it can stop it all.
-  function deckOf(ac, level) {
+  function deckOf(ac: BaseAudioContext, level?: number): Deck {
     const b = busOf(ac, level), dry = ac.createGain(), wet = ac.createGain();
     dry.connect(b.input); wet.connect(b.room);
     return { ac, dry, wet, chans: {}, live: [] };
   }
-  function chan(dk, name) {
+  function chan(dk: Deck, name: SoundName): GainNode {
     if (dk.chans[name]) return dk.chans[name];
     const I = SOUNDS[name], ac = dk.ac, input = ac.createGain();
     input.gain.value = I.level;
@@ -275,14 +356,14 @@ const MUSIC = (() => {
       lfo.frequency.value = I.breath[0]; depth.gain.value = I.level * I.breath[1];
       lfo.connect(depth); depth.connect(input.gain); lfo.start(); dk.live.push([lfo, Infinity]);
     }
-    let tail = input;
+    let tail: AudioNode = input;
     if (I.lowpass) { const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = I.lowpass; lp.Q.value = Math.SQRT1_2; tail.connect(lp); tail = lp; }
     if (I.pan && ac.createStereoPanner) { const p = ac.createStereoPanner(); p.pan.value = I.pan; tail.connect(p); tail = p; }
     tail.connect(dk.dry);
     if (I.room) { const send = ac.createGain(); send.gain.value = I.room; tail.connect(send); send.connect(dk.wet); }
     return (dk.chans[name] = input);
   }
-  function burst(dk, out, [type, freq, q, gain, tau], t, v, r) {
+  function burst(dk: Deck, out: AudioNode, [type, freq, q, gain, tau]: NoiseSpec, t: number, v: number, r: Random): void {
     const ac = dk.ac, s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain(), end = t + tau * 7 + 0.01;
     s.buffer = noiseOf(ac); f.type = type; f.frequency.value = freq; f.Q.value = q;
     g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v * gain, t + 0.001); g.gain.setTargetAtTime(0, t + 0.001, tau);
@@ -290,25 +371,25 @@ const MUSIC = (() => {
     s.start(t, r() * 1.5); s.stop(end); dk.live.push([s, end]);
   }
   // One note: `t` and `sec` in the context's seconds, `v` from 0 to 1.
-  function sound(dk, ins, m, t, sec, v, r) {
+  function sound(dk: Deck, ins: SoundName, m: number, t: number, sec: number, v: number, r: Random): void {
     const I = SOUNDS[ins];
     if (!I) return;
     const ac = dk.ac, out = chan(dk, ins), f = hz(m), env = ac.createGain(), base = I.base || 1;
-    let end;
+    let end: number;
     env.gain.value = 0;
     if (I.drum || I.decay) {
-      const tau = typeof I.decay === 'function' ? I.decay(f) : I.decay, a = I.attack || 0.002;
+      const tau = typeof I.decay === 'function' ? I.decay(f) : I.decay!, a = I.attack || 0.002;
       env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(v, t + a); env.gain.setTargetAtTime(0, t + a, tau);
       end = t + a + tau * 6;
       const off = t + Math.max(sec, I.ring || 0, a + 0.01);
       if (I.damp && off < end - 0.05) { env.gain.setTargetAtTime(0, off, I.damp); end = Math.min(end, off + I.damp * 6); }
     } else {
-      const a = Math.min(I.attack, sec * 0.6);
+      const a = Math.min(I.attack!, sec * 0.6);
       if (a >= 0.06) env.gain.setValueCurveAtTime(SWELL.map(x => x * v), t, a);
       else { env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(v, t + a); }
-      if (I.sustain) env.gain.setTargetAtTime(v * I.sustain, t + a, I.fall);
-      env.gain.setTargetAtTime(0, t + sec, I.release / 3);
-      end = t + sec + I.release * 2;
+      if (I.sustain) env.gain.setTargetAtTime(v * I.sustain, t + a, I.fall!);
+      env.gain.setTargetAtTime(0, t + sec, I.release! / 3);
+      end = t + sec + I.release! * 2;
     }
     let into = env;
     if (I.sweep) {
@@ -340,30 +421,72 @@ const MUSIC = (() => {
     if (I.noise) burst(dk, out, I.noise, t, v, r);
     if (I.chiff) { const [mul, q, gain, tau] = I.chiff; burst(dk, out, ['bandpass', Math.min(f * mul, 12000), q, gain, tau], t, v, r); }
   }
-  function close(dk) {
+  function close(dk: Deck): void {
     for (const [node] of dk.live) { try { node.stop(); } catch (e) { /* not started yet, or done */ } }
     dk.live = [];
     try { dk.dry.disconnect(); dk.wet.disconnect(); } catch (e) { /* gone already */ }
   }
 
   /* ---------- reading a score ---------- */
-  const COMPILED = new WeakMap();
-  const readFig = w => { if (!/^(B|B5|B8|C|[1-4])$/.test(w)) throw new Error('Not a figure step: ' + w); return w; };
+  const COMPILED = new WeakMap<Score, Compiled>();
+  // A step of a lute's figure: B is the bass, B8 and B5 the octave and the fifth above it, C the whole chord strummed,
+  // and 1 to 4 the chord's notes from the lowest up.
+  type FigureStep = 'B' | 'B5' | 'B8' | 'C' | '1' | '2' | '3' | '4';
+  type Figure = Bar<FigureStep>;
+  // A drum stroke: which drum, and the note it is struck at.
+  type Stroke = [ins: SoundName, m: number];
+  // The parts that play in a pass. Each has an instrument and a `level` against the others (1 if not given). A loop piece's
+  // parts are the score's, read by compile(); the others are made as a suite is arranged, and loop() turns tunes into parts.
+  interface PartBase { ins: SoundName; level?: number }
+  // A figure played under every bar: `fig`, or one of `figs` at random, with the `cadence` for the last bar of a piece, and `alt`
+  // from bar `altAt` on. Its bass lies within `low`, its chord within `win` in `n` notes, strummed `strum` seconds apart.
+  interface FigurePart extends PartBase {
+    kind: 'figure'; key: string;
+    fig?: Figure; figs?: Figure[]; cadence?: Figure; alt?: Figure; altAt?: number; thin?: Figure;
+    low?: NoteRange; win?: NoteRange; n?: number; strum?: number;
+  }
+  // A tune in its bars, with a second voice `double` semitones from it, if it has one.
+  interface TunePart extends PartBase { kind: 'tune'; ins: PitchedName; bars: Tune; double?: number }
+  interface BassPart extends PartBase { kind: 'bass'; key: string; win?: NoteRange }
+  interface DronePart extends PartBase { kind: 'drone'; notes: number[] }
+  interface ChordsPart extends PartBase { kind: 'chords'; key: string; win: NoteRange; n: number }
+  // A bar of `pat` for each bar in turn, and `turn` for the last bar of a pass.
+  interface PercPart extends PartBase { kind: 'perc'; pat: Bar<Stroke[]>[]; turn?: Bar<Stroke[]> | null }
+  interface RollPart extends PartBase { kind: 'roll' }
+  type Part = FigurePart | TunePart | BassPart | DronePart | ChordsPart | PercPart | RollPart;
+  // A tune a loop piece's part will play, which has no bars yet: loop() chooses a tune for it when a section asks.
+  interface TuneSlot extends PartBase { kind: 'tune'; ins: PitchedName; key: string }
+  type LoopPart = Exclude<Part, TunePart> | TuneSlot;
+  // A piece as the composing uses it: the score's text read into chords and notes.
+  interface PieceBase { name: string; meter: number; bpm: number; ground: Ground; mode: Mode; tunes: Record<string, Tune> }
+  interface SuitePiece extends PieceBase {
+    figures: Figure[]; sparse: Figure[]; cadence: Figure; voices: PitchedName[];
+    drone: number[] | null; droneOdds: number; intro: number; coda: number;
+    win: NoteRange; perc: Bar<Stroke[]>[] | null;
+  }
+  interface LoopPiece extends PieceBase { parts: Record<string, LoopPart>; start: string; sections: Record<string, SectionDef> }
+  type Piece = SuitePiece | LoopPiece;
+  // A flourish read: the notes of each line.
+  interface CompiledSting { bpm: number; meter: number; lines: [ins: SoundName, bar: Bar<number[]>][] }
+  // A score as compile() answers: its pieces read, its cues as written, its flourishes read.
+  interface Compiled { pieces: Record<string, Piece>; cues: Record<string, CueDef>; stings: Record<string, CompiledSting> }
+  const readFig = (w: string): FigureStep => { if (!/^(B|B5|B8|C|[1-4])$/.test(w)) throw new Error('Not a figure step: ' + w); return w as FigureStep; };
   // Drum strokes: a note for the part's own drum, X for the frame drum's boom and x for its rim.
-  const readStroke = ins => w => (w === 'X' ? [['frame', 43]] : w === 'x' ? [['tap', 79]] : notesOf(w).map(m => [ins, m]));
-  const notes = text => text.trim().split(/\s+/).map(noteOf);
+  const readStroke = (ins: SoundName) => (w: string): Stroke[] => (w === 'X' ? [['frame', 43]] : w === 'x' ? [['tap', 79]] : notesOf(w).map(m => [ins, m]));
+  const notes = (text: string): number[] => text.trim().split(/\s+/).map(noteOf);
   // Checks a score and puts it in the form the composing uses, once for each score. A mistake in
   // the score (a bar that does not add up, a tune longer than its ground) is an error here.
-  function compile(score) {
-    if (COMPILED.has(score)) return COMPILED.get(score);
-    const pieces = {};
+  function compile(score: Score): Compiled {
+    if (COMPILED.has(score)) return COMPILED.get(score)!;
+    const pieces: Record<string, Piece> = {};
     for (const [name, p] of Object.entries(score.pieces)) {
       const meter = p.meter, scale = p.scale.trim().split(/\s+/).map(pcOf);
       if (scale.length < 7) throw new Error(name + ': a scale needs its seven notes');
       // The first seven notes are the mode; an eighth a semitone under the tonic is its raised leading tone.
       const lead = scale.slice(7).find(x => x === (scale[0] + 11) % 12);
-      const P = { name, meter, bpm: p.bpm, ground: groundOf(p.ground, meter), mode: { tonic: scale[0], diatonic: scale.slice(0, 7), lead: lead === undefined ? null : lead, meter }, tunes: {} };
-      const one = (text, read, where) => { const b = barsOf(text, meter, read, name + ' ' + where); if (b.length !== 1) throw new Error(name + ' ' + where + ' should be one bar'); return b[0]; };
+      // Built in two steps: the fields that only a suite piece has, or only a loop piece has, are added below.
+      const P = { name, meter, bpm: p.bpm, ground: groundOf(p.ground, meter), mode: { tonic: scale[0], diatonic: scale.slice(0, 7), lead: lead === undefined ? null : lead, meter }, tunes: {} } as SuitePiece & LoopPiece;
+      const one = <T>(text: string, read: (what: string) => T, where: string): Bar<T> => { const b = barsOf(text, meter, read, name + ' ' + where); if (b.length !== 1) throw new Error(name + ' ' + where + ' should be one bar'); return b[0]; };
       for (const [k, t] of Object.entries(p.tunes || {})) {
         P.tunes[k] = barsOf(t, meter, notesOf, name + ' tune ' + k);
         if (P.tunes[k].length !== P.ground.length) throw new Error(name + ' tune ' + k + ' has ' + P.tunes[k].length + ' bars, and its ground ' + P.ground.length);
@@ -371,7 +494,9 @@ const MUSIC = (() => {
       if (p.sections) {
         P.parts = {};
         for (const [k, d] of Object.entries(p.parts)) {
-          const part = Object.assign({}, d, { key: k });
+          // A copy of the definition whose text fields (pat, turn, fig, thin, notes) are replaced below by the bars and notes they
+          // read as, so it is not of the definition's type, nor yet of the part's.
+          const part: any = Object.assign({}, d, { key: k });
           if (d.kind === 'perc') { part.pat = barsOf(d.pat, meter, readStroke(d.ins), name + ' ' + k); part.turn = d.turn ? one(d.turn, readStroke(d.ins), k + ' turn') : null; }
           if (d.kind === 'figure') { part.fig = one(d.fig, readFig, k); part.thin = d.thin ? one(d.thin, readFig, k + ' thin') : part.fig; }
           if (d.kind === 'drone') part.notes = notes(d.notes);
@@ -394,7 +519,7 @@ const MUSIC = (() => {
       pieces[name] = P;
     }
     for (const [k, c] of Object.entries(score.cues)) for (const p of c.suite || [c.loop]) if (!pieces[p]) throw new Error('cue ' + k + ': no piece ' + p);
-    const stings = {};
+    const stings: Record<string, CompiledSting> = {};
     for (const [k, s] of Object.entries(score.stings || {})) stings[k] = { bpm: s.bpm, meter: s.meter, lines: s.lines.map(([ins, t]) => [ins, barsOf(t, s.meter, notesOf, 'sting ' + k)[0]]) };
     const out = { pieces, cues: score.cues, stings };
     COMPILED.set(score, out);
@@ -403,16 +528,32 @@ const MUSIC = (() => {
 
   /* ---------- composing ---------- */
   const RIT = [1, 0.97, 0.93, 0.86, 0.74];
-  const fits = (tune, ins) => tune.every(bar => bar.every(([, ms]) => ms.every(m => m >= SOUNDS[ins].range[0] && m <= SOUNDS[ins].range[1])));
+  // A run of bars of a piece, with the parts that play in them: bars `from` up to `to`, at `level` (1 if not given). Passes
+  // marked `rit` slow to their end. A pass is given its length in seconds, `sec`, when it is performed.
+  interface Pass { name: string; from: number; to: number; level?: number; rit?: boolean; parts: (Part | null)[]; sec?: number }
+  // What the composing remembers as it goes: the last voicing and bass note of each part (by its `key`), the section a loop piece is in
+  // and how often each has come round, how many pieces of a suite have been played, which one last, and a loop's tempo once it is set.
+  interface ComposeState {
+    voice: Record<string, number[]>; bass: Record<string, number>;
+    section: string | null; seen: Record<string, number>;
+    played: number; piece: string | null; bpm?: number;
+  }
+  const fits = (tune: Tune, ins: PitchedName) => tune.every(bar => bar.every(([, ms]) => ms.every(m => m >= SOUNDS[ins].range[0] && m <= SOUNDS[ins].range[1])));
+  // One note to sound, as buildBar makes it: `m` is its MIDI number, `at` the beats into the bar it starts and `d` the beats it lasts
+  // (or `sec`, its seconds, for a drone), `v` how loud (0 to 1). `off` is how many seconds early or late it is played: a strummed
+  // chord sets it as it goes, and the bar's last step gives it to every event.
+  interface NoteEvent { ins: SoundName; m: number; at: number; d: number; v: number; sec?: number; off?: number }
+  // An event once its bar is finished, which is how it leaves buildBar.
+  interface TimedEvent extends NoteEvent { off: number }
   // One bar of a pass, as events: { ins, m, at (beats into the bar), d (beats), sec (or seconds), v, off (seconds early or late) }.
-  function buildBar(P, pass, i, st, r) {
-    const ev = [], segs = P.ground[i], last = i === pass.to - 1;
-    const segAt = at => { let k = 0; while (k + 1 < segs.length && segs[k + 1][0] <= at + 1e-9) k++; return k; };
+  function buildBar(P: Piece, pass: Pass, i: number, st: ComposeState, r: Random): TimedEvent[] {
+    const ev: NoteEvent[] = [], segs = P.ground[i], last = i === pass.to - 1;
+    const segAt = (at: number) => { let k = 0; while (k + 1 < segs.length && segs[k + 1][0] <= at + 1e-9) k++; return k; };
     for (const part of pass.parts) {
       if (!part) continue;
       const v = part.level || 1;
       if (part.kind === 'figure') {
-        const fig = i === P.ground.length - 1 && part.cadence ? part.cadence : part.figs ? choose(part.figs, r) : part.alt && i - pass.from >= part.altAt ? part.alt : part.fig;
+        const fig = i === P.ground.length - 1 && part.cadence ? part.cadence : part.figs ? choose(part.figs, r) : part.alt && i - pass.from >= part.altAt! ? part.alt : part.fig!;
         const low = part.low || [33, 50], win = part.win || [50, 67], n = part.n || 3;
         const vo = segs.map(([, ch]) => (st.voice[part.key] = voiceLead(ch, st.voice[part.key], win[0], win[1], n)));
         const bs = segs.map(([, ch]) => (st.bass[part.key] = bassNear(ch.bass, st.bass[part.key] == null ? (low[0] + low[1]) / 2 : st.bass[part.key], low[0], low[1])));
@@ -434,7 +575,7 @@ const MUSIC = (() => {
           ev.push({ ins: part.ins, m, at, d: d * 0.97, v: v * 0.9 });
         }
       } else if (part.kind === 'drone') {
-        if (i === pass.from) for (const m of part.notes) ev.push({ ins: part.ins, m, at: 0, d: 0, sec: pass.sec + 1.5, v: v * 0.8 });
+        if (i === pass.from) for (const m of part.notes) ev.push({ ins: part.ins, m, at: 0, d: 0, sec: pass.sec! + 1.5, v: v * 0.8 });
       } else if (part.kind === 'chords') {
         for (const [at, ch, d] of segs) {
           const vo = (st.voice[part.key] = voiceLead(ch, st.voice[part.key], part.win[0], part.win[1], part.n));
@@ -449,13 +590,18 @@ const MUSIC = (() => {
     }
     // Played, not printed: a little early or late, a little louder or softer.
     for (const e of ev) { e.off = (e.off || 0) + (r() - 0.5) * 0.016; e.v *= 0.9 + r() * 0.2; }
-    return ev;
+    return ev as TimedEvent[];
   }
+  // What the performer hands out, a bar at a time: a bar to play (at `bpm`, `beats` long, with its events), or a rest of `rest` seconds.
+  // Each lists the other's fields as undefined, so that `rest` tells them apart.
+  interface PlayBar { bpm: number; beats: number; events: TimedEvent[]; piece: string; pass: string; rest?: undefined }
+  interface RestBar { rest: number; piece: null; bpm?: undefined; beats?: undefined; events?: undefined; pass?: undefined }
+  type Performed = PlayBar | RestBar;
   // Passes into bars at `bpm`; a pass marked `rit` slows to its end.
-  function perform(P, passes, st, r, cue, bpm) {
-    const bars = [], tr = cue.transpose || 0;
+  function perform(P: Piece, passes: Pass[], st: ComposeState, r: Random, cue: CueDef, bpm: number): PlayBar[] {
+    const bars: PlayBar[] = [], tr = cue.transpose || 0;
     for (const pass of passes) {
-      const len = pass.to - pass.from, tempi = [];
+      const len = pass.to - pass.from, tempi: number[] = [];
       for (let j = 0; j < len; j++) tempi.push(bpm * (pass.rit ? RIT[Math.max(0, RIT.length - len + j)] : 1));
       pass.sec = tempi.reduce((s, b) => s + P.meter * 60 / b, 0);
       for (let j = 0; j < len; j++) {
@@ -469,20 +615,20 @@ const MUSIC = (() => {
   // A piece of a suite, arranged for this time round: an introduction on the lute (left out when it
   // opens the music), the tunes two to four times with the arrangement changing each time and now
   // and then a bar or two of the ground alone, then the last bars again, softly and slowing, as an echo.
-  function suite(P, st, r, opening, cue) {
-    const n = P.ground.length, passes = [], keys = Object.keys(P.tunes), used = {};
-    let figK = -1, voice = null;
-    const lute = (alt) => {
+  function suite(P: SuitePiece, st: ComposeState, r: Random, opening: boolean, cue: CueDef): PlayBar[] {
+    const n = P.ground.length, passes: Pass[] = [], keys = Object.keys(P.tunes), used: Record<string, number> = {};
+    let figK = -1, voice: PitchedName | null = null;
+    const lute = (alt: boolean): FigurePart => {
       figK = other(P.figures.length, figK, r);
-      const f = { kind: 'figure', ins: 'lute', key: 'lute', fig: P.figures[figK], win: P.win };
+      const f: FigurePart = { kind: 'figure', ins: 'lute', key: 'lute', fig: P.figures[figK], win: P.win };
       if (alt && r() < 0.35) { f.alt = P.figures[other(P.figures.length, figK, r)]; f.altAt = 4 * (1 + Math.floor(r() * Math.max(1, n / 4 - 1))); }
       return f;
     };
-    const sparse = () => ({ kind: 'figure', ins: 'lute', key: 'lute', figs: P.sparse, cadence: P.cadence, win: P.win, strum: 0.03, level: 0.9 });
-    const drone = () => (P.drone && r() < P.droneOdds ? { kind: 'drone', ins: 'drone', notes: P.drone } : null);
-    const bass = odds => (r() < odds ? { kind: 'bass', ins: 'bassviol', key: 'bass' } : null);
-    const drum = () => (P.perc && r() < 0.7 ? { kind: 'perc', ins: 'frame', pat: P.perc, level: 0.8 } : null);
-    const tune = (key, how, avoid) => {
+    const sparse = (): FigurePart => ({ kind: 'figure', ins: 'lute', key: 'lute', figs: P.sparse, cadence: P.cadence, win: P.win, strum: 0.03, level: 0.9 });
+    const drone = (): DronePart | null => (P.drone && r() < P.droneOdds ? { kind: 'drone', ins: 'drone', notes: P.drone } : null);
+    const bass = (odds: number): BassPart | null => (r() < odds ? { kind: 'bass', ins: 'bassviol', key: 'bass' } : null);
+    const drum = (): PercPart | null => (P.perc && r() < 0.7 ? { kind: 'perc', ins: 'frame', pat: P.perc, level: 0.8 } : null);
+    const tune = (key: string, how: Variation, avoid: PitchedName | null): TunePart | null => {
       for (let tries = 0; tries < 8; tries++) {
         const pool = P.voices.filter(x => x !== avoid), ins = choose(pool.length ? pool : P.voices, r);
         const h = tries < 4 ? how : 'plain', bars = vary(P.tunes[key], h, P.mode, h === 'oct' ? SOUNDS[ins].oct || 0 : 0, r);
@@ -492,7 +638,7 @@ const MUSIC = (() => {
     };
     if (!opening) passes.push({ name: 'intro', from: 0, to: P.intro, level: 0.8, parts: [sparse(), drone()] });
     const count = 2 + (r() < 0.6 ? 1 : 0) + (r() < 0.25 ? 1 : 0);
-    let key = keys[0], first = null;
+    let key = keys[0], first: PitchedName | null = null;
     for (let k = 0; k < count; k++) {
       if (k > 0 && keys.length > 1) key = key === keys[0] ? (r() < 0.75 ? keys[1] : keys[0]) : keys[0];
       const t = tune(key, used[key] ? choose(['orn', 'orn', 'thin', 'oct'], r) : 'plain', voice);
@@ -502,14 +648,14 @@ const MUSIC = (() => {
       if (k < count - 1 && r() < 0.22) passes.push({ name: 'interlude', from: 0, to: P.intro, level: 0.85, parts: [lute(false), bass(0.5)] });
     }
     const echo = first && vary(P.tunes[key], 'thin', P.mode, 0, r);
-    passes.push({ name: 'echo', from: n - P.coda, to: n, level: 0.72, rit: true, parts: [sparse(), echo && fits(echo, first) ? { kind: 'tune', ins: first, bars: echo } : null, drone()] });
+    passes.push({ name: 'echo', from: n - P.coda, to: n, level: 0.72, rit: true, parts: [sparse(), echo && fits(echo, first!) ? { kind: 'tune', ins: first!, bars: echo } : null, drone()] });
     return perform(P, passes, st, r, cue, P.bpm * (cue.tempo || 1) * (0.97 + r() * 0.06));
   }
   // A section of a piece that goes on as long as it is wanted, chosen from where the last one may go.
-  function loop(P, st, r, cue) {
+  function loop(P: LoopPiece, st: ComposeState, r: Random, cue: CueDef): PlayBar[] {
     const name = st.section == null ? P.start : choose(P.sections[st.section].next, r), S = P.sections[name];
     st.section = name; st.seen[name] = (st.seen[name] || 0) + 1;
-    const parts = S.parts.map(ref => {
+    const parts: Part[] = S.parts.map(ref => {
       const doubled = ref.endsWith('+'), [k, arg] = ref.replace('+', '').split(':'), d = P.parts[k];
       if (d.kind === 'tune') return { kind: 'tune', ins: d.ins, bars: vary(P.tunes[arg], st.seen[name] > 1 && r() < 0.5 ? 'orn' : 'plain', P.mode, 0, r), double: doubled ? -12 : 0, level: d.level };
       if (d.kind === 'figure') return Object.assign({}, d, { fig: arg === 'thin' ? d.thin : d.fig });
@@ -518,28 +664,30 @@ const MUSIC = (() => {
     if (!st.bpm) st.bpm = P.bpm * (cue.tempo || 1) * (0.97 + r() * 0.06);
     return perform(P, [{ name, from: 0, to: S.bars || P.ground.length, level: S.level || 1, parts }], st, r, cue, st.bpm);
   }
+  interface Performer { readonly piece: string | null; next(): Performed }
   // A cue as an endless run of bars, each { bpm, beats, events } or { rest } in seconds, decided as
   // it goes from its own random numbers: the same seed always plays the same music. `opening` starts
   // a suite with the piece the cue names first, straight into its tune; `avoid` is a piece not to
   // start with, the one that played last.
-  function performer(score, name, seed, opts) {
+  function performer(score: Score, name: string, seed: number, opts?: PerformerOptions): Performer {
     const S = compile(score), cue = S.cues[name], o = opts || {};
     if (!cue) throw new Error('No cue ' + name);
-    const r = rng(seed), st = { voice: {}, bass: {}, section: null, seen: {}, played: 0, piece: null }, queue = [];
+    const r = rng(seed), st: ComposeState = { voice: {}, bass: {}, section: null, seen: {}, played: 0, piece: null }, queue: Performed[] = [];
     const refill = () => {
       if (cue.suite) {
         const opening = !st.played && o.opening && cue.first, avoid = st.played ? st.piece : o.avoid;
-        const pool = cue.suite.filter(p => p !== avoid), p = opening ? cue.first : choose(pool.length ? pool : cue.suite, r);
+        const pool = cue.suite.filter(p => p !== avoid), p = opening ? cue.first! : choose(pool.length ? pool : cue.suite, r);
         st.piece = p;
-        queue.push(...suite(S.pieces[p], st, r, !!opening, cue));
+        // (A cue's suite names suite pieces, and a cue's loop a loop piece.)
+        queue.push(...suite(S.pieces[p] as SuitePiece, st, r, !!opening, cue));
         queue.push({ rest: cue.rest[0] + r() * (cue.rest[1] - cue.rest[0]), piece: null });
         st.played++;
       } else {
         st.piece = cue.loop;
-        queue.push(...loop(S.pieces[cue.loop], st, r, cue));
+        queue.push(...loop(S.pieces[cue.loop] as LoopPiece, st, r, cue));
       }
     };
-    return { get piece() { return st.piece; }, next() { if (!queue.length) refill(); return queue.shift(); } };
+    return { get piece() { return st.piece; }, next() { if (!queue.length) refill(); return queue.shift()!; } };
   }
 
   /* ---------- out loud ---------- */
@@ -547,7 +695,7 @@ const MUSIC = (() => {
   // Plays a cue on `ac` from `at`, fading in over `fade` seconds. Call tick() often (a few times a
   // second at least) with the context's time and it schedules the bars about to start; stop() fades
   // it out, and close() silences whatever it left sounding.
-  function play(ac, score, name, opts) {
+  function play(ac: BaseAudioContext, score: Score, name: string, opts: PlayOptions): MusicPlayer {
     const o = opts || {}, seed = o.seed >>> 0, r = rng(seed ^ 0x5bd1e995), perf = performer(score, name, seed, o), dk = deckOf(ac, o.level);
     const start = o.at != null ? o.at : ac.currentTime + 0.1;
     const gain = compile(score).cues[name].level || 1;
@@ -557,7 +705,7 @@ const MUSIC = (() => {
     }
     let next = start;
     // Every bar that starts before `until`, in its turn.
-    const schedule = until => {
+    const schedule = (until: number): void => {
       while (next < until) {
         const bar = perf.next(), spb = 60 / (bar.bpm || 60);
         for (const e of bar.events || []) sound(dk, e.ins, e.m, next + e.at * spb + e.off, e.sec != null ? e.sec : e.d * spb, e.v, r);
@@ -580,13 +728,13 @@ const MUSIC = (() => {
     };
   }
   // A short flourish, once: answers when it has finished, and a way to silence it.
-  function sting(ac, score, name, at, level) {
+  function sting(ac: BaseAudioContext, score: Score, name: string, at: number, level?: number): MusicSting {
     const s = compile(score).stings[name], dk = deckOf(ac, level), spb = 60 / s.bpm, r = rng(3);
     for (const [ins, bar] of s.lines) for (const [b, ms, d] of bar) for (const m of ms) sound(dk, ins, m, at + b * spb, d * spb, 1, r);
     return { end: at + s.meter * spb, close: () => close(dk) };
   }
   // A cue rendered whole, faster than it plays, for listening to it outside the game: resolves to an AudioBuffer.
-  function render(score, name, seconds, opts) {
+  function render(score: Score, name: string, seconds: number, opts: RenderOptions): Promise<AudioBuffer> {
     const o = opts || {}, rate = o.rate || 48000, ac = new OfflineAudioContext(2, Math.ceil(seconds * rate), rate);
     play(ac, score, name, Object.assign({ at: 0.05 }, o)).schedule(seconds);
     return ac.startRendering();

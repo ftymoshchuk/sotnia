@@ -1,29 +1,44 @@
 "use strict";
 /* ===== SOTNIA core rules: no DOM in this block ===== */
-const rnd = (a, b) => a + Math.random() * (b - a);
-const ri = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
-const pick = a => a[Math.floor(Math.random() * a.length)];
-const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-const chance = p => Math.random() < p;
+// st, in most of the functions below, is the campaign: its type, Campaign, is declared in journey.ts above newGame().
+const rnd = (a: number, b: number) => a + Math.random() * (b - a);
+const ri = (a: number, b: number) => Math.floor(a + Math.random() * (b - a + 1));
+const pick = <T>(a: readonly T[]): T => a[Math.floor(Math.random() * a.length)];
+const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
+const chance = (p: number) => Math.random() < p;
 
 const ROSTER_MAX = 8;
 
-const CLS = {
+/** The three kinds of fighting man: pikemen, musketeers (shot) and sabreurs. */
+type TroopClass = 'pike' | 'shot' | 'sabre';
+/**
+ * What each class is born with. vig: vigour, the hit points at full strength; mel: melee skill; aim: marksmanship (0 for the men who
+ * never shoot); grd: guard; spd: speed; reach: how far the weapon reaches; cd: seconds between blows; dmg: the least and most a blow
+ * does; arm: the armour of the class; skill: what the class calls the skill it lives by (aim or melee).
+ */
+interface ClassStats { name: string; skill: string; vig: number; mel: number; aim: number; grd: number; spd: number; reach: number; cd: number; dmg: [number, number]; arm: number }
+const CLS: Record<TroopClass, ClassStats> = {
   pike:  { name: 'Pikeman',   skill: 'Pike',  vig: 66, mel: 9,  aim: 0, grd: 7, spd: 15, reach: 19, cd: 1.5,  dmg: [9, 14], arm: 3 },
   shot:  { name: 'Musketeer', skill: 'Aim',   vig: 48, mel: 5,  aim: 9, grd: 4, spd: 17, reach: 8,  cd: 1.3,  dmg: [4, 7],  arm: 0 },
   sabre: { name: 'Sabreur',   skill: 'Blade', vig: 55, mel: 11, aim: 0, grd: 9, spd: 27, reach: 9,  cd: 0.85, dmg: [7, 11], arm: 1 }
 };
-const WPN = {
+// Weapon and armour names by gear level, 0 to 3. GEAR_COST[n] is the price of raising either one from level n.
+const WPN: Record<TroopClass, readonly string[]> = {
   pike:  ['Ash pike', 'Ironbound pike', 'Partisan', "Master's halberd"],
   shot:  ['Old arquebus', 'Matchlock musket', 'Dutch musket', 'Wheel-lock'],
   sabre: ['Notched sabre', 'Hungarian sabre', 'Karabela', 'Damascened sabre']
 };
-const ARM = ['Linen shirt', 'Buff coat', 'Breastplate', 'Cuirass and tassets'];
-const GEAR_COST = [22, 40, 65];
-const TIER = ['rabble', 'trained', 'veteran', 'elite'];
-const COST = [0.5, 1, 1.6, 2.4];
+const ARM: readonly string[] = ['Linen shirt', 'Buff coat', 'Breastplate', 'Cuirass and tassets'];
+const GEAR_COST: readonly number[] = [22, 40, 65];
+// Foes come in tiers 0 to 3, by how well drilled and armed they are. COST is what a unit of each tier adds to a contract's strength.
+const TIER: readonly string[] = ['rabble', 'trained', 'veteran', 'elite'];
+const COST: readonly number[] = [0.5, 1, 1.6, 2.4];
 
-const ORIGINS = [
+/** The peoples men are drawn from: the ids of ORIGINS. */
+type OriginId = 'cossack' | 'pole' | 'german' | 'swede' | 'scot' | 'magyar' | 'croat' | 'tatar';
+/** Where men come from: the classes they take up, and the names they are given. */
+interface Origin { id: OriginId; label: string; cls: TroopClass[]; first: string[]; last: string[] }
+const ORIGINS: Origin[] = [
   { id: 'cossack', label: 'Zaporozhian', cls: ['sabre', 'sabre', 'shot'],
     first: ['Ostap', 'Taras', 'Danylo', 'Maksym', 'Pavlo', 'Hryts', 'Semen', 'Fedir'],
     last: ['Vovk', 'Shram', 'Bily', 'Chorny', 'Holota', 'Kryvy', 'Zaliznyi', 'Perebyinis'] },
@@ -50,7 +65,10 @@ const ORIGINS = [
     last: ['Assan', 'Murza', 'Ułan', 'Bohdan', 'Alej', 'Tuhan'] }
 ];
 
-const TRAITS = {
+/** A trait is named by its own word. The good ones help the man who has them, the bad ones cost. */
+type Trait = 'Steadfast' | 'Keen-eyed' | 'Brawler' | 'Fleet' | 'Hardy' | 'Lucky' | 'Skittish' | 'Grasping';
+interface TraitInfo { good: boolean; desc: string }
+const TRAITS: Record<Trait, TraitInfo> = {
   'Steadfast':  { good: true,  desc: 'Never breaks and runs.' },
   'Keen-eyed':  { good: true,  desc: 'Shoots straighter than his fellows.' },
   'Brawler':    { good: true,  desc: 'Hits harder in the press.' },
@@ -61,14 +79,19 @@ const TRAITS = {
   'Grasping':   { good: false, desc: 'Wants three thalers more a month.' }
 };
 
-const SCARS = [
+/** A wound that leaves its mark: fn changes the man who bears it, and label goes on his record. */
+interface Scar { label: string; fn: (s: Soldier) => void }
+const SCARS: Scar[] = [
   { label: 'a ruined hand', fn: s => { if (s.cls === 'shot') s.aim = Math.max(1, s.aim - 2); else s.mel = Math.max(1, s.mel - 2); } },
   { label: 'a limp', fn: s => { s.grd = Math.max(1, s.grd - 2); } },
   { label: 'a rib that never set', fn: s => { s.vig = Math.max(24, s.vig - 6); s.hp = Math.min(s.hp, s.vig); } },
   { label: 'one eye', fn: s => { if (s.cls === 'shot') s.aim = Math.max(1, s.aim - 3); else s.grd = Math.max(1, s.grd - 1); } }
 ];
 
-const STAFF = {
+/** Hired hands who ride with the baggage train. The fee is paid once, the wage every month. */
+type StaffId = 'surgeon' | 'drill' | 'qm' | 'chaplain';
+interface StaffInfo { name: string; fee: number; wage: number; desc: string }
+const STAFF: Record<StaffId, StaffInfo> = {
   surgeon:  { name: 'Barber-surgeon', fee: 40, wage: 6, desc: 'Rest heals faster. Men struck down die less often.' },
   drill:    { name: 'Drillmaster',    fee: 45, wage: 6, desc: 'A day of drill teaches half as much again.' },
   qm:       { name: 'Quartermaster',  fee: 30, wage: 3, desc: 'The company eats a quarter less. Market prices fall 15%.' },
@@ -76,21 +99,38 @@ const STAFF = {
 };
 
 /* ---------- soldiers ---------- */
-function applyPromo(s, k) {
+/** A promotion raises vigour, the skill his class lives by (aim for a musketeer, melee for the rest) or guard. */
+type Promo = 'vig' | 'skill' | 'grd';
+function applyPromo(s: Soldier, k: Promo) {
   if (k === 'vig') { s.vig += 8; s.hp = Math.min(s.vig, (s.hp || 0) + 8); }
   else if (k === 'skill') { if (s.cls === 'shot') s.aim += 2; else s.mel += 2; }
   else s.grd += 2;
 }
-function makeSoldier(st, cls, level, origin) {
+/** What a man does with a day in camp. */
+type CampOrder = 'drill' | 'rest' | 'forage';
+/** A man on the company's roll. wpn and arm are gear levels, 0 to 3 (see WPN and ARM). */
+interface Soldier {
+  id: number; name: string;
+  origin: string; // the label of his Origin, such as 'Polish', not its id
+  cls: TroopClass; level: number; xp: number;
+  vig: number; hp: number; mel: number; aim: number; grd: number; wpn: number; arm: number;
+  morale: number; trait: Trait | null; order: CampOrder;
+  wound: number; // days he is still laid up
+  kills: number;
+  promos: number; // promotions earned and not yet spent
+  scars: string[]; // the labels of his SCARS
+  fought: boolean; // he fought since the last day passed
+}
+function makeSoldier(st: Campaign, cls: TroopClass, level: number, origin?: Origin): Soldier {
   origin = origin || pick(ORIGINS.filter(o => o.cls.includes(cls)));
   const c = CLS[cls];
   const s = {
     id: st.nextId++, name: pick(origin.first) + ' ' + pick(origin.last), origin: origin.label, cls,
     level: 1, xp: 0, vig: c.vig + ri(-4, 4), mel: c.mel + ri(-1, 1), aim: c.aim ? c.aim + ri(-1, 1) : 0,
     grd: c.grd + ri(-1, 1), wpn: 0, arm: 0, morale: ri(55, 72), trait: null, order: 'drill',
-    wound: 0, kills: 0, promos: 0, scars: [], fought: false
-  };
-  if (chance(0.6)) s.trait = pick(Object.keys(TRAITS));
+    wound: 0, kills: 0, promos: 0, scars: [] as string[], fought: false
+  } as Soldier; // hp follows, once vig is settled
+  if (chance(0.6)) s.trait = pick(Object.keys(TRAITS) as Trait[]);
   if (s.trait === 'Keen-eyed' && cls !== 'shot') s.trait = 'Brawler';
   if (s.trait === 'Hardy') s.vig += 10;
   s.hp = s.vig;
@@ -98,10 +138,10 @@ function makeSoldier(st, cls, level, origin) {
   s.hp = s.vig;
   return s;
 }
-const xpNeed = level => 30 + level * 18;
-const wageOf = s => 3 + 2 * s.level + (s.trait === 'Grasping' ? 3 : 0); // thalers a month
-const rating = s => s.vig / 8 + s.mel + (s.cls === 'shot' ? s.aim : 0) + s.grd * 0.6 + s.wpn * 2 + s.arm * 2;
-function levelUps(st, L) {
+const xpNeed = (level: number) => 30 + level * 18;
+const wageOf = (s: Soldier) => 3 + 2 * s.level + (s.trait === 'Grasping' ? 3 : 0); // thalers a month
+const rating = (s: Soldier) => s.vig / 8 + s.mel + (s.cls === 'shot' ? s.aim : 0) + s.grd * 0.6 + s.wpn * 2 + s.arm * 2;
+function levelUps(st: Campaign, L?: string[]) {
   for (const s of st.roster) {
     while (s.xp >= xpNeed(s.level)) {
       s.xp -= xpNeed(s.level); s.level++; s.promos++;
@@ -109,13 +149,22 @@ function levelUps(st, L) {
     }
   }
 }
-function promote(st, id, k) {
+function promote(st: Campaign, id: number, k: Promo) {
   const s = st.roster.find(r => r.id === id);
   if (!s || s.promos < 1) return false;
   s.promos--; applyPromo(s, k); return true;
 }
-const TVIG = [0.72, 0.9, 1.05, 1.2], TSK = [-3, 0, 2, 4], TMOR = [34, 48, 62, 78];
-function enemyUnit(cls, tier, skin) {
+const TVIG: readonly number[] = [0.72, 0.9, 1.05, 1.2], TSK: readonly number[] = [-3, 0, 2, 4], TMOR: readonly number[] = [34, 48, 62, 78];
+/** The colours a fighter wears, which say who he is: 'own' for the company, the rest for the foes it meets. */
+type Skin = 'own' | 'bandit' | 'deserter' | 'raider' | 'imperial' | 'swede' | 'champion' | 'black' | 'muscovite';
+/** What a fighter brings to a battle. A Soldier has all of it, and so does a Foe. hp is a man's hit points now (a foe starts at full vigour). */
+interface Fighter {
+  cls: TroopClass; vig: number; mel: number; aim: number; grd: number; wpn: number; arm: number; morale: number; trait: Trait | null;
+  name?: string; hp?: number; tier?: number; skin?: Skin;
+}
+/** An enemy as a contract lists him, with the numbers his tier gives him; the battle makes a BattleUnit of him. */
+interface Foe extends Fighter { tier: number; skin: Skin; name: string }
+function enemyUnit(cls: TroopClass, tier: number, skin: Skin): Foe {
   const c = CLS[cls];
   return {
     cls, tier, skin, name: '', vig: Math.round(c.vig * TVIG[tier]), mel: c.mel + TSK[tier],
@@ -125,23 +174,27 @@ function enemyUnit(cls, tier, skin) {
 }
 
 /* ---------- economy ---------- */
-const priceMul = st => (st.staff.qm ? 0.85 : 1);
-const breadPrice = st => Math.round(4 * priceMul(st));
-const powderPrice = st => Math.round(14 * priceMul(st));
-const gearPrice = (st, tier) => Math.round(GEAR_COST[tier] * priceMul(st));
-function wagesDue(st) {
+const priceMul = (st: Campaign) => (st.staff.qm ? 0.85 : 1);
+const breadPrice = (st: Campaign) => Math.round(4 * priceMul(st));
+const powderPrice = (st: Campaign) => Math.round(14 * priceMul(st));
+const gearPrice = (st: Campaign, tier: number) => Math.round(GEAR_COST[tier] * priceMul(st));
+function wagesDue(st: Campaign) {
   let w = 0;
   for (const s of st.roster) w += wageOf(s);
-  for (const k in STAFF) if (st.staff[k]) w += STAFF[k].wage;
+  for (const k in STAFF) if (st.staff[k as StaffId]) w += STAFF[k as StaffId].wage;
   return w;
 }
-const breadDue = st => Math.ceil(st.roster.length * (st.staff.qm ? 0.75 : 1));
-function logLine(st, t) { st.log.unshift({ d: st.day, n: st.date, t }); if (st.log.length > 120) st.log.length = 120; }
+const breadDue = (st: Campaign) => Math.ceil(st.roster.length * (st.staff.qm ? 0.75 : 1));
+/** One line of the campaign's log: the day count, the calendar date, and what happened. */
+interface LogEntry { d: number; n: number; t: string }
+function logLine(st: Campaign, t: string) { st.log.unshift({ d: st.day, n: st.date, t }); if (st.log.length > 120) st.log.length = 120; }
 
-function genRecruits(st) {
+/** A man looking for a place, and the price he asks to sign. */
+interface Recruit { s: Soldier; price: number }
+function genRecruits(st: Campaign) {
   const top = clamp(1 + Math.floor(st.renown / 18), 1, 4);
   st.recruits = [];
-  const want = ['pike', 'shot', 'sabre'].sort(() => Math.random() - 0.5);
+  const want = (['pike', 'shot', 'sabre'] as TroopClass[]).sort(() => Math.random() - 0.5);
   for (let i = 0; i < 3; i++) {
     const lv = ri(1, top);
     const s = makeSoldier(st, want[i], lv, originFor(want[i], here(st).land));
@@ -150,7 +203,7 @@ function genRecruits(st) {
     st.recruits.push({ s, price: Math.round((20 + lv * 14 + good + bad + ri(-2, 3)) * priceMul(st)) });
   }
 }
-function hire(st, i) {
+function hire(st: Campaign, i: number) {
   const r = st.recruits[i];
   if (!r || st.thalers < r.price || st.roster.length >= ROSTER_MAX) return false;
   st.thalers -= r.price; st.roster.push(r.s); st.recruits.splice(i, 1);
@@ -158,12 +211,16 @@ function hire(st, i) {
   st.odds = {};
   return true;
 }
-function buy(st, what) {
+/** Bread and powder are bought ten at a time. */
+type Supply = 'bread' | 'powder';
+function buy(st: Campaign, what: Supply) {
   if (what === 'bread') { const p = breadPrice(st); if (st.thalers < p) return false; st.thalers -= p; st.bread += 10; return true; }
   if (what === 'powder') { const p = powderPrice(st); if (st.thalers < p) return false; st.thalers -= p; st.powder += 10; return true; }
   return false;
 }
-function upgrade(st, id, k) {
+/** A man's weapon or his armour. */
+type GearSlot = 'wpn' | 'arm';
+function upgrade(st: Campaign, id: number, k: GearSlot) {
   const s = st.roster.find(r => r.id === id);
   if (!s || s[k] >= 3) return false;
   const p = gearPrice(st, s[k]);
@@ -171,13 +228,13 @@ function upgrade(st, id, k) {
   st.thalers -= p; s[k]++; st.odds = {};
   return true;
 }
-function hireStaff(st, k) {
+function hireStaff(st: Campaign, k: StaffId) {
   if (st.staff[k] || st.thalers < STAFF[k].fee) return false;
   st.thalers -= STAFF[k].fee; st.staff[k] = true;
   logLine(st, 'A ' + STAFF[k].name.toLowerCase() + ' joins the baggage train.');
   return true;
 }
-function dismiss(st, id) {
+function dismiss(st: Campaign, id: number) {
   const s = st.roster.find(r => r.id === id);
   if (!s) return;
   st.roster = st.roster.filter(r => r !== s);
@@ -186,7 +243,23 @@ function dismiss(st, id) {
 }
 
 /* ---------- contracts ---------- */
-const TEMPLATES = [
+/**
+ * How the foe fights: 'hold' waits dug in, 'advance' marches on you, 'charge' comes at a rush. The company picks from the same three,
+ * and may add 'retreat' once the fight is on.
+ */
+type Stance = 'hold' | 'advance' | 'charge';
+/** A few supplies thrown in on top of the pay. */
+type Bonus = Partial<Record<Supply, number>>;
+/** journey.ts gives the nine templates below their lands (TEMPLATE_LANDS) and adds the last three to the list. */
+type TemplateId = 'road' | 'mill' | 'ford' | 'toll' | 'wagons' | 'river' | 'quarrel' | 'picket' | 'forage' | 'tatarhunt' | 'manor' | 'blockhouse';
+/** What a fight is made from: the foe, the troops he fields (mix, cycled to fill his numbers), how good they are, and how they fight. */
+interface Encounter {
+  id: TemplateId | AmbushId; title: string; who: string; text: string; skin: Skin; foe: string;
+  mix: TroopClass[]; tier: number; ai: Stance; bonus?: Bonus;
+}
+/** Paid work, on offer in the lands listed while the company's threat level (see threat()) lies from min to max. */
+interface Template extends Encounter { id: TemplateId; min: number; max: number; lands?: LandId[] }
+const TEMPLATES: Template[] = [
   { id: 'road', title: 'Road agents on the salt road', who: 'The salt-masters of Wieliczka',
     text: 'Cut-purses stop the carts between the mines and Kraków. Scatter them, and the salt-masters pay in coin.',
     skin: 'bandit', foe: 'road agents', mix: ['sabre', 'pike', 'sabre', 'shot'], tier: 1, ai: 'charge', min: 1, max: 16 },
@@ -215,16 +288,32 @@ const TEMPLATES = [
     text: 'Yellow-coats are stripping the valley of grain. Take it back and keep a share of the bread.',
     skin: 'imperial', foe: 'Imperial foot', mix: ['pike', 'sabre', 'pike', 'sabre', 'shot'], tier: 2, ai: 'advance', bonus: { bread: 14 }, min: 9, max: 23 }
 ];
-const WEATHER = { clear: 'Clear', rain: 'Rain: matchlocks misfire', fog: 'Fog: short musket range' };
-function rollWeather() { const r = Math.random(); return r < 0.6 ? 'clear' : r < 0.82 ? 'rain' : 'fog'; }
-const GRADE = { easy: { dn: -1, dq: -0.5, pay: 1 }, fair: { dn: 0, dq: 0, pay: 1 }, hard: { dn: 1, dq: 0.35, pay: 1.15 } };
-function powerOf(units) { let p = 0; for (const u of units) p += COST[u.tier]; return p * (1 + 0.12 * (units.length - 1)); }
-function makeContract(st, tpl, grade) {
+/** The day's weather, which is the battle's: rain makes matchlocks misfire, fog shortens musket range (see WEATHER). */
+type Weather = 'clear' | 'rain' | 'fog';
+const WEATHER: Record<Weather, string> = { clear: 'Clear', rain: 'Rain: matchlocks misfire', fog: 'Fog: short musket range' };
+function rollWeather(): Weather { const r = Math.random(); return r < 0.6 ? 'clear' : r < 0.82 ? 'rain' : 'fog'; }
+/** A contract is offered in three grades. dq shifts the quality of the foe and pay scales the pay (dn is not read anywhere). */
+type Grade = 'easy' | 'fair' | 'hard';
+interface GradeInfo { dn: number; dq: number; pay: number }
+const GRADE: Record<Grade, GradeInfo> = { easy: { dn: -1, dq: -0.5, pay: 1 }, fair: { dn: 0, dq: 0, pay: 1 }, hard: { dn: 1, dq: 0.35, pay: 1.15 } };
+function powerOf(units: Foe[]) { let p = 0; for (const u of units) p += COST[u.tier]; return p * (1 + 0.12 * (units.length - 1)); }
+/** A fight on offer. Most are posted in a town; the duel, the Black Regiment and the ambush on the road are special kinds, marked by their flags. */
+interface Contract {
+  id: number;
+  tpl: TemplateId | AmbushId | 'duel' | 'final'; // what it was made from
+  title: string; who: string; text: string; skin: Skin; foe: string; units: Foe[]; ai: Stance;
+  grade: Grade | 'duel' | 'final' | 'ambush'; weather: Weather;
+  ttl: number; // days left on the board
+  bonus: Bonus | null; pay: number; renown: number;
+  cap: number; // the most men that may be sent
+  duel?: boolean; final?: boolean; ambush?: boolean;
+}
+function makeContract(st: Campaign, tpl: Encounter, grade: Grade): Contract {
   const day = threat(st), G = GRADE[grade];
   const dayN = 3 + Math.floor((day - 1) / 5), mine = st.roster.length;
   const n = clamp(grade === 'easy' ? Math.min(dayN - 1, mine - 1) : grade === 'fair' ? Math.min(dayN, Math.max(mine, 3)) : dayN + 1, 2, 8);
   const q = clamp(0.3 + (day - 1) / 10 + G.dq + (tpl.tier - 1) * 0.3, 0, 2.7);
-  const units = [];
+  const units: Foe[] = [];
   for (let i = 0; i < n; i++) {
     const tier = Math.min(3, Math.floor(q) + (chance(q - Math.floor(q)) ? 1 : 0));
     units.push(enemyUnit(tpl.mix[i % tpl.mix.length], tier, tpl.skin));
@@ -238,7 +327,7 @@ function makeContract(st, tpl, grade) {
     cap: clamp(n + (grade === 'easy' ? 1 : 0), 2, ROSTER_MAX)
   };
 }
-function makeDuel(st) {
+function makeDuel(st: Campaign): Contract {
   const tl = threat(st), tier = tl < 8 ? 1 : tl < 16 ? 2 : 3;
   const u = enemyUnit('sabre', tier, 'champion');
   u.morale = 70;
@@ -251,8 +340,8 @@ function makeDuel(st) {
   };
 }
 // The Black Regiment: out of the journey until it returns as a set piece on the road.
-function finalContract(st) {
-  const mix = [['pike', 3], ['pike', 2], ['pike', 1], ['shot', 2], ['shot', 2], ['sabre', 3], ['sabre', 2]];
+function finalContract(st: Campaign): Contract {
+  const mix: [TroopClass, number][] = [['pike', 3], ['pike', 2], ['pike', 1], ['shot', 2], ['shot', 2], ['sabre', 3], ['sabre', 2]];
   return {
     id: st.nextId++, tpl: 'final', final: true, title: 'The Black Regiment at the ford', who: 'The Crown Hetman',
     text: "Colonel Krafft's black-coats have sold their swords to the other side and hold the only crossing. The Hetman's whole muster watches from the hill. Break them and your banner is made.",
@@ -260,12 +349,12 @@ function finalContract(st) {
     grade: 'final', weather: rollWeather(), ttl: 99, bonus: null, pay: 300, renown: 30, cap: ROSTER_MAX
   };
 }
-function genContracts(st) {
+function genContracts(st: Campaign) {
   const have = new Set(st.contracts.map(c => c.grade));
   const used = new Set(st.contracts.map(c => c.tpl));
   const tl = threat(st), land = here(st).land;
-  const fits = t => tl >= t.min && tl <= t.max && (!t.lands || t.lands.includes(land));
-  for (const g of ['easy', 'fair', 'hard']) {
+  const fits = (t: Template) => tl >= t.min && tl <= t.max && (!t.lands || t.lands.includes(land));
+  for (const g of ['easy', 'fair', 'hard'] as const) {
     if (have.has(g)) continue;
     let pool = TEMPLATES.filter(t => fits(t) && !used.has(t.id));
     if (!pool.length) pool = TEMPLATES.filter(fits);
@@ -279,11 +368,34 @@ function genContracts(st) {
 
 /* ---------- battle ---------- */
 const BW = 300, BD = 44, PACE = 15.5, TLIMIT = 120;
-const alive = u => !u.dead && !u.fled;
-const fighting = u => !u.dead && !u.fled && !u.routing;
-const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const alive = (u: BattleUnit) => !u.dead && !u.fled;
+const fighting = (u: BattleUnit) => !u.dead && !u.fled && !u.routing;
+const dist = (a: Pick<BattleUnit, 'x' | 'y'>, b: Pick<BattleUnit, 'x' | 'y'>) => Math.hypot(a.x - b.x, a.y - b.y);
 
-function toUnit(o, side, sid) {
+/** The company is side 0 and the foe side 1. */
+type Side = 0 | 1;
+/** What a unit is doing, which is what the picture shows. */
+type UnitMode = 'idle' | 'walk' | 'fight' | 'reload' | 'aim' | 'rout';
+/**
+ * A fighter on the field. x runs along its width (the company starts on the left, the foe on the right) and y across its depth;
+ * hx, hy is the spot a unit holds when told to hold. The rest is timers and flags for the fight and for the picture.
+ */
+interface BattleUnit {
+  sid: number | string; // the soldier's id, or 'e0', 'e1'... for a foe
+  side: Side; name: string; cls: TroopClass; skin: Skin; tier: number;
+  x: number; y: number; hx: number; hy: number;
+  hp: number; max: number; mel: number; aim: number; grd: number; wpn: number;
+  armv: number; // armour: the class's, plus what the gear adds
+  spd: number; mor: number; trait: Trait | null;
+  face: 1 | -1; // 1 faces right
+  cd: number; // seconds until its next blow
+  loaded: boolean; rl: number; aimT: number; aimNeed: number; // a musket: loaded, seconds of reloading left, seconds spent aiming and needed
+  tgt: BattleUnit | null; ret: number; // its target, and seconds until it picks again
+  anim: number; moving: boolean; swing: number; flash: number; hurt: number; // for the picture
+  kills: number; dead: boolean; fled: boolean; routing: boolean; mode: UnitMode;
+  run: number; // seconds of running up to a charge
+}
+function toUnit(o: Fighter, side: Side, sid: number | string): BattleUnit {
   const c = CLS[o.cls];
   return {
     sid, side, name: o.name || '', cls: o.cls, skin: side === 0 ? 'own' : (o.skin || 'bandit'), tier: o.tier || 0,
@@ -294,13 +406,13 @@ function toUnit(o, side, sid) {
     dead: false, fled: false, routing: false, mode: 'idle', run: 0
   };
 }
-function deploy(b, side) {
+function deploy(b: Battle, side: Side) {
   const us = b.units.filter(u => u.side === side);
   const hx = { pike: 66, sabre: 52, shot: 34 };
-  for (const cls of ['pike', 'shot', 'sabre']) {
+  for (const cls of ['pike', 'shot', 'sabre'] as const) {
     const g = us.filter(u => u.cls === cls);
     g.forEach((u, i) => {
-      let y;
+      let y: number;
       if (cls === 'sabre') y = i % 2 === 0 ? 3 + (i / 2) * 8 : BD - 3 - ((i - 1) / 2) * 8;
       else y = BD * (i + 0.5) / g.length + rnd(-2, 2);
       let x = hx[cls] + rnd(-2, 2);
@@ -310,8 +422,36 @@ function deploy(b, side) {
     });
   }
 }
-function makeBattle(ours, theirs, o) {
-  const b = {
+/** What a battle needs besides who fights. vis: record fx for the picture (the scouts' headless runs leave it out). */
+interface BattleOptions { stance?: Stance; ai?: Stance; weather?: Weather; powder?: number; duel?: boolean; vis?: boolean }
+/** What the fight asks the picture to draw. f is the way the unit faces; shot with mis is a musket that only flashed in the pan, and miss a ball that missed. */
+type BattleFx =
+  | { k: 'blood'; x: number; y: number; n: number; f: 1 | -1 }
+  | { k: 'death'; x: number; y: number }
+  | { k: 'parry'; x: number; y: number }
+  | { k: 'shot'; x: number; y: number; f: 1 | -1; mis: boolean }
+  | { k: 'miss'; x: number; y: number };
+/** One line of the fight's running commentary. side is 1 for news the company will not like. */
+interface BattleLogEntry { t: number; s: string; side: Side }
+/** A fight in progress: the field, the clock, everyone on it, and how each side means to fight. */
+interface Battle {
+  W: number; D: number; // the field's width and depth
+  t: number; // seconds since it began
+  units: BattleUnit[];
+  stance: [Stance | 'retreat', Stance]; // the company's and the foe's
+  ai: Stance; // the foe's plan: a 'hold' turns to 'charge' under fire
+  underFire: boolean; weather: Weather; powder: number; duel: boolean;
+  noShot: boolean; // nobody may fire (a duel)
+  range: number; // musket range
+  fx: BattleFx[]; log: BattleLogEntry[]; vis: boolean; over: boolean;
+  winner: Side | null; retreated: boolean;
+  mt: number; // seconds to the next morale check
+  shots: number; dry: boolean; lastShot: number;
+  hinted?: boolean; // the hint about a foe that will not come out has been given
+  draw?: boolean; // time ran out
+}
+function makeBattle(ours: (Fighter & { id: number })[], theirs: Fighter[], o: BattleOptions): Battle {
+  const b: Battle = {
     W: BW, D: BD, t: 0, units: [], stance: [o.stance || 'advance', o.ai === 'hold' ? 'hold' : o.ai || 'advance'],
     ai: o.ai || 'advance', underFire: false, weather: o.weather || 'clear', powder: o.powder || 0,
     duel: !!o.duel, noShot: !!o.duel, range: o.weather === 'fog' ? 88 : 150, fx: [], log: [], vis: !!o.vis,
@@ -322,13 +462,13 @@ function makeBattle(ours, theirs, o) {
   deploy(b, 0); deploy(b, 1);
   return b;
 }
-function blog(b, s, side) { b.log.push({ t: b.t, s, side }); if (b.log.length > 60) b.log.shift(); }
-function fxp(b, f) { if (b.vis) b.fx.push(f); }
-const uname = (b, u) => u.side === 0 ? u.name.split(' ')[0] : (b.duel ? 'the hired blade' : 'a ' + TIER[u.tier] + ' ' + CLS[u.cls].name.toLowerCase());
-const cap1 = s => s.charAt(0).toUpperCase() + s.slice(1);
+function blog(b: Battle, s: string, side: Side) { b.log.push({ t: b.t, s, side }); if (b.log.length > 60) b.log.shift(); }
+function fxp(b: Battle, f: BattleFx) { if (b.vis) b.fx.push(f); }
+const uname = (b: Battle, u: BattleUnit) => u.side === 0 ? u.name.split(' ')[0] : (b.duel ? 'the hired blade' : 'a ' + TIER[u.tier] + ' ' + CLS[u.cls].name.toLowerCase());
+const cap1 = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-function pickTarget(b, u) {
-  let best = null, bs = 1e9;
+function pickTarget(b: Battle, u: BattleUnit) {
+  let best: BattleUnit | null = null, bs = 1e9;
   for (const e of b.units) {
     if (e.side === u.side || !alive(e)) continue;
     let w = 1;
@@ -340,8 +480,8 @@ function pickTarget(b, u) {
   }
   u.tgt = best;
 }
-function nearest(b, u) {
-  let best = null, bd = 1e9;
+function nearest(b: Battle, u: BattleUnit) {
+  let best: BattleUnit | null = null, bd = 1e9;
   for (const e of b.units) {
     if (e.side === u.side || !alive(e)) continue;
     const d = dist(u, e);
@@ -349,7 +489,7 @@ function nearest(b, u) {
   }
   return { e: best, d: bd };
 }
-function moveTo(b, u, tx, ty, sp, dt, stop) {
+function moveTo(b: Battle, u: BattleUnit, tx: number, ty: number, sp: number, dt: number, stop?: number) {
   stop = stop || 0;
   const dx = tx - u.x, dy = ty - u.y, d = Math.hypot(dx, dy);
   if (d <= stop + 0.01) return;
@@ -357,7 +497,7 @@ function moveTo(b, u, tx, ty, sp, dt, stop) {
   u.x += dx / d * m; u.y = clamp(u.y + dy / d * m, 0, b.D);
   u.moving = true; u.anim += dt * sp / 9;
 }
-function checked(b, u) {
+function checked(b: Battle, u: BattleUnit) {
   if (u.cls === 'pike') return false;
   const r = CLS[u.cls].reach;
   for (const e of b.units) {
@@ -367,7 +507,7 @@ function checked(b, u) {
   }
   return false;
 }
-function hurt(b, t, dmg, src, kind) {
+function hurt(b: Battle, t: BattleUnit, dmg: number, src: BattleUnit, kind: 'ball' | 'steel') {
   t.hp -= dmg; t.hurt = 0.2; t.aimT = 0;
   if (kind === 'ball' && t.side === 1) b.underFire = true;
   fxp(b, { k: 'blood', x: t.x, y: t.y, n: kind === 'ball' ? 8 : 4, f: src.face });
@@ -384,7 +524,7 @@ function hurt(b, t, dmg, src, kind) {
     blog(b, cap1(uname(b, src)) + ' ' + how + ' ' + uname(b, t) + '.', src.side);
   }
 }
-function strike(b, u, t, d) {
+function strike(b: Battle, u: BattleUnit, t: BattleUnit, d: number) {
   const c = CLS[u.cls], st = b.stance[u.side], tst = b.stance[t.side];
   u.cd = c.cd * rnd(0.9, 1.15); u.swing = 0.22;
   const impact = u.run > 1;
@@ -403,7 +543,7 @@ function strike(b, u, t, d) {
     hurt(b, t, Math.max(1, Math.round(dmg - t.armv)), u, 'steel');
   } else fxp(b, { k: 'parry', x: (u.x + t.x) / 2, y: (u.y + t.y) / 2 });
 }
-function fire(b, u, t, d) {
+function fire(b: Battle, u: BattleUnit, t: BattleUnit, d: number) {
   u.loaded = false; u.rl = clamp(4.5 - 0.09 * u.aim, 2.6, 5); u.aimT = 0; u.flash = 0.14; b.shots++; b.lastShot = b.t;
   if (u.side === 0) {
     b.powder--;
@@ -421,7 +561,7 @@ function fire(b, u, t, d) {
     hurt(b, t, Math.max(4, Math.round(dmg - t.armv / 2)), u, 'ball');
   } else fxp(b, { k: 'miss', x: t.x + rnd(-7, 7), y: t.y + rnd(-3, 3) });
 }
-function moraleTick(b) {
+function moraleTick(b: Battle) {
   const n = [0, 0];
   for (const u of b.units) if (fighting(u)) n[u.side]++;
   for (const u of b.units) {
@@ -433,22 +573,22 @@ function moraleTick(b) {
     if (u.mor < 20 || (u.hp < u.max * 0.3 && u.mor < thr)) {
       if (chance(0.3)) {
         u.routing = true; u.tgt = null;
-        if (b.duel) { u.fled = true; blog(b, cap1(uname(b, u)) + ' lowers his blade and yields.', 1 - u.side); }
+        if (b.duel) { u.fled = true; blog(b, cap1(uname(b, u)) + ' lowers his blade and yields.', 1 - u.side as Side); }
         else {
-          blog(b, cap1(uname(b, u)) + ' breaks and runs.', 1 - u.side);
+          blog(b, cap1(uname(b, u)) + ' breaks and runs.', 1 - u.side as Side);
           for (const o of b.units) if (o.side === u.side && fighting(o)) o.mor -= 4;
         }
       }
     }
   }
 }
-function orderRetreat(b) {
+function orderRetreat(b: Battle) {
   if (b.over) return;
   b.retreated = true; b.stance[0] = 'retreat';
   for (const u of b.units) if (u.side === 0 && alive(u)) { u.routing = true; u.tgt = null; }
   blog(b, 'The drum beats the retreat.', 1);
 }
-function stepBattle(b, dt) {
+function stepBattle(b: Battle, dt: number) {
   if (b.over) return;
   b.t += dt;
   if (b.ai === 'hold') {
@@ -499,14 +639,14 @@ function stepBattle(b, dt) {
       u.mode = 'walk'; moveTo(b, u, t.x, t.y, Math.min(u.spd, PACE), dt); continue;
     }
     let mt = t, md = d;
-    if (threatened && ne.e !== t && (u.cls === 'shot' || ne.d < d - 6)) { mt = ne.e; md = ne.d; }
+    if (threatened && ne.e !== t && (u.cls === 'shot' || ne.d < d - 6)) { mt = ne.e!; md = ne.d; }
     if (md <= c.reach) { u.mode = 'fight'; u.face = mt.x >= u.x ? 1 : -1; if (u.cd <= 0) strike(b, u, mt, md); continue; }
     if (st === 'hold') {
       if (ne.d > 46) {
         if (Math.hypot(u.hx - u.x, u.hy - u.y) > 3) { moveTo(b, u, u.hx, u.hy, u.spd, dt); u.mode = 'walk'; } else u.mode = 'idle';
         continue;
       }
-      mt = ne.e;
+      mt = ne.e!;
     }
     let sp = st === 'charge' ? u.spd * 1.45 : (ne.d > 30 ? Math.min(u.spd, PACE) : u.spd);
     if (checked(b, u)) sp *= 0.4;
@@ -539,19 +679,19 @@ function stepBattle(b, dt) {
 }
 
 /* ---------- picking men, odds ---------- */
-function fitFor(s, c) { return s.wound === 0; }
-function defaultPick(st, c) {
+function fitFor(s: Soldier, c: Contract) { return s.wound === 0; }
+function defaultPick(st: Campaign, c: Contract) {
   let pool = st.roster.filter(s => s.wound === 0 && s.hp >= s.vig * 0.5);
   if (!pool.length) pool = st.roster.filter(s => s.wound === 0);
   if (c.duel) pool = pool.slice().sort((a, b2) => (b2.mel + b2.grd + b2.hp / 10) - (a.mel + a.grd + a.hp / 10));
   else pool = pool.slice().sort((a, b2) => rating(b2) - rating(a));
   return pool.slice(0, c.cap).map(s => s.id);
 }
-function battleFor(st, c, ids, stance, vis) {
+function battleFor(st: Campaign, c: Contract, ids: number[], stance: Stance, vis: boolean) {
   const ours = st.roster.filter(s => ids.includes(s.id));
   return makeBattle(ours, c.units, { stance, ai: c.ai, weather: c.weather, powder: st.powder, duel: c.duel, vis });
 }
-function estimateOdds(st, c, ids, n, stance) {
+function estimateOdds(st: Campaign, c: Contract, ids: number[], n?: number, stance?: Stance) {
   if (!ids.length) return 0;
   let w = 0; n = n || 12;
   for (let i = 0; i < n; i++) {
@@ -564,26 +704,45 @@ function estimateOdds(st, c, ids, n, stance) {
   }
   return w / n;
 }
-function stanceOdds(st, c, ids, n) {
-  const o = {};
-  for (const s of (c.duel ? ['advance', 'charge'] : ['hold', 'advance', 'charge'])) o[s] = estimateOdds(st, c, ids, n || 12, s);
-  o.best = Object.keys(o).reduce((a, k) => (o[k] > o[a] ? k : a));
-  o.p = o[o.best];
+/** The scouts' odds of winning with each stance (a duel has no 'hold'), the best stance and its odds. The screens set none when nobody is fit to fight. */
+interface StanceOdds extends Partial<Record<Stance, number>> { best: Stance; p: number; none?: boolean }
+function stanceOdds(st: Campaign, c: Contract, ids: number[], n?: number): StanceOdds {
+  const o = {} as StanceOdds; // best and p are filled in below
+  for (const s of (c.duel ? ['advance', 'charge'] : ['hold', 'advance', 'charge']) as Stance[]) o[s] = estimateOdds(st, c, ids, n || 12, s);
+  o.best = (Object.keys(o) as Stance[]).reduce((a, k) => (o[k]! > o[a]! ? k : a));
+  o.p = o[o.best]!;
   return o;
 }
-const KIND = {
+const KIND: Record<Stance, { tag: string; note: string }> = {
   hold: { tag: 'Assault', note: 'They are dug in and will not come out. You must go to them.' },
   advance: { tag: 'Open field', note: 'They will march on you in good order.' },
   charge: { tag: 'Ambush', note: 'They will come at you in a rush.' }
 };
-function oddsWord(p) {
+function oddsWord(p: number) {
   return p >= 0.85 ? 'Easy pickings' : p >= 0.65 ? 'Favourable' : p >= 0.42 ? 'Even odds' : p >= 0.2 ? 'Hard' : 'Grim';
 }
 
 /* ---------- aftermath ---------- */
-function resolveBattle(st, c, b) {
+/** How a man fared in a fight. */
+type Fate = 'unhurt' | 'wounded' | 'struck down' | 'killed' | 'fled' | 'yielded';
+/** One man's line in the report: his kills, his fate, the experience he earned and any scar he took. */
+interface ReportLine { id: number; name: string; cls: TroopClass; kills: number; fate: Fate; xp: number; scar: string | null }
+/** A man who died in the company's service, kept for the last page. */
+interface Fallen { name: string; cls: TroopClass; origin: string; day: number; date: number; where: string; level: number; kills: number }
+/** Supplies taken from the field. */
+type Loot = Record<Supply, number>;
+/** The count of a fight, as resolveBattle hands it to the report screen. */
+interface BattleReport {
+  won: boolean; retreated: boolean; draw: boolean; lines: ReportLine[]; pay: number; loot: Loot | null;
+  renown: number; // gained, or lost (negative) after a defeat in paid work
+  dead: string[]; // the names of the men killed
+  title: string; final: boolean; duel: boolean; ambush: boolean; foe: string;
+  cargoLost: number; // taken by the raiders after a lost ambush
+  shots: number; secs: number;
+}
+function resolveBattle(st: Campaign, c: Contract, b: Battle): BattleReport {
   const won = b.winner === 0 && !b.retreated;
-  const rep = { won, retreated: !!b.retreated, draw: !!b.draw, lines: [], pay: 0, loot: null, renown: 0, dead: [], title: c.title, final: !!c.final, duel: !!c.duel, ambush: !!c.ambush, foe: c.foe, cargoLost: 0, shots: b.shots, secs: Math.round(b.t) };
+  const rep: BattleReport = { won, retreated: !!b.retreated, draw: !!b.draw, lines: [], pay: 0, loot: null, renown: 0, dead: [], title: c.title, final: !!c.final, duel: !!c.duel, ambush: !!c.ambush, foe: c.foe, cargoLost: 0, shots: b.shots, secs: Math.round(b.t) };
   st.powder = Math.max(0, b.powder);
   st.stats.battles++; if (won) st.stats.won++;
   for (const u of b.units) {
@@ -591,7 +750,7 @@ function resolveBattle(st, c, b) {
     const s = st.roster.find(r => r.id === u.sid);
     if (!s) continue;
     s.kills += u.kills; st.stats.kills += u.kills;
-    const line = { id: s.id, name: s.name, cls: s.cls, kills: u.kills, fate: 'unhurt', xp: 0, scar: null };
+    const line: ReportLine = { id: s.id, name: s.name, cls: s.cls, kills: u.kills, fate: 'unhurt', xp: 0, scar: null };
     if (u.dead) {
       let p = c.duel ? 0.2 : 0.42;
       if (st.staff.surgeon) p -= 0.18;
@@ -622,8 +781,8 @@ function resolveBattle(st, c, b) {
   if (rep.dead.length) st.roster.forEach(s => { s.morale = clamp(s.morale - 5 * rep.dead.length, 0, 100); });
   if (won) {
     rep.pay = c.pay; st.thalers += c.pay; st.renown += c.renown; rep.renown = c.renown; st.stats.earned += c.pay;
-    const loot = { bread: ri(0, 3), powder: c.duel ? 0 : ri(0, 3) };
-    if (c.bonus) for (const k in c.bonus) loot[k] = (loot[k] || 0) + c.bonus[k];
+    const loot: Loot = { bread: ri(0, 3), powder: c.duel ? 0 : ri(0, 3) };
+    if (c.bonus) for (const k in c.bonus) loot[k as Supply] = (loot[k as Supply] || 0) + c.bonus[k as Supply]!; // for...in gives plain strings
     st.bread += loot.bread; st.powder += loot.powder; rep.loot = loot;
     logLine(st, (c.ambush ? 'Beat off ' + c.foe + ' on the road.' : 'Won: ' + c.title + '. ' + c.pay + ' thalers paid.') + (rep.dead.length ? ' Buried: ' + rep.dead.join(', ') + '.' : ''));
   } else if (c.ambush) {
@@ -645,9 +804,27 @@ function resolveBattle(st, c, b) {
 
 /* ---------- events ---------- */
 // Each choice: label, hint (its effects in words), fx (the same as [icon, amount, what] chips; none means nothing changes) and fn.
-const all = (st, fn) => st.roster.forEach(fn);
-const bump = (s, k, v) => { s[k] = clamp(s[k] + v, k === 'hp' ? 1 : 0, k === 'hp' ? s.vig : 100); };
-const EVENTS = [
+const all = (st: Campaign, fn: (s: Soldier) => void) => st.roster.forEach(fn);
+const bump = (s: Soldier, k: 'hp' | 'morale', v: number) => { s[k] = clamp(s[k] + v, k === 'hp' ? 1 : 0, k === 'hp' ? s.vig : 100); };
+/** The things that can happen in camp or on the road: the ids of EVENTS. */
+type CampEventId = 'deserter' | 'sutler' | 'fever' | 'village' | 'dice' | 'cart' | 'pedlar' | 'weevils';
+/** An effect chip, as [icon, amount, what]: an icon (see icons.ts), a signed amount as it is shown, and what it is of. */
+type FxChip = [icon: IconName, amount: string, what: string];
+/**
+ * What the company remembers of an event between its being rolled and its being answered. Only the dice event keeps more than its id:
+ * the names of the two men (a, b) and their ids (ia, ib).
+ */
+interface PendingEvent { id?: CampEventId; a?: string; b?: string; ia?: number; ib?: number }
+/** One way to answer an event. fn does it and returns the words that tell of it. */
+interface CampChoice { label: string; hint: string; fx?: FxChip[]; fn: (st: Campaign) => string }
+/** Something that happens to the company, and the ways to answer it. */
+interface CampEvent {
+  id: CampEventId; title: string; text: (st: Campaign) => string;
+  ok: (st: Campaign) => boolean; // can it happen now?
+  prep?: (st: Campaign) => PendingEvent; // picks the men or things it is about
+  choices: CampChoice[];
+}
+const EVENTS: CampEvent[] = [
   { id: 'deserter', title: 'A deserter at the picket line',
     text: () => 'A Swedish musketeer, half starved, offers his matchlock and his oath for a place by the fire.',
     ok: st => st.roster.length < ROSTER_MAX,
@@ -686,14 +863,14 @@ const EVENTS = [
       { label: 'March on', hint: 'Nothing gained, nothing lost.', fn: () => 'The company marches past without a word.' }
     ] },
   { id: 'dice', title: 'Dice and drawn steel',
-    text: st => { const p = st.pending; return p.a + ' and ' + p.b + ' are on their feet over a throw of the dice, hands on hilts.'; },
+    text: st => { const p = st.pending!; return p.a + ' and ' + p.b + ' are on their feet over a throw of the dice, hands on hilts.'; },
     ok: st => st.roster.length >= 2,
     prep: st => { const a = st.roster.slice().sort(() => Math.random() - 0.5); return { a: a[0].name, b: a[1].name, ia: a[0].id, ib: a[1].id }; },
     choices: [
       { label: 'Let them settle it, to first blood', hint: 'One is cut. The company enjoys the show.', fx: [['drop', '−14', 'blood, the loser'], ['star', '+15', 'experience, the winner'], ['flame', '+4', 'spirit, every man']],
-        fn: st => { const a = st.roster.find(s => s.id === st.pending.ia), b2 = st.roster.find(s => s.id === st.pending.ib); if (!a || !b2) return 'It blows over.'; const w = chance(0.5) ? a : b2, l = w === a ? b2 : a; bump(l, 'hp', -14); w.xp += 15; all(st, s => bump(s, 'morale', 4)); return w.name + ' draws first blood. ' + l.name + ' pays the debt and keeps the scar.'; } },
+        fn: st => { const a = st.roster.find(s => s.id === st.pending!.ia), b2 = st.roster.find(s => s.id === st.pending!.ib); if (!a || !b2) return 'It blows over.'; const w = chance(0.5) ? a : b2, l = w === a ? b2 : a; bump(l, 'hp', -14); w.xp += 15; all(st, s => bump(s, 'morale', 4)); return w.name + ' draws first blood. ' + l.name + ' pays the debt and keeps the scar.'; } },
       { label: 'Fine them both', hint: '+8 thalers. Both sulk.', fx: [['coin', '+8', 'thalers'], ['flame', '−8', 'spirit, the two']],
-        fn: st => { st.thalers += 8; [st.pending.ia, st.pending.ib].forEach(id => { const s = st.roster.find(r => r.id === id); if (s) bump(s, 'morale', -8); }); return 'Four thalers each into the chest. Neither speaks to you for a day.'; } }
+        fn: st => { st.thalers += 8; [st.pending!.ia, st.pending!.ib].forEach(id => { const s = st.roster.find(r => r.id === id); if (s) bump(s, 'morale', -8); }); return 'Four thalers each into the chest. Neither speaks to you for a day.'; } }
     ] },
   { id: 'cart', title: 'An overturned cart',
     text: () => "A powder cart lies in the ditch, its driver gone. The barrels carry the Crown's mark.",
@@ -720,7 +897,7 @@ const EVENTS = [
         fn: st => { if (st.staff.qm) return 'Nothing lost.'; if (chance(0.4) && st.roster.length) { const s = pick(st.roster); bump(s, 'hp', -12); return s.name + ' spends the night behind the hedge.'; } return 'Nobody complains. Nobody looks closely.'; } }
     ] }
 ];
-function rollEvent(st) {
+function rollEvent(st: Campaign) {
   let pool = EVENTS.filter(e => !st.seen.includes(e.id) && e.ok(st));
   if (!pool.length) { st.seen = []; pool = EVENTS.filter(e => e.ok(st)); }
   if (!pool.length) return null;
@@ -730,7 +907,7 @@ function rollEvent(st) {
   st.pending.id = e.id;
   return e;
 }
-function applyEvent(st, i) {
+function applyEvent(st: Campaign, i: number) {
   const e = EVENTS.find(x => x.id === (st.pending && st.pending.id));
   if (!e) return '';
   const res = e.choices[i].fn(st);

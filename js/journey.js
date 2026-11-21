@@ -17,8 +17,6 @@ function dateText(n, short) {
         return j.d + ' ' + M[j.m] + '/' + g.d + ' ' + M[g.m] + (short ? '' : ' ' + g.y);
     return j.d + '/' + g.d + ' ' + M[g.m] + (short ? '' : ' ' + g.y);
 }
-/* ---------- the lands ---------- */
-// danger: how often trouble finds a train on the road (see AMBUSH_RATE). origins: who signs on there.
 const LANDS = {
     steppe: { name: 'the Wild Fields', danger: 3, origins: ['cossack', 'tatar'], ambush: ['tatars'] },
     ukraine: { name: 'Ukraine', danger: 2, origins: ['cossack', 'pole'], ambush: ['tatars', 'masterless'] },
@@ -35,8 +33,6 @@ const SERVICES = {
     fort: { market: true },
     ford: {}, lakes: {}, camp: {}
 };
-/* ---------- places ---------- */
-// lon, lat in degrees. major places are always named on the map.
 const P = (name, lon, lat, land, kind, major) => ({ name, lon, lat, land, kind: kind || 'town', major: !!major });
 const PLACES = {
     leipzig: P('Leipzig', 12.37, 51.34, 'saxony', 'town', true),
@@ -96,7 +92,6 @@ function kmBetween(A, B) {
     const h = Math.sin(dLat / 2) ** 2 + Math.cos(A.lat * rad) * Math.cos(B.lat * rad) * Math.sin(dLon / 2) ** 2;
     return 2 * R * Math.asin(Math.sqrt(h));
 }
-/* ---------- roads ---------- */
 // Roads wind, so a leg is the straight distance plus 15%; rivers meander, plus 25%. River legs run downstream from a to b.
 const ROADS = [];
 function road(a, b, danger, river) {
@@ -179,7 +174,6 @@ road('kazimierz', 'warsaw', 1, true);
 road('warsaw', 'plock', 1, true);
 road('plock', 'torun', 1, true);
 road('torun', 'danzig', 1, true);
-/* ---------- how the cargo travels ---------- */
 // km a day at a steady and at a forced pace; the chance a day of rain or of forced marching costs cargo.
 const TRANSPORT = {
     oxcart: { name: 'ox-carts', steady: 18, forced: 26, rain: 0.12, forcedLoss: 0.22, forcedMax: 1,
@@ -192,7 +186,6 @@ const TRANSPORT = {
         forcedText: n => 'Floating on through the night, a raft runs aground: ' + n + (n > 1 ? ' lasts' : ' last') + ' of rye lost.' },
     chest: { name: 'a light wagon', steady: 25, forced: 34, rain: 0, forcedLoss: 0 }
 };
-/* ---------- quests ---------- */
 const QUESTS = [
     { id: 'salt', title: 'Salt for the Leipzig fair', who: "On the company's own account", kind: 'venture', transport: 'oxcart',
         from: 'syvash', to: 'leipzig', start: dayOf(6, 9), deadline: dayOf(10, 23), until: 'the Michaelmas fair closes',
@@ -215,11 +208,11 @@ const QUESTS = [
         text: 'Six hundred thalers in an iron-bound chest, for the regiments King Władysław has led to the relief of Smolensk. Bring it to the camp by Michaelmas, when their pay falls due. The fee is yours on delivery, less anything missing from the chest.',
         opening: "The Crown's chest is chained to the wagon bed in Warsaw. Smolensk is a long way east." }
 ];
-const questOf = st => QUESTS.find(q => q.id === st.quest);
-const transportOf = st => TRANSPORT[questOf(st).transport];
-const here = st => PLACES[st.at];
+const questOf = (st) => QUESTS.find(q => q.id === st.quest); // a campaign always names a quest in QUESTS
+const transportOf = (st) => TRANSPORT[questOf(st).transport];
+const here = (st) => PLACES[st.at];
 const has = (st, k) => !!(SERVICES[here(st).kind] || {})[k];
-const atEnd = st => st.at === questOf(st).to;
+const atEnd = (st) => st.at === questOf(st).to;
 const cargoName = (st, n) => (n === 1 ? questOf(st).cargo.one : questOf(st).cargo.many);
 /* ---------- where the company stands ---------- */
 // How far along the journey, by straight distance: 0 at the start, 1 at the destination.
@@ -228,7 +221,7 @@ function progress(st) {
     return clamp(1 - kmBetween(here(st), to) / kmBetween(PLACES[q.from], to), 0, 1);
 }
 // Contracts and ambushes grow harder as the company nears its goal, as they did over the old 24 days.
-const threat = st => clamp(1 + Math.round(23 * progress(st)), 1, 24);
+const threat = (st) => clamp(1 + Math.round(23 * progress(st)), 1, 24);
 const legDays = (km, speed) => Math.max(1, Math.ceil(km / speed));
 function roadsFrom(st) {
     const T = transportOf(st), out = [];
@@ -306,9 +299,9 @@ function marketDays(st, r) {
     }
     return r.days;
 }
-const daysLeft = st => questOf(st).deadline - st.date;
-const lateDays = st => Math.max(0, st.date - questOf(st).deadline);
-const lateFactor = st => Math.max(0.5, 1 - 0.02 * lateDays(st));
+const daysLeft = (st) => questOf(st).deadline - st.date;
+const lateDays = (st) => Math.max(0, st.date - questOf(st).deadline);
+const lateFactor = (st) => Math.max(0.5, 1 - 0.02 * lateDays(st));
 // What a town on the way pays for one unit of cargo: little near the source, more as the road goes on.
 function unitPrice(st) {
     const q = questOf(st);
@@ -358,7 +351,7 @@ const AMBUSHES = {
 const AMBUSH_RATE = [0.005, 0.02, 0.04, 0.06];
 function makeAmbush(st, land, from) {
     const key = pick(LANDS[land].ambush), A = AMBUSHES[key];
-    const c = makeContract(st, Object.assign({ id: key, who: '', tier: 1, ai: 'charge' }, A), threat(st) < 6 ? 'easy' : 'fair');
+    const c = makeContract(st, Object.assign({ id: key, who: '', tier: 1, ai: 'charge' }, A), threat(st) < 6 ? 'easy' : 'fair'); // Object.assign and the payoff below make it one
     Object.assign(c, { ambush: true, grade: 'ambush', who: 'On the road from ' + from, pay: 0, renown: 2, ttl: 1, bonus: null, cap: ROSTER_MAX, weather: st.weather });
     const share = clamp(Math.ceil(st.cargo * (0.05 + 0.02 * c.units.length)), 1, Math.max(1, st.cargo));
     c.payoff = { cargo: share, coin: Math.round(share * unitPrice(st) * 1.25) };
