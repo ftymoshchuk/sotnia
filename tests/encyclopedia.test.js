@@ -4,33 +4,12 @@
  * these check is that nothing in them is left out of it, that its words and numbers are the game's, that its pictures differ
  * where the things they show differ, and that small type on the colours of a nation can be read. How the pages look is for the
  * eye (docs/figures.html and the browser); the way in and out of them is the browser's too. */
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { load, plain } = require('./canvas-stub');
 
-const ROOT = path.join(__dirname, '..');
-// a canvas that notes the rectangles painted on it and shrugs at the rest; its address is a hash of them, and how many there were
-const RECORDER = `
-const hash = s => { let a = 0xdeadbeef, b = 0x41c6ce57; for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); a = Math.imul(a ^ c, 2654435761); b = Math.imul(b ^ c, 1597334677); }
-  a = Math.imul(a ^ (a >>> 16), 2246822507) ^ Math.imul(b ^ (b >>> 13), 3266489909); b = Math.imul(b ^ (b >>> 16), 2246822507) ^ Math.imul(a ^ (a >>> 13), 3266489909); return (b >>> 0).toString(16) + (a >>> 0).toString(16); };
-function rec() {
-  const calls = [];
-  const g = { fillStyle: '#000', globalAlpha: 1, fillRect(x, y, w, h) { calls.push([x, y, w, h, this.fillStyle]); }, createRadialGradient: () => ({ addColorStop() {} }), createLinearGradient: () => ({ addColorStop() {} }) };
-  return { g: new Proxy(g, { get: (t, k) => (k in t ? t[k] : () => {}), set: (t, k, v) => { t[k] = v; return true; } }), calls };
-}
-const document = { createElement: () => { const { g, calls } = rec(); return { width: 0, height: 0, getContext: () => g, toDataURL: () => 'data:' + hash(JSON.stringify(calls)) + '-' + calls.length }; } };
-`;
-function book() {
-  const ctx = vm.createContext({});
-  vm.runInContext(RECORDER, ctx);
-  for (const f of ['js/core.js', 'js/journey.js', 'js/geo.js', 'js/art.js', 'js/figures.js', 'js/icons.js', 'js/screens.js', 'js/encyclopedia.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx, { filename: f });
-  return code => vm.runInContext(code, ctx);
-}
-// Values built inside the VM have its own Array and Object, which strict equality treats as different types.
-const plain = (r, code) => JSON.parse(r('JSON.stringify(' + code + ')'));
-const TABS = ['nations', 'units', 'foes', 'goods'];
+const book = () => load(['core', 'journey', 'geo', 'art', 'figures', 'terrain', 'icons', 'screens', 'encyclopedia']);
+const TABS = ['nations', 'units', 'foes', 'lands', 'goods'];
 const page = (r, tab) => { r(`ui.codex = ${JSON.stringify(tab)}`); return r('codexHTML()'); };
 // what a reader sees of a page: its words, one space apart
 const words = html => html.replace(/<[^>]*>/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/\s+/g, ' ');
@@ -144,7 +123,7 @@ test('the Train and goods tab has every hand, both supplies and every commission
 test('no page shows undefined, NaN, null or a stray object, and each tab opens its own page', () => {
   const r = book();
   const seen = TABS.map(t => { const h = page(r, t); assert.ok(!/undefined|NaN|\[object|\bnull\b/.test(words(h)), t); return h; });
-  assert.equal(new Set(seen).size, 4, 'four different pages');
+  assert.equal(new Set(seen).size, TABS.length, 'a different page for each tab');
   TABS.forEach((t, i) => {
     const sel = [...seen[i].matchAll(/data-k="(\w+)" aria-selected="true"/g)].map(m => m[1]);
     assert.deepEqual(sel, [t], `${t} is the one tab selected`);
@@ -184,4 +163,50 @@ test('a bar in the colour of a nation, or of a people, can be read: its ink has 
     assert.ok(x.every((v, i) => Math.abs(v - y[i]) <= 0.5 * Math.max(v, 255 - v)), `${coat} is kept near itself in ${b.bg}`);
     assert.ok(html.includes(`--n:${b.bg};--nt:${b.fg}`), `${coat} is used as ${b.bg}`);
   }
+});
+
+test('the Lands tab has every land with its places, its men, its dangers and its work, the three weathers, and every site', () => {
+  const r = book(), html = page(r, 'lands'), text = words(html), lower = text.toLowerCase();
+  const lands = plain(r, `Object.keys(LANDS).map(id => ({ id, name: LANDS[id].name, danger: LANDS[id].danger, foes: LANDS[id].ambush.map(a => AMBUSHES[a].foe), men: LANDS[id].origins.map(o => ORIGINS.find(x => x.id === o).label),
+    major: Object.keys(PLACES).filter(p => PLACES[p].land === id && PLACES[p].major).map(p => PLACES[p].name), work: TEMPLATES.filter(t => t.lands && t.lands.includes(id)).map(t => t.title) }))`);
+  assert.equal(cards(html, 'cxland').length, lands.length, 'a card for each land');
+  for (const l of lands) {
+    assert.ok(lower.includes(l.name.toLowerCase()), l.name);
+    for (const p of l.major) assert.ok(lower.includes(p.toLowerCase()), `${l.name}: ${p}`);
+    for (const f of l.foes) assert.ok(text.includes(f), `${l.name}: waylaid by ${f}`);
+    for (const m of l.men) assert.ok(text.includes(m), `${l.name}: ${m} sign on`);
+    for (const w of l.work) assert.ok(text.includes(w), `${l.name}: work ${w}`);
+    assert.ok(text.includes(plain(r, `DANGER[${l.danger}]`)), `${l.name}: danger`);
+  }
+  const [odds, misfire, range] = plain(r, '[WEATHER_ODDS, MISFIRE, MUSKET_RANGE]');
+  assert.equal(cards(html, 'cxweather').length, 3);
+  for (const w of ['clear', 'rain', 'fog']) {
+    assert.ok(text.includes(`${Math.round(100 * odds[w])} days in a hundred`), `${w}: how often`);
+    assert.ok(text.includes(`misfires ${Math.round(100 * misfire[w])} times in a hundred`), `${w}: misfires`);
+    assert.ok(text.includes(`carries ${range[w]} paces`), `${w}: range`);
+  }
+  const sites = plain(r, 'Object.keys(SITE_TEXT)');
+  assert.deepEqual([...sites].sort(), plain(r, 'Object.keys(SITE_ART)').sort(), 'every site that is drawn is described');
+  assert.equal(cards(html, 'cxsite').length, sites.length, 'a card for each site');
+  for (const id of sites) assert.ok(text.includes(plain(r, `SITE_TEXT.${id}.name`)), id);
+  // every piece of work that names a site is on the card of that site
+  for (const [tpl, site] of Object.entries(plain(r, 'SITE_OF'))) {
+    const title = tpl === 'final' ? 'The Black Regiment at the ford' : plain(r, `(TEMPLATES.find(t => t.id === '${tpl}') || AMBUSHES['${tpl}']).title`);
+    assert.ok(cards(html, 'cxsite').find(c => words(c).includes(plain(r, `SITE_TEXT.${site}.name`))).includes(title.replace(/&/g, '&amp;')) || words(cards(html, 'cxsite').find(c => words(c).includes(plain(r, `SITE_TEXT.${site}.name`)))).includes(title), `${tpl} at ${site}`);
+  }
+});
+
+test('the pictures of the Lands tab differ: each land, each weather, each site', () => {
+  const r = book(), html = page(r, 'lands');
+  const land = cards(html, 'cxland').map(c => pictures(c)[0]), wx = cards(html, 'cxweather').map(c => pictures(c)[0]), site = cards(html, 'cxsite').map(c => pictures(c)[0]);
+  for (const [name, set] of [['lands', land], ['weathers', wx], ['sites', site]]) { assert.ok(set.every(Boolean), name + ' have pictures'); assert.equal(new Set(set).size, set.length, `no two ${name} share a picture`); }
+  assert.ok(!wx.slice(1).some(p => land.includes(p)), 'a rainy day or a foggy one is not a clear day in a land');
+});
+
+test('a nation is shown in a land of its own and a people in its home country, and the way the lands are listed does not run on over an "and"', () => {
+  const r = book();
+  assert.deepEqual(Object.keys(plain(r, 'NATION_HOME')).sort(), plain(r, 'ORIGINS.map(o => o.id)').sort());
+  assert.deepEqual(Object.keys(plain(r, 'FOE_HOME')).sort(), Object.keys(plain(r, 'FOE_TEXT')).sort());
+  assert.equal(r("cxList(['Silesia', 'Saxony and Lusatia'])"), 'Silesia; Saxony and Lusatia');
+  assert.equal(r("cxList(['a', 'b', 'c'])"), 'a, b and c');
 });

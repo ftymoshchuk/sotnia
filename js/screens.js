@@ -456,7 +456,7 @@ function reportHTML() {
             s && s.promos ? ['star', 'Promotion earned'] : l.fate === 'fled' ? ['run', 'Ran from the field'] : l.fate === 'wounded' ? ['drop', 'Cut, but standing'] : ['check', 'Not a scratch'];
         return cardHTML({
             cls: 'fate' + (dead ? ' dead' : '') + (s && s.promos ? ' gilt' : ''), attrs: ' aria-label="' + esc(l.name + ': ' + F.word) + '"', title: esc(l.name),
-            art: fateArt(l), artCls: dead ? 'dead' : l.fate === 'struck down' ? 'hurt' : '',
+            art: fateArt(l, ui.c ? settingOf(G, ui.c).land : undefined), artCls: dead ? 'dead' : l.fate === 'struck down' ? 'hurt' : '',
             badges: '<span class="stamp ' + F.tone + '">' + ic(F.icon) + F.word + '</span>',
             body: '<span class="strip">' + stat('swords', l.kills, l.kills === 1 ? 'kill' : 'kills') + stat('star', l.xp ? '+' + l.xp : '—', 'experience') + '</span>' + fxLine(note),
             type: { look: dead ? 'grey' : LOOK[l.cls], text: CLS[l.cls].name }
@@ -605,7 +605,7 @@ function render() {
     ui.view = null;
     ui.camp = null;
     if (ui.screen === 'battle') {
-        ui.view = newView($('#field'), ui.c.id * 7919 + G.day * 31, ui.c.weather, true);
+        ui.view = newView($('#field'), ui.c.id * 7919 + G.day * 31, ui.c.weather, true, settingOf(G, ui.c));
         paintHud();
     }
     else if (ui.screen === 'title') {

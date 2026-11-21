@@ -1,5 +1,5 @@
 "use strict";
-const CODEX_TABS = [['nations', 'flag', 'Nations'], ['units', 'men', 'Units'], ['foes', 'swords', 'Foes'], ['goods', 'wagon', 'Train and goods']];
+const CODEX_TABS = [['nations', 'flag', 'Nations'], ['units', 'men', 'Units'], ['foes', 'swords', 'Foes'], ['lands', 'map', 'Lands'], ['goods', 'wagon', 'Train and goods']];
 /** What the way back says, by the screen the encyclopedia was opened from. */
 const BACK_WORD = { title: 'Back to the title', camp: 'Back to camp', muster: 'Back to the muster', report: 'Back to the report', end: 'Back to the ledger' };
 /**
@@ -45,11 +45,14 @@ const FOE_TEXT = {
     champion: { name: 'Hired blades', blurb: 'A neighbour who wants your contract will hire men to take it, and a gentleman’s quarrel is settled by one man from each side.', also: 'An affair of honour is a duel to the yield.', mix: ['sabre'] },
     black: { name: 'The Black Regiment', blurb: 'Colonel Krafft’s black-coats, who have sold their swords to the other side: picked men, drilled and well armed, met only at the end of a long road.', also: 'Holds the ford at the end of the road.', mix: ['pike', 'shot', 'sabre'] }
 };
+/** The land each nation and each people is shown in, as at home: where its men are most to be found, or met. */
+const NATION_HOME = { cossack: 'steppe', pole: 'poland', german: 'saxony', swede: 'silesia', scot: 'prussia', magyar: 'poland', croat: 'silesia', tatar: 'lithuania' };
+const FOE_HOME = { imperial: 'silesia', swede: 'saxony', muscovite: 'front', tatar: 'steppe', croat: 'silesia', bandit: 'poland', deserter: 'lithuania', raider: 'ukraine', champion: 'poland', black: 'saxony' };
 /** What a cap is called, and what a nation's mark is. */
 const HEAD_NAME = { morion: 'a morion', hat: 'a broad felt hat', kolpak: 'a fur kolpak', kalpak: 'a tall kalpak', bonnet: 'a blue bonnet', tatar: 'a turban' };
 const MARK_TEXT = { plaid: 'a tartan plaid hung from the shoulders', hanging: 'a sleeve thrown back from the shoulder', cravat: 'a red cravat', braid: 'white braid across the chest', slashes: 'slashed sleeves' };
-/** "a, b and c". */
-const cxList = (a) => (a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0] || '');
+/** "a, b and c"; where a name has an "and" of its own, "a; b and c; d". */
+const cxList = (a) => (a.some(x => / and /.test(x)) ? a.join('; ') : a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0] || '');
 /** A colour (#rrggbb) as its red, green and blue, each from 0 to 255. */
 const cxRGB = (hex) => { const n = parseInt(hex.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
 /** How bright a colour is to the eye, from 0 to 1 (the relative luminance of WCAG 2). */
@@ -97,7 +100,7 @@ function codexNation(o) {
     const names = [0, 1, 2].map(i => o.first[i] + ' ' + o.last[i]).join(', ');
     return cardHTML({
         cls: 'cxnation', attrs: ' aria-label="' + esc(o.label) + '"', title: esc(o.label) + '<small>' + esc(cxList(cs.map(c => CLASS_MEN[c]))) + '</small>',
-        art: nationArt(o), artCls: 'squad',
+        art: nationArt(o, NATION_HOME[o.id]), artCls: 'squad',
         body: '<span class="flavour">' + esc(T.blurb) + '</span>' + cxLine('eye', T.dress) +
             '<span class="colours">' + flagHTML(o.label) + cxSwatches(o.id) + '</span>' +
             cxLine('map', 'Signs on in ' + cxList(lands) + '.') + cxLine('men', names + '…'),
@@ -135,7 +138,7 @@ function codexUnit(o, cls) {
     const d = dressFor({ cls, skin: 'own', nation: o.id }), name = o.label + ' ' + CLS[cls].name;
     return cardHTML({
         cls: 'cxunit', attrs: ' aria-label="' + esc(name) + '"', title: esc(name) + '<small>from the ' + esc(WPN[cls][0].toLowerCase()) + ' to the ' + esc(WPN[cls][3].toLowerCase()) + '</small>',
-        art: unitArt(o, cls), artCls: 'squad',
+        art: unitArt(o, cls, NATION_HOME[o.id]), artCls: 'squad',
         body: cxLine('eye', 'Head: ' + HEAD_NAME[d.head] + '.') + (d.mark ? cxLine('star', 'Mark: ' + MARK_TEXT[d.mark] + '.') : '') +
             '<span class="colours">' + flagHTML(o.label) + cxSwatches(o.id) + '</span>',
         type: { look: LOOK[cls], text: o.label }
@@ -180,7 +183,7 @@ function codexFoe(skin) {
     const lands = Object.keys(LANDS).filter(l => LANDS[l].ambush.some(a => AMBUSHES[a].skin === skin)).map(l => LANDS[l].name);
     const jobs = TEMPLATES.filter(t => t.skin === skin).map(t => '“' + t.title + '”');
     return cardHTML({
-        cls: 'cxfoe', attrs: ' aria-label="' + esc(T.name) + '"', title: esc(T.name), art: peopleArt(skin, cs, 1), artCls: 'squad',
+        cls: 'cxfoe', attrs: ' aria-label="' + esc(T.name) + '"', title: esc(T.name), art: peopleArt(skin, cs, 1, FOE_HOME[skin]), artCls: 'squad',
         body: '<span class="flavour">' + esc(T.blurb) + '</span>' + (lands.length ? cxLine('map', 'Waylays trains in ' + cxList(lands) + '.') : '') +
             (jobs.length ? cxLine('scroll', 'Hired against in ' + cxList(jobs) + '.') : '') + (T.also ? cxLine('swords', T.also) : ''),
         type: { look: 'nation', style: cxBarStyle(coat), text: cs.map(c => CLS[c].name).join(' · ') }
@@ -190,7 +193,7 @@ function codexTier(t) {
     const gear = Math.max(0, t - 1);
     return cardHTML({
         cls: 'cxtier', attrs: ' aria-label="' + esc(cap1(TIER[t])) + '"', title: esc(cap1(TIER[t])) + '<small>' + (gear ? 'level ' + gear + ' arms and armour' : t ? 'the same arms, better drilled' : 'the arms and armour a man starts with') + '</small>',
-        art: peopleArt('imperial', ['pike', 'shot'], t), artCls: 'squad',
+        art: peopleArt('imperial', ['pike', 'shot'], t, 'silesia'), artCls: 'squad',
         body: '<span class="strip">' + stat('heart', Math.round(100 * TVIG[t]) + '%', 'Vigour, against a man of the same class in the company') + stat('swords', cxSigned(TSK[t]), 'To skill and to guard') + stat('flame', TMOR[t], 'Spirit at the start') + stat('cuirass', gear, 'Level of arms and armour') + '</span>',
         type: { look: ['grey', 'ink', 'weld', 'madder'][t], text: cap1(TIER[t]) }
     });
@@ -200,11 +203,99 @@ function codexFoes() {
     return '<section>' + sectHTML('Peoples met on the road', 'who waylays a train, and who is hired against') + '<div class="cards wide">' + people.map(codexFoe).join('') + '</div></section>' +
         '<section>' + sectHTML('How well drilled', 'every foe has a degree of drill, and the arms that go with it') + '<div class="cards wide">' + TIER.map((_, t) => codexTier(t)).join('') + '</div></section>';
 }
+/* ---------- the lands ---------- */
+/** What is said of each land: what it is called by the eye, and what the traveller sees in it (the pictures are drawn from TERRAINS in terrain.ts). */
+const LAND_TEXT = {
+    steppe: { epithet: 'Open grass', blurb: 'The Wild Fields, where the Dnieper runs out into grass and the Crimean khan’s horse rides. There is nothing to stand behind: a burial mound with its stone woman, a Cossack watchtower with a tar barrel on a pole, a lone thorn tree, a well with its sweep, a herd far off. Feather grass reaches the stirrup.' },
+    ukraine: { epithet: 'Villages and willows', blurb: 'Rolling country of whitewashed huts under thatch, willows by the ponds, windmills on the rises and wooden churches with their three domes. Black earth is ploughed up to the doors, and the haystacks stand until the snow.' },
+    poland: { epithet: 'The Crown’s plain', blurb: 'Wide ploughland and birch groves under a high sky: a village church with its spire, thatched cottages, a storks’ nest on a pole, a manor behind its wall, windmills, and a wayside cross where the roads part.' },
+    prussia: { epithet: 'Dykes, dunes and sails', blurb: 'The Vistula delta and the Baltic shore: flat country behind its dykes, ditches full of reeds, a brick church with its steep spire and a Dutch tower mill, pines on the dunes, and ships standing out on the grey water.' },
+    lithuania: { epithet: 'Forest and lake', blurb: 'The Grand Duchy: wall after wall of spruce and pine, with log huts and a small wooden chapel in the clearings, birches, boulders and bracken, and still lakes the mist comes off.' },
+    front: { epithet: 'Siege lines', blurb: 'Before Smolensk the country has been dug over: earthworks with their gabions and guns, tents in rows, smoke from burning villages and bare trees, and, on its hill, the walled city with its towers, which the Crown’s army has come to relieve.' },
+    silesia: { epithet: 'Hills and burnt farms', blurb: 'The Emperor’s hills under the blue line of the mountains: a castle on its rise, half-timbered farms and a church spire, and everywhere the marks of fifteen years of war, roofless houses, smoke, and a gibbet at the crossroads.' },
+    saxony: { epithet: 'The Elbe valley', blurb: 'Vineyards on the slopes, half-timbered houses round a church, a castle on its rock or a windmill, hop poles in the fields, and the Elbe behind them with its barges and reeds.' }
+};
+/** What is said of each place a fight is fought at, besides the land: the work that is done there is read from SITE_OF. */
+const SITE_TEXT = {
+    ford: { name: 'The ford', blurb: 'A shallow crossing, with stepping stones and reeds on both banks, where horse and foot must wade and whoever waits in the reeds fires first.' },
+    river: { name: 'The riverbank', blurb: 'A broad river and its reeds, with rafts of grain and boats tied up along the bank.' },
+    mill: { name: 'The burnt mill', blurb: 'The stump of a mill with its sails burned off, smoke still rising, and a dead tree beside it: good cover for men with powder.' },
+    toll: { name: 'The toll house', blurb: 'A toll house at the end of a plank bridge over a stream, its barrier pole across the road.' },
+    wagons: { name: 'The wagon road', blurb: 'A convoy of covered wagons strung out along a rutted road.' },
+    pond: { name: 'The mill-pond', blurb: 'A pond held back by a weir, with a watermill and its wheel at one end.' },
+    picket: { name: 'The picket', blurb: 'A crossroads with its signpost, a palisade of stakes, and the tents of a picket in a row.' },
+    forage: { name: 'The foragers’ farm', blurb: 'A barn and its haystacks, and a cart standing loaded, where an army that lives off the country is helping itself.' },
+    burning: { name: 'The burning village', blurb: 'Thatched huts on fire, smoke in columns, and cattle being driven off to one side.' },
+    manor: { name: 'The manor', blurb: 'A manor behind its low wall, shaded by oaks, with a cellar worth holding.' },
+    blockhouse: { name: 'The blockhouse', blurb: 'A log blockhouse behind a palisade of stakes, put up to hold a road.' },
+    road: { name: 'The wayside', blurb: 'A rutted road, a wayside cross, and a couple of carts standing on it.' },
+    ravine: { name: 'The ravine', blurb: 'A cleft cut across the hills, where the road narrows, with scrub on its lip and rocks at its foot.' },
+    edge: { name: 'The edge of the forest', blurb: 'The first trees of a forest close at one side of the road, with bushes in front of them and the light behind.' }
+};
+/** What each weather does to a fight, beyond the picture: read from MISFIRE, MUSKET_RANGE and WEATHER_ODDS. */
+const WEATHER_TEXT = {
+    clear: 'The sun is out and the air is clear. A musket does its work as it should.',
+    rain: 'A grey sky, puddles standing on the ground and the colours washed out. Matchlocks misfire in the wet.',
+    fog: 'Fog on the hills and the far country gone, so that the landmarks are ghosts. Muskets carry a little over half as far and aim worse.'
+};
+/** The place's names for the lands' towns and camps, major ones first. */
+const cxPlaces = (id) => {
+    const here = Object.keys(PLACES).filter(p => PLACES[p].land === id), major = here.filter(p => PLACES[p].major).map(p => PLACES[p].name), minor = here.length - major.length;
+    return cxList(minor ? [...major, minor === 1 ? 'one more' : minor + ' more'] : major) + '.';
+};
+function codexLand(id) {
+    const L = LANDS[id], T = LAND_TEXT[id];
+    const origins = L.origins.map(o => ORIGINS.find(x => x.id === o).label), work = TEMPLATES.filter(t => t.lands && t.lands.includes(id)).map(t => '“' + t.title + '”');
+    return cardHTML({
+        cls: 'cxland', attrs: ' aria-label="' + esc(L.name) + '"', title: esc(cap1(L.name)) + '<small>' + esc(T.epithet) + '</small>',
+        art: landArt(id), artCls: 'panorama',
+        body: '<span class="flavour">' + esc(T.blurb) + '</span>' + cxLine('map', cap1(cxPlaces(id))) +
+            '<span class="line">' + ic('men') + '<span class="colours">' + L.origins.map(o => flagHTML(ORIGINS.find(x => x.id === o).label)).join('') + '<span>Men sign on here: ' + esc(cxList(origins)) + '.</span></span></span>' +
+            cxLine('swords', 'Trains are waylaid by ' + cxList(L.ambush.map(a => AMBUSHES[a].foe)) + '.') + (work.length ? cxLine('scroll', 'Work posted: ' + cxList(work) + '.') : '') +
+            '<span class="line">' + ic('warn') + '<span>' + pips(L.danger, 3, DANGER[L.danger]) + ' ' + esc(DANGER[L.danger]) + '</span></span>',
+        type: { look: 'nation', style: cxBarStyle(TONES[id].mark), text: esc(T.epithet) }
+    });
+}
+function codexWeather(w) {
+    const odds = Math.round(100 * WEATHER_ODDS[w]), icon = w === 'clear' ? 'sun' : w;
+    return cardHTML({
+        cls: 'cxweather', attrs: ' aria-label="' + esc(WEATHER[w]) + '"', title: esc(cap1(w)) + '<small>' + odds + ' days in a hundred</small>', art: landArt('poland', w), artCls: 'panorama',
+        body: '<span class="flavour">' + esc(WEATHER_TEXT[w]) + '</span>' +
+            cxLine('shot', 'A shot misfires ' + Math.round(100 * MISFIRE[w]) + ' times in a hundred.') + cxLine('eye', 'A musket carries ' + MUSKET_RANGE[w] + ' paces' + (w === 'fog' ? ', and ' + Math.round(100 * FOG_AIM) + ' in a hundred fewer shots find their man.' : '.')),
+        type: { look: w === 'clear' ? 'weld' : w === 'rain' ? 'woad' : 'grey', text: ic(icon) + esc(cap1(w)) }
+    });
+}
+function codexSite(id) {
+    const T = SITE_TEXT[id];
+    const tpls = Object.keys(SITE_OF).filter(k => SITE_OF[k] === id);
+    const names = [...new Set(tpls.map(k => k === 'final' ? 'The Black Regiment at the ford' : (TEMPLATES.find(t => t.id === k) || AMBUSHES[k]).title))];
+    const lands = new Set();
+    for (const k of tpls) {
+        const t = TEMPLATES.find(x => x.id === k);
+        if (t && t.lands)
+            t.lands.forEach(l => lands.add(l));
+        for (const l of Object.keys(LANDS))
+            if (LANDS[l].ambush.includes(k))
+                lands.add(l);
+    }
+    const home = [...lands][0] || 'poland';
+    return cardHTML({
+        cls: 'cxsite', attrs: ' aria-label="' + esc(T.name) + '"', title: esc(T.name), art: siteArt(id, home), artCls: 'squad',
+        body: '<span class="flavour">' + esc(T.blurb) + '</span>' + cxLine('scroll', 'Fought for: ' + cxList(names.map(n => '“' + n + '”')) + '.') + (lands.size ? cxLine('map', 'Seen in ' + cxList([...lands].map(l => LANDS[l].name)) + '.') : ''),
+        type: { look: 'ink', text: esc(T.name) }
+    });
+}
+function codexLands() {
+    const lands = Object.keys(LANDS), sites = Object.keys(SITE_TEXT);
+    return '<section>' + sectHTML('The lands of the road', 'what each looks like, and who is in it') + '<div class="cards lands">' + lands.map(codexLand).join('') + '</div></section>' +
+        '<section>' + sectHTML('The weather', 'the same country on three days') + '<div class="cards wide">' + ['clear', 'rain', 'fog'].map(codexWeather).join('') + '</div></section>' +
+        '<section>' + sectHTML('Where a fight is fought', 'a piece of work, or an ambush, may name the place') + '<div class="cards wide">' + sites.map(codexSite).join('') + '</div></section>';
+}
 /* ---------- the train and the goods ---------- */
 function codexHand(k) {
     const s = STAFF[k];
     return cardHTML({
-        cls: 'cxhand', attrs: ' aria-label="' + esc(s.name) + '"', title: esc(s.name), art: staffArt(k), body: STAFF_FX[k].map(fxLine).join(''),
+        cls: 'cxhand', attrs: ' aria-label="' + esc(s.name) + '"', title: esc(s.name), art: staffArt(k, 'poland'), body: STAFF_FX[k].map(fxLine).join(''),
         type: { look: 'moss', text: '+' + s.wage + ' a month', coin: s.fee, coinLabel: 'Fee to engage, thalers' }
     });
 }
@@ -225,7 +316,7 @@ function codexGoods() {
 function codexHTML() {
     const back = BACK_WORD[ui.codexFrom] || 'Back';
     return '<div class="codex"><div class="codex-head"><button class="btn ghost" data-act="codexBack">' + ic('retreat') + esc(back) + '</button>' +
-        '<div><h2 class="codex-title">Encyclopedia</h2><p class="codex-sub">The nations of the company and the men they send, the arms and armour a man can come to, the foes on the road, and the baggage train.</p></div></div>' +
+        '<div><h2 class="codex-title">Encyclopedia</h2><p class="codex-sub">The nations of the company and the men they send, the arms and armour a man can come to, the foes on the road, the lands they are met in, and the baggage train.</p></div></div>' +
         '<nav class="tabs" role="tablist" aria-label="The encyclopedia">' + CODEX_TABS.map(t => '<button role="tab" data-act="codexTab" data-k="' + t[0] + '" aria-selected="' + (ui.codex === t[0]) + '">' + ic(t[1]) + t[2] + '</button>').join('') + '</nav>' +
-        '<div class="panel" role="tabpanel">' + (ui.codex === 'nations' ? codexNations() : ui.codex === 'units' ? codexUnits() : ui.codex === 'foes' ? codexFoes() : codexGoods()) + '</div></div>';
+        '<div class="panel" role="tabpanel">' + (ui.codex === 'nations' ? codexNations() : ui.codex === 'units' ? codexUnits() : ui.codex === 'foes' ? codexFoes() : ui.codex === 'lands' ? codexLands() : codexGoods()) + '</div></div>';
 }

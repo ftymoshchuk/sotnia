@@ -37,8 +37,9 @@ npm run typecheck   # check the types without writing anything
 | `src/core.ts` | The rules of the company, with no DOM: troop classes, origins, traits, soldiers, economy, contracts, the battle simulation, scouting odds, aftermath and camp events |
 | `src/journey.ts` | The rules of the road, with no DOM: the calendar, the lands, places and roads of 1633, quests, travel days, cargo, ambushes, selling and delivery |
 | `src/geo.ts` | Coastlines and rivers for the map (drawing data only) |
-| `src/art.ts` | Palette, the woodcut backdrop, the battlefield and its particles, the camp at night, the pictures on the cards, and the map |
+| `src/art.ts` | Palette, the battlefield and its particles, the camp at night, the pictures on the cards, and the map |
 | `src/figures.ts` | Every man, hired hand and foe, drawn at twice the pixels of the scene around him and dressed in the colours of his nation and the weapon and armour he has bought; the pictures of gear for the cards; and the call that puts a scene on the screen |
+| `src/terrain.ts` | The scenery behind a fight, drawn as finely as the figures: the hills, trees, buildings and ground of each land in each weather, the places a piece of work can put a fight at, and the skyline the camp stands against by night |
 | `src/music.ts` | The music engine, which knows nothing of the game: it reads a score, composes as it plays and synthesises every note with Web Audio (there are no recordings) |
 | `src/score.ts` | The game's music, written out: the journey's pieces, the muster, the fight and the flourishes after it |
 | `src/audio.ts` | Sound effects, and starting the right music for each screen |
@@ -48,9 +49,10 @@ npm run typecheck   # check the types without writing anything
 | `src/main.ts` | Click and key handling, the frame loop and boot |
 | `js/` | The scripts the page loads, one for each file in `src/`, written by `npm run build`. Generated: never edited by hand |
 | `package.json`, `tsconfig.json` | TypeScript, the only dependency, and the compiler settings: strict, with every file a script (see below) |
-| `tests/` | Headless tests of the rules, the music, the figures and the encyclopedia (they load the compiled `js/`), and the guard that keeps every workflow action pinned |
+| `tests/` | Headless tests of the rules, the music, the figures, the terrain and the encyclopedia (they load the compiled `js/`), and the guard that keeps every workflow action pinned |
 | `.github/` | CI, which ends in the `ci-passed` check, and Dependabot for the action pins and TypeScript |
 | `docs/figures.html` | A sheet of every figure, weapon and piece of armour, drawn by the game's own scripts: open it after `npm run build`, or with `?zoom=6` for larger pixels |
+| `docs/lands.html` | A sheet of every land in every weather, the sites a fight can be fought at, and the camp's skylines by night, drawn the same way; `?zoom=2` for larger |
 | `docs/default-branch.ruleset.json` | The branch rules for `main` |
 | `scripts/apply-ruleset.sh` | Puts those rules on the repository, and checks them |
 
@@ -69,8 +71,10 @@ Keep `src/core.ts` and `src/journey.ts` free of DOM access. The scouts' odds com
 - **The look:** every man, recruit, supply, job, member of the baggage train, opening order and fallen man is a card, built by `cardHTML()` in `src/screens.ts`: a name banner, a picture, the body, and a type bar coloured by kind, with the price or wage on a coin at its left. Icons stand in for words wherever a number says enough; the word stays for screen readers and on hover.
 - **Kit:** each man has a weapon level and an armour level, `wpn` and `arm`, from 0 to 3. Their names are `WPN` (for each class) and `ARM`, their prices `GEAR_COST`, and `upgrade()` buys the next level. The levels change what he does in a fight (`wpn` adds to the damage of his blows, `arm` to the armour that turns them) and what he looks like: see [Figures](#figures). A card shows each slot as a ladder of its four pieces (`gearHTML()` in `src/screens.ts`), and shows the man in the next piece while its button is under the pointer. Foes wear the gear of their tier.
 - **Nations:** every man of the company is dressed as his nation, the `Origin` he was raised from. `NATIONS` in `src/figures.ts` gives each its colours, its legs and boots, what it wears on its head, and the one thing in its dress that no other nation has (see [Figures](#figures)). The same table dresses the foes who are a people of their own, by their skins: `swede`, `imperial`, `muscovite`, `tatar` and `croat`. A card shows the colours of a man's country as a little flag before the name of his nation (`flagOf()`).
-- **The encyclopedia:** `codexHTML()` in `src/encyclopedia.ts` builds its four tabs (nations, units, foes, train and goods) out of the tables the rules run on (`ORIGINS`, `CLS`, `WPN`, `ARM`, `GEAR_COST`, `TRAITS`, `AMBUSHES`, `TEMPLATES`, `TIER`, `STAFF`, `QUESTS`, and `NATIONS` for dress), so a nation, a weapon or a foe added to a table turns up on its page by itself. The words the tables lack are `NATION_TEXT` and `FOE_TEXT`, `Record`s over the ids, so one left out fails to compile. The numbers of the gear rules are named constants in `src/core.ts` (`WPN_BLOW`, `WPN_BALL`, `ARM_PLATE`, `BALL_DMG`) that the battle and the page both read, so they cannot disagree. Its pictures are `nationArt()`, `unitArt()`, `classArt()`, `armourArt()` and `peopleArt()` in `src/art.ts`. It opens from the title's button or the book in the top bar (never in a battle); Esc or its back button return to the screen it was opened from, and `#encyclopedia`, `#encyclopedia-units`, `-foes` and `-goods` link to a tab.
-- **The camp:** `campPlan()` in `src/art.ts` puts each man where his order sends him (by the fire to rest, the drill yard, out foraging, or abed by the tent), and `drawCamp()` draws the night, the fire and the men walking between places. The slots are in `CAMP`.
+- **The encyclopedia:** `codexHTML()` in `src/encyclopedia.ts` builds its five tabs (nations, units, foes, lands, train and goods) out of the tables the rules run on (`ORIGINS`, `CLS`, `WPN`, `ARM`, `GEAR_COST`, `TRAITS`, `AMBUSHES`, `TEMPLATES`, `TIER`, `STAFF`, `QUESTS`, `LANDS`, `PLACES`, `SITE_OF`, the weather's constants, and `NATIONS` for dress), so a nation, a weapon or a foe added to a table turns up on its page by itself. The words the tables lack are `NATION_TEXT`, `FOE_TEXT`, `LAND_TEXT`, `SITE_TEXT` and `WEATHER_TEXT`, `Record`s over the ids, so one left out fails to compile. The numbers of the gear rules are named constants in `src/core.ts` (`WPN_BLOW`, `WPN_BALL`, `ARM_PLATE`, `BALL_DMG`) that the battle and the page both read, so they cannot disagree. Its pictures are `nationArt()`, `unitArt()`, `classArt()`, `armourArt()` and `peopleArt()` in `src/art.ts`. It opens from the title's button or the book in the top bar (never in a battle); Esc or its back button return to the screen it was opened from, and `#encyclopedia`, `#encyclopedia-units`, `-foes`, `-lands` and `-goods` link to a tab.
+- **Terrain:** the scenery behind a fight is the land it is fought in. A contract and an ambush carry their `land` (the company's place stands for it in a contract saved before they did), and `settingOf()` in `src/terrain.ts` turns one into a `Setting`: the land, and the site its work names (`SITE_OF`). `TONES`, `LAND_ART` and `SITE_ART` hold the colours, the drawing of each land and of each site, `Record`s over the ids, so a land or a site added without its drawing fails to compile (and `LAND_TEXT`, `SITE_TEXT` and the homes of nations and peoples in `src/encyclopedia.ts` likewise). `PROPS` are the things that stand in a land, and `makeBackdrop()` draws the lot. See [Terrain](#terrain).
+- **The weather:** `WEATHER_ODDS`, `MISFIRE`, `MUSKET_RANGE` and `FOG_AIM` in `src/core.ts` are what the day's weather does to a fight and how often each is dealt; the battle plays by them and the encyclopedia quotes them. How a weather looks is `weatherTone()` and `weatherArt()` in `src/terrain.ts`, and the rain and the moving fog drawn over the field as it is played, `drawField()` in `src/art.ts`.
+- **The camp:** `campPlan()` in `src/art.ts` puts each man where his order sends him (by the fire to rest, the drill yard, out foraging, or abed by the tent), and `drawCamp()` draws the night, the fire and the men walking between places. The slots are in `CAMP`, and the skyline is the land's (`skylineOf()`).
 - **Music:** what plays is in `src/score.ts`: each piece's ground, tunes and figures, and the cues that say which pieces play on which screen and how loud each cue is against the others. `MUSIC_LEVEL` in `src/audio.ts` sets the loudness of all of it, and the instruments are `SOUNDS` in `src/music.ts`. See [Music](#music).
 - **Saves:** the state built by `newGame()` is a `Campaign` (in `src/journey.ts`) and carries `v: 2`, and `loadSave()` ignores any other version. Bump it when the shape of `Campaign` changes, so old saves are dropped instead of loading broken.
 - **Types:** each shape the game passes around is named beside the code that builds it: `Soldier`, `Battle`, `Contract` and `CampEvent` in `src/core.ts`; `Place`, `Road`, `Quest` and the saved `Campaign` in `src/journey.ts`; the interface's `UiState` in `src/screens.ts`; the format of a `Score` in `src/score.ts`. Ids are unions of strings and the lookup tables are `Record`s over them, so a misspelt place, land or troop class fails to compile. The campaign global `G` is `Campaign | null`, since it is null on the title screen, which is why the screens write `G!`.
@@ -114,7 +118,17 @@ It also plays every cue for ten minutes against `tests/webaudio-stub.js`, a stan
 - the ink on a bar in the colour of a nation can be read (contrast of at least 4.5), and the colour is kept as near itself as that allows;
 - the way into it is on every screen but the battle, and the way out of it is worded for each screen it can be opened from.
 
+It also checks the Lands tab: every land with its places, its men, its dangers and its work, the three weathers with the numbers the battle plays by, and every site with the work fought there, each with a picture of its own.
+
 Its clicks, Escape and addresses (`act()` and `start()` in `src/main.ts`) need a page, so these tests do not cover them.
+
+`tests/terrain.test.js` loads the terrain the same way, onto a canvas that records what is painted (`tests/canvas-stub.js`, which the encyclopedia's tests use too), and checks that:
+
+- every land has a drawing and its colours, and is drawn in every weather as a picture of its own, the same each time and different from another seed's;
+- a site is drawn over its land and says where it stands, every piece of work that names a site names one that exists, and every site is used;
+- a contract and an ambush are fought in the land they are posted in, an old contract falls back on where the company stands, and a duel is fought where the company is;
+- the camp's skyline, a card's landscape and a man's picture follow the land;
+- the odds and the rules of the weather the page quotes are those the battle plays by.
 
 `main` carries the same branch ruleset as the Sigrix public repositories (see `docs/new-repository.md` in `sigrix-io/actions`):
 
@@ -161,7 +175,7 @@ src.connect(ac.destination); src.start();
 
 ## Figures
 
-`src/figures.ts` draws every man. A figure has twice the pixels of the scene it stands in (`SS`, so a man is about 40 pixels tall where he used to be 18), which is room for a buckle, the lock of a musket and the comb of a helmet. The woodcut backdrops keep their coarse pixels and the men stand in front of them. A scene that holds figures keeps a canvas `SS` times larger, made by `sceneCanvas()`, whose context is scaled so that the scene's own coordinates draw as before; the field, the camp and every card picture are made so. `present()` puts such a buffer on the screen, blowing it up by a whole number before shrinking it the rest of the way, so that its pixels are all the same size on a screen that is not a whole number of times as big.
+`src/figures.ts` draws every man. A figure has twice the pixels of the scene it stands in (`SS`, so a man is about 40 pixels tall where he used to be 18), which is room for a buckle, the lock of a musket and the comb of a helmet. The backdrops are drawn that fine too (see [Terrain](#terrain)). A scene that holds figures keeps a canvas `SS` times larger, made by `sceneCanvas()`, whose context is scaled so that the scene's own coordinates draw as before; the field, the camp and every card picture are made so. `present()` puts such a buffer on the screen, blowing it up by a whole number before shrinking it the rest of the way, so that its pixels are all the same size on a screen that is not a whole number of times as big.
 
 A figure is layers, drawn from the feet up in pixels from his feet (x forward, y up as a negative number), so that a man who faces left is the same drawing mirrored: legs, the coat and whatever armour he wears over it (`torso()`), his head, what is on it (`hat()`), his weapon, and his arms. `drawSoldier()` is given what he is (`cls`, his livery `skin`), what he has (`wpn`, `arm`, levels 0 to 3), which man he is (`man`, which settles his hair and moustache), and what he is doing (`mode`, `moving`, `swing`, `flash`; see `SoldierLook` in `src/art.ts`). `drawCamper()` adds the poses of camp, and `drawCivilian()` the hired hands.
 
@@ -195,6 +209,37 @@ The foes with a dress of their own are the Swedes, the Imperials, the Muscovites
 
 To add a level or change one, edit the part for its class (`musketArt()`, `pikeArt()` or `sabreArt()` in the frame of the weapon itself: `a` runs along it from the butt and `c` across it, so one drawing serves a musket held level and held upright) or `torso()`. To add a pose, add a branch to `drawSoldier()`; the figure tests then draw it in every kit and check that it fits. `gearArt()` draws the pictures of weapons and armour that the cards show in their ladders, from the same code. Open `docs/figures.html` to see everything at once.
 
+## Terrain
+
+The backdrop of a fight is the land it is fought in. `src/terrain.ts` draws it at twice the pixels of the scene, as the figures are (`SS`), onto a canvas of 600 by 248 of them with the horizon where it always was, so that the men stand where they did, in the lower half of the picture. What is drawn there is kept quiet; the landmarks stand on the hills, along the horizon and a little below it.
+
+A land is drawn in this order: the sky (bands of tone from the zenith to the haze, ruled across as an engraver would, the sun and the strokes of the clouds), the far hills, the near hills (a sum of waves, which the landmarks stand on), the landmarks, the ground (the horizon and its gradient) and what lies on it. `place()` spaces a land's landmarks along the picture in an order the seed deals, so that no two fights look alike. The colours are in `TONES`, pale as the paper of the old backdrops was, so that the ink does the drawing and the tone only says which country it is. Everything that stands (`PROPS`: trees, houses, churches, mills, towers, tents, wagons) is made of a few shapes (`rect`, `line`, `disc`, `poly`) in ink, with a flat fill and the hatching an engraver gives a roof.
+
+| Land | What stands in it |
+| --- | --- |
+| The Wild Fields | an almost flat horizon; burial mounds, one with its stone woman and one with a Cossack watchtower; a lone thorn tree; a herd far off; a well with its sweep; feather grass |
+| Ukraine | rolling hills; a hamlet of whitewashed huts under thatch, between willows; a wooden church of three domes or a windmill, or both; poplars; a ploughed field and haystacks |
+| The Crown of Poland | a village church with its spire and its cottages, a storks' nest on a pole, a windmill or a manor, a birch grove, a wayside cross, a ploughed field |
+| Royal Prussia | a dyke; the Baltic with ships on it, at one side; a brick church with a steep spire, half-timbered houses, a Dutch tower mill, pines; a ditch with reeds |
+| Lithuania | walls of spruce and pine along the hills; a clearing with log huts and a wooden chapel; a lake; boulders, ferns and birches |
+| The Smolensk front | the walled city with its towers on its hill; earthworks with gabions and a gun; tents; smoke from burning villages; bare trees; wagons |
+| Silesia | blue mountains behind; a castle on its hill; a church and half-timbered farms among burnt ones, with smoke; an orchard; a gibbet |
+| Saxony and Lusatia | far hills; vineyards on the slope; half-timbered houses round a church; a castle or a windmill; the Elbe with a barge and its reeds; hop poles |
+
+### Weather
+
+`weatherTone()` greys and darkens a land's colours in rain and pales them in fog, and the sky has no sun and heavier clouds in either. `weatherArt()` then lays fog over everything that stands far off, the thicker the nearer the horizon, so that the landmarks are ghosts and the hills a pale smear, and stands puddles on the ground in rain. The rain falling and the banks of fog drifting are drawn over the field as it is played (`drawField()`). What the weather does to a fight is `MISFIRE`, `MUSKET_RANGE` and `FOG_AIM` in `src/core.ts`, which the encyclopedia quotes.
+
+### Sites
+
+Work that names a place is fought there: a contract by its template, an ambush by who lays it (`SITE_OF`). A site is drawn over its land: a ford (a river across the picture, with stepping stones and reeds), the riverbank with its rafts, a burnt mill, a toll house with its bridge, a convoy of wagons, a mill-pond with its watermill, a picket, the foragers' barn and ricks, a burning village, a manor, a blockhouse, the wayside, a ravine, the edge of a forest. Each says where along the picture it stands, so that the card of the work can show it.
+
+### Cards and camp
+
+The pictures on the cards are windows onto the same backdrops (`backdropOf()`, `landscape()`): the roll shows the land the company is in, a contract the land and the site of its work (the window is lifted to show the ground a site stands on), and a nation or a people in the encyclopedia the land it is shown in as at home. The camp at night keeps its own sky and stars and takes its skyline from the land (`skylineOf()`): the field's backdrop without its sky, as one dark shape.
+
+To add a land, add it to `LandId` and `LANDS`, and the compiler asks for its `TONES`, its `LAND_ART` and the rest. `docs/lands.html` shows every land in every weather, another day in each, every site, and the night skylines.
+
 ## Data
 
 Coastlines come from Natural Earth's 1:50m land, which is in the public domain. Dates are shown in both calendars of the time: Gregorian, kept in Catholic Poland, and Julian, ten days behind, kept in Saxony and Orthodox Ukraine.
@@ -211,6 +256,6 @@ The next commit split that file into separate files without changing the code. A
 
 Then the scripts became TypeScript: written in `src/` under `strict`, and compiled to the `js/` files the page loads. Nothing a player can see was meant to change, and three checks say nothing did. Each compiled script has the same syntax tree as the JavaScript it replaced (the comparison ignores layout and comments, but not a single name, operator or literal). Every comment of the original survives into `js/`. And a browser run that clicked through 1,600 steps of the old game, with fights, marches, trading and the map, is reproduced step for step by the new one. The last hand-written JavaScript is at `git show bca68a2:js/core.js`, and likewise for the other nine scripts.
 
-After that the men were redrawn at twice the pixels, and dressed in the weapon and armour they have bought: until then the rules had levels of gear but the picture never showed them. See [Figures](#figures). Then each was dressed in the colours of his nation (see [Nations](#nations)), and the encyclopedia was added: one place to see every nation, unit, weapon, foe and good of the game.
+After that the men were redrawn at twice the pixels, and dressed in the weapon and armour they have bought: until then the rules had levels of gear but the picture never showed them. See [Figures](#figures). Then each was dressed in the colours of his nation (see [Nations](#nations)), and the encyclopedia was added: one place to see every nation, unit, weapon, foe and good of the game. Last the backdrop was redrawn as the land the fight is in, at the same fineness as the men (see [Terrain](#terrain)), and the encyclopedia gained a tab for the lands.
 
 `src/main.ts` still checks for `window.claude.hot`. That only exists inside the Claude artifact runtime, where it keeps the campaign across hot reloads. Everywhere else it is absent and the game boots normally.

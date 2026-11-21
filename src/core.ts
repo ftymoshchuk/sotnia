@@ -298,7 +298,13 @@ const TEMPLATES: Template[] = [
 /** The day's weather, which is the battle's: rain makes matchlocks misfire, fog shortens musket range (see WEATHER). */
 type Weather = 'clear' | 'rain' | 'fog';
 const WEATHER: Record<Weather, string> = { clear: 'Clear', rain: 'Rain: matchlocks misfire', fog: 'Fog: short musket range' };
-function rollWeather(): Weather { const r = Math.random(); return r < 0.6 ? 'clear' : r < 0.82 ? 'rain' : 'fog'; }
+/** How a day's weather is dealt: the share of days that are each kind. */
+const WEATHER_ODDS: Record<Weather, number> = { clear: 0.6, rain: 0.22, fog: 0.18 };
+function rollWeather(): Weather { const r = Math.random(); return r < WEATHER_ODDS.clear ? 'clear' : r < WEATHER_ODDS.clear + WEATHER_ODDS.rain ? 'rain' : 'fog'; }
+/** What the weather does to a musket: the chance a shot misfires, how far it carries, and what fog takes off the chance of hitting. */
+const MISFIRE: Record<Weather, number> = { clear: 0.06, rain: 0.3, fog: 0.06 };
+const MUSKET_RANGE: Record<Weather, number> = { clear: 150, rain: 150, fog: 88 };
+const FOG_AIM = 0.06;
 /** A contract is offered in three grades. dq shifts the quality of the foe and pay scales the pay (dn is not read anywhere). */
 type Grade = 'easy' | 'fair' | 'hard';
 interface GradeInfo { dn: number; dq: number; pay: number }
@@ -310,6 +316,7 @@ interface Contract {
   tpl: TemplateId | AmbushId | 'duel' | 'final'; // what it was made from
   title: string; who: string; text: string; skin: Skin; foe: string; units: Foe[]; ai: Stance;
   grade: Grade | 'duel' | 'final' | 'ambush'; weather: Weather;
+  land?: LandId; // where it is fought (a contract saved before it was kept has none: the company's place stands for it)
   ttl: number; // days left on the board
   bonus: Bonus | null; pay: number; renown: number;
   cap: number; // the most men that may be sent
@@ -328,7 +335,7 @@ function makeContract(st: Campaign, tpl: Encounter, grade: Grade): Contract {
   units.sort((a, b2) => b2.tier - a.tier);
   return {
     id: st.nextId++, tpl: tpl.id, title: tpl.title, who: tpl.who, text: tpl.text, skin: tpl.skin, foe: tpl.foe,
-    units, ai: tpl.ai, grade, weather: rollWeather(), ttl: ri(2, 4), bonus: tpl.bonus || null,
+    units, ai: tpl.ai, grade, weather: rollWeather(), land: here(st).land, ttl: ri(2, 4), bonus: tpl.bonus || null,
     pay: Math.round((11 + 11 * powerOf(units)) * G.pay * (1 + st.renown / 250)),
     renown: grade === 'easy' ? 3 : grade === 'hard' ? 8 : 5,
     cap: clamp(n + (grade === 'easy' ? 1 : 0), 2, ROSTER_MAX)
@@ -342,7 +349,7 @@ function makeDuel(st: Campaign): Contract {
   return {
     id: st.nextId++, tpl: 'duel', duel: true, title: 'An affair of honour', who,
     text: 'Your banner has been called a rabble of horse-thieves at table. One man from each side, cold steel, until one yields.',
-    skin: 'champion', foe: 'a hired blade', units: [u], ai: 'advance', grade: 'duel', weather: 'clear', ttl: 2, bonus: null,
+    skin: 'champion', foe: 'a hired blade', units: [u], ai: 'advance', grade: 'duel', weather: 'clear', land: here(st).land, ttl: 2, bonus: null,
     pay: 22 + tl * 2, renown: 7, cap: 1
   };
 }
@@ -353,7 +360,7 @@ function finalContract(st: Campaign): Contract {
     id: st.nextId++, tpl: 'final', final: true, title: 'The Black Regiment at the ford', who: 'The Crown Hetman',
     text: "Colonel Krafft's black-coats have sold their swords to the other side and hold the only crossing. The Hetman's whole muster watches from the hill. Break them and your banner is made.",
     skin: 'black', foe: 'the Black Regiment', units: mix.map(m => enemyUnit(m[0], m[1], 'black')), ai: 'hold',
-    grade: 'final', weather: rollWeather(), ttl: 99, bonus: null, pay: 300, renown: 30, cap: ROSTER_MAX
+    grade: 'final', weather: rollWeather(), land: here(st).land, ttl: 99, bonus: null, pay: 300, renown: 30, cap: ROSTER_MAX
   };
 }
 function genContracts(st: Campaign) {
@@ -463,7 +470,7 @@ function makeBattle(ours: (Fighter & { id: number })[], theirs: Fighter[], o: Ba
   const b: Battle = {
     W: BW, D: BD, t: 0, units: [], stance: [o.stance || 'advance', o.ai === 'hold' ? 'hold' : o.ai || 'advance'],
     ai: o.ai || 'advance', underFire: false, weather: o.weather || 'clear', powder: o.powder || 0,
-    duel: !!o.duel, noShot: !!o.duel, range: o.weather === 'fog' ? 88 : 150, fx: [], log: [], vis: !!o.vis,
+    duel: !!o.duel, noShot: !!o.duel, range: MUSKET_RANGE[o.weather || 'clear'], fx: [], log: [], vis: !!o.vis,
     over: false, winner: null, retreated: false, mt: 0.5, shots: 0, dry: false, lastShot: 0
   };
   ours.forEach(s => b.units.push(toUnit(s, 0, s.id)));
@@ -558,10 +565,10 @@ function fire(b: Battle, u: BattleUnit, t: BattleUnit, d: number) {
     b.powder--;
     if (b.powder <= 0 && !b.dry) { b.dry = true; blog(b, 'The powder is spent. Muskets are clubs now.', 1); }
   }
-  const mis = chance(b.weather === 'rain' ? 0.3 : 0.06);
+  const mis = chance(MISFIRE[b.weather]);
   fxp(b, { k: 'shot', x: u.x + u.face * 10, y: u.y, f: u.face, mis });
   if (mis) { u.rl *= 0.6; if (u.side === 0) blog(b, uname(b, u) + "'s match hisses out. Misfire.", 1); return; }
-  let p = 0.42 + 0.03 * u.aim - 0.0028 * d + (u.trait === 'Keen-eyed' ? 0.1 : 0) - (b.weather === 'fog' ? 0.06 : 0);
+  let p = 0.42 + 0.03 * u.aim - 0.0028 * d + (u.trait === 'Keen-eyed' ? 0.1 : 0) - (b.weather === 'fog' ? FOG_AIM : 0);
   if (t.cls === 'sabre' && t.moving) p *= 0.8;
   p = clamp(p, 0.08, 0.92);
   if (chance(p)) {

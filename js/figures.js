@@ -2,14 +2,15 @@
 /* ===== SOTNIA interface: figures. Every man, hired hand and foe is drawn here, finely, in what he has bought. ===== */
 /**
  * Figures are drawn SS times finer than the scene they stand in: one scene pixel is SS by SS figure pixels. That is the room a man needs
- * for a buckle, the lock of a musket or the comb of a helmet, which at a scene pixel apiece came out as blocks. The backdrops keep
- * their chunky woodcut pixels. In the painters below, dx and dy are figure pixels from the feet (y is negative upwards, x is forwards,
- * and everything is mirrored for a man facing left), while the x and y a figure is drawn at are scene pixels.
+ * for a buckle, the lock of a musket or the comb of a helmet, which at a scene pixel apiece came out as blocks. The backdrops are drawn
+ * that fine too (see terrain.ts), so that a man does not stand against blocks twice his own pixel. In the painters below, dx and dy are
+ * figure pixels from the feet (y is negative upwards, x is forwards, and everything is mirrored for a man facing left), while the x and y
+ * a figure is drawn at are scene pixels.
  */
 const SS = 2;
 /**
  * A canvas for a scene of W by H scene pixels, SS times finer, whose context is scaled so that scene coordinates draw as they always
- * did. It turns image smoothing off, so that a coarser canvas drawn onto it (a backdrop) stays sharp.
+ * did. It turns image smoothing off, so that a canvas drawn onto it (a window onto a backdrop) stays sharp.
  */
 function sceneCanvas(W, H) {
     const c = document.createElement('canvas');

@@ -359,7 +359,7 @@ const AMBUSH_RATE = [0.005, 0.02, 0.04, 0.06];
 function makeAmbush(st, land, from) {
     const key = pick(LANDS[land].ambush), A = AMBUSHES[key];
     const c = makeContract(st, Object.assign({ id: key, who: '', tier: 1, ai: 'charge' }, A), threat(st) < 6 ? 'easy' : 'fair'); // Object.assign and the payoff below make it one
-    Object.assign(c, { ambush: true, grade: 'ambush', who: 'On the road from ' + from, pay: 0, renown: 2, ttl: 1, bonus: null, cap: ROSTER_MAX, weather: st.weather });
+    Object.assign(c, { ambush: true, grade: 'ambush', who: 'On the road from ' + from, pay: 0, renown: 2, ttl: 1, bonus: null, cap: ROSTER_MAX, weather: st.weather, land });
     const share = clamp(Math.ceil(st.cargo * (0.05 + 0.02 * c.units.length)), 1, Math.max(1, st.cargo));
     c.payoff = { cargo: share, coin: Math.round(share * unitPrice(st) * 1.25) };
     return c;

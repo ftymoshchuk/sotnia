@@ -20,7 +20,7 @@ function newDemo() {
     const ours = ['pike', 'shot', 'sabre', 'pike', 'shot'].map((c, i) => { const u = enemyUnit(c, 1, 'own'); u.id = i; u.name = ''; u.morale = 60; u.wpn = ri(0, 3); u.arm = ri(0, 3); u.origin = pick(ORIGINS.filter(o => o.cls.includes(c))).label; return u; });
     const weather = pick(['clear', 'clear', 'rain', 'fog']);
     ui.demo = makeBattle(ours, mix().map(u => { u.skin = skin; u.morale = 60; u.wpn = ri(0, 2); u.arm = ri(0, 2); return u; }), { stance: 'advance', ai: 'advance', weather, powder: 99, vis: true });
-    ui.view = newView($('#field'), (Math.random() * 1e6) | 0, weather, false);
+    ui.view = newView($('#field'), (Math.random() * 1e6) | 0, weather, false, { land: pick(Object.keys(LANDS)) });
     demoWait = 0;
     drawField(ui.view, ui.demo, 0);
 }

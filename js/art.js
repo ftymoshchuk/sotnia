@@ -13,172 +13,12 @@ const SKINS = {
     champion: { coat: PAL.plum, trim: PAL.ochre }, black: { coat: PAL.black, trim: PAL.red }, muscovite: { coat: PAL.russet, trim: PAL.ochre },
     tatar: { coat: '#2b7d78', trim: PAL.paperHi }, croat: { coat: '#7b5a3c', trim: '#c0392b' }
 };
-/* ---------- backdrop: a woodcut landscape ---------- */
+/* ---------- the random numbers of the backdrops (the backdrops themselves are in terrain.ts) ---------- */
 function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-function pxLine(g, x0, y0, x1, y1, c) {
-    g.fillStyle = c;
-    x0 = Math.round(x0);
-    y0 = Math.round(y0);
-    x1 = Math.round(x1);
-    y1 = Math.round(y1);
-    const dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
-    let e = dx - dy;
-    for (let i = 0; i < 400; i++) {
-        g.fillRect(x0, y0, 1, 1);
-        if (x0 === x1 && y0 === y1)
-            break;
-        const e2 = 2 * e;
-        if (e2 > -dy) {
-            e -= dy;
-            x0 += sx;
-        }
-        if (e2 < dx) {
-            e += dx;
-            y0 += sy;
-        }
-    }
-}
-const MARKS = {
-    windmill(g, x, y) {
-        g.fillStyle = PAL.paper;
-        g.fillRect(x - 4, y - 15, 9, 15);
-        g.fillStyle = INK;
-        g.fillRect(x - 4, y - 15, 1, 15);
-        g.fillRect(x + 4, y - 15, 1, 15);
-        g.fillRect(x, y - 5, 1, 5);
-        g.fillRect(x - 1, y - 5, 3, 1);
-        pxLine(g, x - 5, y - 15, x, y - 21, INK);
-        pxLine(g, x, y - 21, x + 5, y - 15, INK);
-        const my = y - 17;
-        pxLine(g, x - 11, my - 9, x + 11, my + 9, INK);
-        pxLine(g, x - 11, my + 9, x + 11, my - 9, INK);
-        pxLine(g, x - 11, my - 9, x - 8, my - 12, INK);
-        pxLine(g, x + 11, my + 9, x + 8, my + 12, INK);
-        pxLine(g, x - 11, my + 9, x - 14, my + 6, INK);
-        pxLine(g, x + 11, my - 9, x + 14, my - 6, INK);
-    },
-    church(g, x, y) {
-        g.fillStyle = PAL.paper;
-        g.fillRect(x - 9, y - 7, 13, 7);
-        g.fillRect(x + 4, y - 17, 5, 17);
-        g.fillStyle = INK;
-        g.fillRect(x - 9, y - 7, 1, 7);
-        g.fillRect(x - 9, y - 8, 13, 1);
-        g.fillRect(x + 4, y - 17, 1, 17);
-        g.fillRect(x + 8, y - 17, 1, 17);
-        g.fillRect(x + 4, y - 20, 5, 3);
-        g.fillRect(x + 5, y - 22, 3, 2);
-        g.fillRect(x + 6, y - 28, 1, 6);
-        g.fillRect(x + 5, y - 26, 3, 1);
-        g.fillRect(x - 5, y - 4, 1, 3);
-        g.fillRect(x - 1, y - 4, 1, 3);
-        g.fillRect(x + 6, y - 13, 1, 3);
-        for (let i = 0; i < 6; i++)
-            g.fillRect(x - 8 + i * 2, y - 10 + (i % 2), 2, 1);
-    },
-    village(g, x, y) {
-        for (let k = 0; k < 3; k++) {
-            const hx = x + k * 11 - 14, by = y + (k === 1 ? 1 : 0);
-            g.fillStyle = PAL.paper;
-            g.fillRect(hx, by - 5, 8, 5);
-            g.fillStyle = INK;
-            g.fillRect(hx, by - 5, 1, 5);
-            g.fillRect(hx + 7, by - 5, 1, 5);
-            g.fillRect(hx + 3, by - 3, 1, 3);
-            g.fillRect(hx - 1, by - 6, 10, 1);
-            g.fillRect(hx, by - 7, 8, 1);
-            g.fillRect(hx + 1, by - 8, 6, 1);
-            g.fillRect(hx + 2, by - 9, 4, 1);
-        }
-        g.fillStyle = INK;
-        g.fillRect(x - 8, y - 12, 1, 2);
-        g.fillRect(x - 7, y - 14, 1, 2);
-        g.fillRect(x - 8, y - 16, 1, 2);
-        g.fillRect(x - 6, y - 18, 1, 2);
-    },
-    poplars(g, x, y) {
-        g.fillStyle = INK;
-        [[-10, 15], [-4, 19], [3, 13], [9, 17]].forEach(([dx, h]) => { g.fillRect(x + dx, y - h + 2, 3, h - 5); g.fillRect(x + dx + 1, y - h, 1, h); });
-    }
-};
-function makeBackdrop(seed, weather) {
-    const c = document.createElement('canvas');
-    c.width = LW;
-    c.height = LH;
-    const g = c.getContext('2d'), r = mulberry(seed);
-    g.fillStyle = PAL.paper;
-    g.fillRect(0, 0, LW, LH);
-    if (weather === 'clear') {
-        const sx = 50 + (r() * 200 | 0), sy = 15;
-        for (let a = 0; a < 16; a++) {
-            const an = a * Math.PI / 8, r0 = 9, r1 = a % 2 ? 12 : 15;
-            pxLine(g, sx + Math.cos(an) * r0, sy + Math.sin(an) * r0, sx + Math.cos(an) * r1, sy + Math.sin(an) * r1, INK);
-        }
-        for (let a = 0; a < 40; a++) {
-            const an = a * Math.PI / 20;
-            g.fillStyle = INK;
-            g.fillRect(Math.round(sx + Math.cos(an) * 6), Math.round(sy + Math.sin(an) * 6), 1, 1);
-        }
-    }
-    const nc = weather === 'clear' ? 3 : 7;
-    for (let i = 0; i < nc; i++) {
-        const cx = r() * (LW - 60) | 0, cy = 5 + (r() * 24 | 0), w = 26 + (r() * 30 | 0);
-        g.fillStyle = INK;
-        g.fillRect(cx, cy + 4, w, 1);
-        g.fillRect(cx + (w * 0.15 | 0), cy + 2, w * 0.6 | 0, 1);
-        g.fillRect(cx + (w * 0.32 | 0), cy, w * 0.3 | 0, 1);
-        if (weather !== 'clear')
-            g.fillRect(cx + 4, cy + 6, w * 0.7 | 0, 1);
-    }
-    const a1 = r() * 6, a2 = r() * 6;
-    const hy = (x) => Math.round(HZ - 12 - 6 * Math.sin(x * 0.019 + a1) - 3 * Math.sin(x * 0.047 + a2));
-    for (let x = 0; x < LW; x++) {
-        const y = hy(x);
-        g.fillStyle = PAL.hill;
-        g.fillRect(x, y, 1, HZ - y);
-        g.fillStyle = INK;
-        g.fillRect(x, y, 1, 1);
-        if (x % 3 === 0 && hy(x + 3) > y)
-            g.fillRect(x, y + 2, 1, 2 + (r() * 5 | 0));
-    }
-    const names = Object.keys(MARKS).sort(() => r() - 0.5);
-    const x1 = 34 + (r() * 60 | 0), x2 = 190 + (r() * 76 | 0);
-    MARKS[names[0]](g, x1, hy(x1) + 1);
-    MARKS[names[1]](g, x2, hy(x2) + 1);
-    const wx = 110 + (r() * 60 | 0);
-    g.fillStyle = INK;
-    g.fillRect(wx, HZ - 9, 1, 9);
-    g.fillRect(wx - 2, HZ - 7, 5, 1);
-    g.fillStyle = PAL.ground;
-    g.fillRect(0, HZ, LW, LH - HZ);
-    g.fillStyle = INK;
-    g.fillRect(0, HZ, LW, 1);
-    for (let i = 0; i < 34; i++) {
-        const y = HZ + 2 + (r() * r() * (LH - HZ - 4) | 0), x = r() * LW | 0, w = 4 + (r() * 18 | 0);
-        g.fillStyle = 'rgba(28,26,23,.32)';
-        g.fillRect(x, y, w, 1);
-    }
-    for (let i = 0; i < 46; i++) {
-        const x = r() * LW | 0, y = HZ + 5 + (r() * (LH - HZ - 7) | 0);
-        g.fillStyle = 'rgba(28,26,23,.6)';
-        g.fillRect(x, y, 1, 2);
-        g.fillRect(x - 1, y - 1, 1, 2);
-        g.fillRect(x + 1, y - 1, 1, 1);
-    }
-    for (let i = 0; i < 12; i++) {
-        const x = r() * LW | 0, y = HZ + 6 + (r() * (LH - HZ - 9) | 0);
-        g.fillStyle = PAL.paperHi;
-        g.fillRect(x, y, 3, 2);
-        g.fillStyle = INK;
-        g.fillRect(x, y + 2, 3, 1);
-        g.fillRect(x + 3, y + 1, 1, 1);
-    }
-    return c;
-}
 /* ---------- the field ---------- */
-function newView(cv, seed, weather, names) {
+function newView(cv, seed, weather, names, setting) {
     const buf = sceneCanvas(LW, LH); // SS times finer than the scene, for the figures (see SS)
-    const v = { cv, ctx: cv.getContext('2d'), buf, g: buf.getContext('2d'), back: makeBackdrop(seed, weather), parts: [], names, weather }; // css and dpr: fitView sets them next
+    const v = { cv, ctx: cv.getContext('2d'), buf, g: buf.getContext('2d'), back: makeBackdrop(seed, weather, setting), parts: [], names, weather }; // css and dpr: fitView sets them next
     fitView(v);
     return v;
 }
@@ -253,7 +93,7 @@ function stepParts(v, dt) {
 function drawField(v, b, t) {
     const g = v.g;
     g.globalAlpha = 1;
-    g.drawImage(v.back, 0, 0);
+    g.drawImage(v.back, 0, 0, LW, LH);
     if (v.weather === 'fog') {
         g.fillStyle = 'rgba(244,240,228,.5)';
         for (let i = 0; i < 3; i++)
@@ -588,51 +428,25 @@ function artURL(key, W, H, fn) {
     fn(g, W, H);
     return (artCache[key] = c.toDataURL());
 }
-/** The backdrop of a card: hills and dust, and, for some seeds, a small tree on the far ridge (bare leaves it out and the rest the same, for pictures with men to show). */
-function landscape(g, W, H, seed, bare = false) {
-    const r = mulberry(seed * 977 + 13), hz = H - 7, a = r() * 6, b = r() * 6;
-    g.fillStyle = PAL.paperHi;
-    g.fillRect(0, 0, W, H);
-    for (let i = 0; i < 2; i++) {
-        const cx = r() * (W - 16) | 0, cy = 3 + (r() * 7 | 0), w = 8 + (r() * 10 | 0);
-        g.fillStyle = PAL.hill;
-        g.fillRect(cx, cy + 2, w, 1);
-        g.fillRect(cx + 2, cy, w - 5, 1);
-    }
-    for (let x = 0; x < W; x++) {
-        const y = Math.round(hz - 6 - 3 * Math.sin(x * 0.11 + a) - 2 * Math.sin(x * 0.29 + b));
-        g.fillStyle = PAL.hill;
-        g.fillRect(x, y, 1, hz - y);
-        g.fillStyle = INK;
-        g.fillRect(x, y, 1, 1);
-    }
-    if (r() < 0.6) {
-        const px = 4 + (r() * (W - 8) | 0), py = Math.round(hz - 8 - 3 * Math.sin(px * 0.11 + a) - 2 * Math.sin(px * 0.29 + b));
-        if (!bare) {
-            g.fillStyle = INK;
-            g.fillRect(px, py - 6, 1, 6);
-            g.fillRect(px - 1, py - 4, 3, 3);
-        }
-    }
-    g.fillStyle = PAL.ground;
-    g.fillRect(0, hz, W, H - hz);
-    g.fillStyle = INK;
-    g.fillRect(0, hz, W, 1);
-    for (let i = 0; i < 6; i++) {
-        g.fillStyle = 'rgba(28,26,23,.35)';
-        g.fillRect(r() * W | 0, hz + 2 + (r() * (H - hz - 3) | 0), 2 + (r() * 5 | 0), 1);
-    }
+/**
+ * The backdrop of a card: a window onto the field backdrop of a land (see backdropOf), its horizon seven pixels above the foot of the
+ * picture, or twenty when it is to show a site, which stands on the ground in front of the hills; the window is on the site then.
+ */
+function landscape(g, W, H, seed, land, site) {
+    const back = backdropOf(land, seed % 3, 'clear', site), sw = W * SS, sh = H * SS, lift = site ? 20 : 7;
+    const sx = site && back.siteX !== undefined ? clamp(Math.round(back.siteX - sw / 2), 0, back.width - sw) : (seed * 173 + W * 11) % (back.width - sw);
+    g.drawImage(back, sx, HZ * SS - (H - lift) * SS, sw, sh, 0, 0, W, H);
 }
 // A man of the company on his card: standing in his arms and armour, or abed. gear tries other levels than he has, for a card to show what buying them would make of him.
-function soldierArt(s, gear) {
+function soldierArt(s, gear, land = landNow()) {
     const seed = s.id % 5, pose = s.wound ? 'lie' : 'stand', wpn = gear && gear.wpn != null ? gear.wpn : s.wpn, arm = gear && gear.arm != null ? gear.arm : s.arm;
-    return artURL('m' + s.id + s.cls + pose + wpn + arm, 48, 36, (g, W, H) => { landscape(g, W, H, seed); drawCamper(g, 24, H - 3, { cls: s.cls, skin: 'own', face: 1, mode: 'idle', anim: 0, pose, wpn, arm, man: s.id, nation: nationOf(s.origin) }); });
+    return artURL('m' + s.id + s.cls + pose + wpn + arm + land, 48, 36, (g, W, H) => { landscape(g, W, H, seed, land); drawCamper(g, 24, H - 3, { cls: s.cls, skin: 'own', face: 1, mode: 'idle', anim: 0, pose, wpn, arm, man: s.id, nation: nationOf(s.origin) }); });
 }
 // After a fight: how each man came out of it.
-function fateArt(l) {
+function fateArt(l, land = landNow()) {
     const seed = l.id % 5, cls = l.cls, fate = l.fate, kit = { wpn: l.wpn, arm: l.arm, man: l.id, nation: nationOf(l.origin) };
-    return artURL('f' + l.id + cls + fate + l.wpn + l.arm, 48, 36, (g, W, H) => {
-        landscape(g, W, H, seed);
+    return artURL('f' + l.id + cls + fate + l.wpn + l.arm + land, 48, 36, (g, W, H) => {
+        landscape(g, W, H, seed, land);
         if (fate === 'killed' || fate === 'struck down')
             drawCamper(g, 24, H - 3, { cls, skin: 'own', pose: 'lie', bandage: fate !== 'killed', ...kit });
         else if (fate === 'fled')
@@ -643,17 +457,17 @@ function fateArt(l) {
 }
 // The other side of a contract or an ambush, facing the reader's company.
 function foesArt(c) {
-    const us = c.units.slice(0, 6);
-    return artURL('e' + c.id + us.map(u => u.cls).join(''), 72, 36, (g, W, H) => {
-        landscape(g, W, H, c.id % 5);
+    const us = c.units.slice(0, 6), land = c.land || landNow(), site = SITE_OF[c.tpl];
+    return artURL('e' + c.id + us.map(u => u.cls).join('') + land + (site || ''), 72, 36, (g, W, H) => {
+        landscape(g, W, H, c.id % 5, land, site);
         const step = us.length > 4 ? 10 : 12, x0 = Math.round(W / 2 - (us.length - 1) * step / 2);
         us.forEach((u, i) => drawSoldier(g, x0 + i * step, H - 3 - (i % 2) * 2, { cls: u.cls, skin: c.skin || u.skin, face: -1, mode: 'idle', anim: 0, wpn: u.wpn, arm: u.arm, man: i + 2 }));
     });
 }
-function staffArt(k) { return artURL('s' + k, 48, 36, (g, W, H) => { landscape(g, W, H, k.length); drawCivilian(g, 24, H - 3, k, 1); }); }
-function stanceArt(s) {
-    return artURL('t' + s, 60, 36, (g, W, H) => {
-        landscape(g, W, H, s.length + 1);
+function staffArt(k, land = landNow()) { return artURL('s' + k + land, 48, 36, (g, W, H) => { landscape(g, W, H, k.length, land); drawCivilian(g, 24, H - 3, k, 1); }); }
+function stanceArt(s, land = landNow()) {
+    return artURL('t' + s + land, 60, 36, (g, W, H) => {
+        landscape(g, W, H, s.length + 1, land);
         const y = H - 3, o = (cls, x, m) => drawSoldier(g, x, y - (x % 3 === 0 ? 1 : 0), Object.assign({ cls, skin: 'own', face: 1, mode: 'idle', anim: 0 }, m));
         // a company is of many nations: these are of the ones it is likely to have
         if (s === 'hold') {
@@ -701,7 +515,7 @@ function supplyArt(k) {
 // The quest's cargo (and, but for the raft, the man who guards it) for its card. frac is not used.
 function questArt(q, frac) {
     return artURL('q' + q.id, 72, 36, (g, W, H) => {
-        landscape(g, W, H, q.id.length);
+        landscape(g, W, H, q.id.length, PLACES[q.from].land);
         if (q.transport === 'raft') {
             drawCargo(g, 'raft', 16, H - 6, 1, false);
             return;
@@ -715,37 +529,46 @@ function questArt(q, frac) {
         drawSoldier(g, 8, H - 3, { cls: q.transport === 'chest' ? 'shot' : 'pike', skin: 'own', face: 1, mode: 'idle', anim: 0, nation: q.transport === 'chest' ? 'pole' : 'german' });
     });
 }
-/* ---------- the pictures of the encyclopedia: men of a nation, a class or a people standing together ---------- */
+/* ---------- the pictures of the encyclopedia: lands and places, and men of a nation, a class or a people standing together ---------- */
+/** A land as it looks on the field, whole, on a day of this weather. */
+function landArt(land, weather = 'clear') {
+    const key = 'land' + land + weather;
+    return artCache[key] || (artCache[key] = backdropOf(land, 0, weather).toDataURL());
+}
+/** A place a fight is fought at, in a land where it is: the window of a card on it, with nobody there. */
+function siteArt(site, land) {
+    return artURL('site' + site + land, 72, 36, (g, W, H) => landscape(g, W, H, 0, land, site));
+}
 /** Men standing together on a card's landscape: each is where he stands along the picture (scene pixels, from the left) and what he looks like. */
-function squadArt(key, W, seed, men) {
-    return artURL(key, W, 36, (g, w, h) => { landscape(g, w, h, seed, true); for (const [x, look] of men)
+function squadArt(key, W, seed, land, men) {
+    return artURL(key, W, 36, (g, w, h) => { landscape(g, w, h, seed, land); for (const [x, look] of men)
         drawSoldier(g, x, h - 3, look); });
 }
 /** The classes a nation fields, each once, in the order its Origin lists them. */
 const classesOf = (o) => o.cls.filter((c, i) => o.cls.indexOf(c) === i);
 // A nation of the company: one man of each class it fields, side by side, in the better kit a man comes to.
-function nationArt(o) {
+function nationArt(o, land) {
     const cs = classesOf(o), at = cs.length === 1 ? [36] : cs.length === 2 ? [20, 50] : [14, 36, 58];
-    return squadArt('cn' + o.id, 72, o.id.length, cs.map((cls, i) => [at[i], { cls, skin: 'own', nation: o.id, face: 1, mode: 'idle', anim: 0, wpn: i ? 2 : 1, arm: i ? 2 : 1, man: 3 + i * 2 }]));
+    return squadArt('cn' + o.id, 72, o.id.length, land, cs.map((cls, i) => [at[i], { cls, skin: 'own', nation: o.id, face: 1, mode: 'idle', anim: 0, wpn: i ? 2 : 1, arm: i ? 2 : 1, man: 3 + i * 2 }]));
 }
 // One unit of a nation: the worst kit a man of it starts with and the best he may come to, side by side.
-function unitArt(o, cls) {
+function unitArt(o, cls, land) {
     const look = (lv, man) => ({ cls, skin: 'own', nation: o.id, face: 1, mode: 'idle', anim: 0, wpn: lv, arm: lv, man });
-    return squadArt('cu' + o.id + cls, 72, o.id.length + 1, [[22, look(0, 3)], [52, look(3, 8)]]);
+    return squadArt('cu' + o.id + cls, 72, o.id.length + 1, land, [[22, look(0, 3)], [52, look(3, 8)]]);
 }
 // A class: four men of the nations that field it, from the worst kit to the best.
 function classArt(cls) {
     const from = ORIGINS.filter(o => o.cls.includes(cls)).slice(0, 4);
-    return squadArt('cc' + cls, 100, cls.length, from.map((o, i) => [14 + i * 24, { cls, skin: 'own', nation: o.id, face: 1, mode: 'idle', anim: 0, wpn: i, arm: i, man: 3 + i * 2 }]));
+    return squadArt('cc' + cls, 100, cls.length, 'poland', from.map((o, i) => [14 + i * 24, { cls, skin: 'own', nation: o.id, face: 1, mode: 'idle', anim: 0, wpn: i, arm: i, man: 3 + i * 2 }]));
 }
 // The armours: one sabreur in each of the four, worst to best.
 function armourArt() {
-    return squadArt('car', 100, 5, [0, 1, 2, 3].map((lv) => [14 + lv * 24, { cls: 'sabre', skin: 'own', nation: 'pole', face: 1, mode: 'idle', anim: 0, wpn: 1, arm: lv, man: 3 + lv * 2 }]));
+    return squadArt('car', 100, 5, 'poland', [0, 1, 2, 3].map((lv) => [14 + lv * 24, { cls: 'sabre', skin: 'own', nation: 'pole', face: 1, mode: 'idle', anim: 0, wpn: 1, arm: lv, man: 3 + lv * 2 }]));
 }
 // A people met on the road: a man of each class it fields, facing the company, in the gear its degree of drill carries (see TIER).
-function peopleArt(skin, classes, tier) {
+function peopleArt(skin, classes, tier, land) {
     const at = classes.length === 1 ? [40] : classes.length === 2 ? [26, 54] : [20, 42, 64], gear = Math.max(0, tier - 1);
-    return squadArt('cp' + skin + classes.join('') + tier, 72, skin.length, classes.map((cls, i) => [at[i], { cls, skin, face: -1, mode: 'idle', anim: 0, wpn: gear, arm: gear, man: 2 + i * 3 }]));
+    return squadArt('cp' + skin + classes.join('') + tier, 72, skin.length, land, classes.map((cls, i) => [at[i], { cls, skin, face: -1, mode: 'idle', anim: 0, wpn: gear, arm: gear, man: 2 + i * 3 }]));
 }
 // A corner of the camp at night, for the cards of camp events.
 function eventArt() {
@@ -799,16 +622,14 @@ function campPlan(st) {
     return out;
 }
 function campBack(st) {
-    const c = document.createElement('canvas');
-    c.width = CW;
-    c.height = CH;
+    const c = sceneCanvas(CW, CH);
     const g = c.getContext('2d'), F = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
     const poly = (pts, col) => { g.beginPath(); g.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2)
         g.lineTo(pts[i], pts[i + 1]); g.closePath(); g.fillStyle = col; g.fill(); };
     const r = mulberry(st.date * 31 + 7), stars = [];
     F(0, 0, CW, CH, '#0f1520');
     F(0, 34, CW, 40, '#141c2b');
-    F(0, 58, CW, 16, '#1a2335');
+    F(0, 58, CW, 24, '#1e2a42');
     for (let i = 0; i < 46; i++) {
         const x = r() * CW | 0, y = r() * 58 | 0;
         if (Math.hypot(x - 52, y - 17) < 11)
@@ -825,16 +646,12 @@ function campBack(st) {
     g.beginPath();
     g.arc(55.5, 15, 6.3, 0, Math.PI * 2);
     g.fill();
-    poly([0, 74, 18, 70, 40, 72, 62, 66, 88, 70, 110, 67, 140, 71, 170, 65, 200, 69, 228, 66, 256, 70, 284, 67, 320, 71, 320, 151, 0, 151], '#192132');
+    poly([0, 74, 320, 74, 320, 151, 0, 151], '#192132');
+    g.drawImage(skylineOf(here(st).land, st.date % 3 + 1, CW), 0, 81 - HZ, CW, HZ);
     poly([0, 83, 40, 80, 90, 83, 140, 79, 200, 82, 250, 79, 320, 81, 320, 151, 0, 151], '#221c15');
     F(0, 134, CW, 17, '#1a1510');
     for (let i = 0; i < 26; i++)
         F(r() * CW | 0, 86 + (r() * 62 | 0), 2 + (r() * 2 | 0), 1, '#2c241a');
-    [[262, 18, 86, 16], [290, 6, 90, 19], [314, 24, 92, 14], [244, 44, 84, 10]].forEach(([x, top, base, w]) => {
-        const h = base - top;
-        poly([x, top, x - w * 0.5, top + h * 0.35, x - w * 0.25, top + h * 0.35, x - w * 0.75, top + h * 0.68, x - w * 0.45, top + h * 0.68, x - w, base, x + w, base, x + w * 0.45, top + h * 0.68, x + w * 0.75, top + h * 0.68, x + w * 0.25, top + h * 0.35, x + w * 0.5, top + h * 0.35], '#0c120d');
-        F(x - 1, base, 2, 4, '#0c120d');
-    });
     const tent = (l, rr, top, base, peak) => { poly([peak, top, l, base, rr, base], '#6c624f'); poly([peak, top, rr, base, peak + (rr - peak) * 0.5, base], '#564e40'); poly([peak, top + (base - top) * 0.34, peak - (rr - l) * 0.135, base, peak + (rr - l) * 0.135, base], '#120f0b'); F(peak - 0.5, top - 4, 1, 4, PAL.wood); };
     tent(75, 130, 49, 84, 102.5);
     tent(190, 235, 48, 80, 212.5);
@@ -932,13 +749,13 @@ function drawCamp(v, st, sel, dt, still) {
     if (!v || !st)
         return;
     v.t += dt;
-    const t = v.t, g = v.g, key = st.quest + st.date + ':' + (st.cargo0 ? Math.round(5 * st.cargo / st.cargo0) : 0);
+    const t = v.t, g = v.g, key = st.quest + st.at + st.date + ':' + (st.cargo0 ? Math.round(5 * st.cargo / st.cargo0) : 0);
     if (v.key !== key) {
         v.back = campBack(st);
         v.key = key;
     }
     g.globalAlpha = 1;
-    g.drawImage(v.back, 0, 0);
+    g.drawImage(v.back, 0, 0, CW, CH);
     if (!still)
         for (const s of v.back.stars)
             if (s.k < 2) {
