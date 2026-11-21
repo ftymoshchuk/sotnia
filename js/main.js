@@ -1,7 +1,7 @@
 "use strict";
 /* ===== SOTNIA interface: actions, input, the frame loop and boot. Loaded last. ===== */
 /* ---------- actions ---------- */
-let oddsTimer = 0, acc = 0, hudT = 0, last = 0, demoWait = 0;
+let oddsTimer = 0, acc = 0, hudT = 0, last = 0, demoWait = 0, kittedAt = -9999;
 function queueOdds() {
     ui.odds = null;
     clearTimeout(oddsTimer);
@@ -17,9 +17,9 @@ function queueOdds() {
 function newDemo() {
     const mix = () => ['pike', 'shot', 'sabre', 'pike', 'shot'].map(c => enemyUnit(c, 1, pick(['swede', 'imperial', 'raider', 'bandit'])));
     const skin = pick(['swede', 'imperial', 'raider', 'bandit']);
-    const ours = ['pike', 'shot', 'sabre', 'pike', 'shot'].map((c, i) => { const u = enemyUnit(c, 1, 'own'); u.id = i; u.name = ''; u.morale = 60; return u; });
+    const ours = ['pike', 'shot', 'sabre', 'pike', 'shot'].map((c, i) => { const u = enemyUnit(c, 1, 'own'); u.id = i; u.name = ''; u.morale = 60; u.wpn = ri(0, 3); u.arm = ri(0, 3); return u; });
     const weather = pick(['clear', 'clear', 'rain', 'fog']);
-    ui.demo = makeBattle(ours, mix().map(u => { u.skin = skin; u.morale = 60; return u; }), { stance: 'advance', ai: 'advance', weather, powder: 99, vis: true });
+    ui.demo = makeBattle(ours, mix().map(u => { u.skin = skin; u.morale = 60; u.wpn = ri(0, 2); u.arm = ri(0, 2); return u; }), { stance: 'advance', ai: 'advance', weather, powder: 99, vis: true });
     ui.view = newView($('#field'), (Math.random() * 1e6) | 0, weather, false);
     demoWait = 0;
     drawField(ui.view, ui.demo, 0);
@@ -107,8 +107,11 @@ function act(a, d) {
             G.odds = {};
             break;
         case 'up':
-            if (has(G, 'market'))
-                upgrade(G, +d.id, d.k);
+            if (has(G, 'market') && upgrade(G, +d.id, d.k)) {
+                ui.fresh = { id: +d.id, k: d.k };
+                kittedAt = performance.now();
+                sfx('clang');
+            }
             break;
         case 'dismiss':
             dismiss(G, +d.id);
@@ -300,6 +303,7 @@ function act(a, d) {
         default: return;
     }
     render();
+    ui.fresh = null;
 }
 document.addEventListener('click', e => {
     // A click on the map picks the place nearest it as the course.
@@ -310,9 +314,38 @@ document.addEventListener('click', e => {
         return;
     }
     const el = e.target.closest('[data-act]');
-    if (el && !el.disabled)
+    if (el && !el.disabled && el.getAttribute('aria-disabled') !== 'true')
         act(el.dataset.act, el.dataset);
 });
+// Trying on: while the pointer or focus is on the button that buys a man's next arms or armour, his card shows him wearing them. Not while
+// a purchase is being shown off: the pointer is still over the button, which the page has drawn afresh, and the next piece would hide what was bought.
+function tryOn(e) {
+    if (performance.now() - kittedAt < 1300)
+        return;
+    const b = e.target.closest('[data-act="up"]'), s = b && man(+b.dataset.id), art = b && b.closest('.card')?.querySelector('.art'), img = art && art.querySelector('img');
+    if (!b || !s || !art || !img)
+        return;
+    const k = b.dataset.k;
+    if (s[k] >= 3 || art.classList.contains('trying'))
+        return;
+    art.dataset.was = img.src;
+    img.src = soldierArt(s, { [k]: s[k] + 1 });
+    art.classList.add('trying');
+}
+function tryOff(e) {
+    const b = e.target.closest('[data-act="up"]'), to = e.relatedTarget;
+    if (!b || (to && b.contains(to)))
+        return;
+    const art = b.closest('.card')?.querySelector('.art.trying'), img = art && art.querySelector('img');
+    if (art && img) {
+        img.src = art.dataset.was || img.src;
+        art.classList.remove('trying');
+    }
+}
+document.addEventListener('mouseover', tryOn);
+document.addEventListener('focusin', tryOn);
+document.addEventListener('mouseout', tryOff);
+document.addEventListener('focusout', tryOff);
 document.addEventListener('change', e => { const el = e.target; if (el.dataset && el.dataset.act === 'course-pick')
     act('course-pick', { v: el.value }); });
 document.addEventListener('keydown', e => {

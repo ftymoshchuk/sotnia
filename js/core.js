@@ -339,7 +339,7 @@ function toUnit(o, side, sid) {
     return {
         sid, side, name: o.name || '', cls: o.cls, skin: side === 0 ? 'own' : (o.skin || 'bandit'), tier: o.tier || 0,
         x: 0, y: 0, hx: 0, hy: 0, hp: o.hp != null ? o.hp : o.vig, max: o.vig, mel: o.mel, aim: o.aim, grd: o.grd,
-        wpn: o.wpn, armv: c.arm + o.arm * 1.5, spd: c.spd * (o.trait === 'Fleet' ? 1.15 : 1), mor: o.morale,
+        wpn: o.wpn, arm: o.arm, armv: c.arm + o.arm * 1.5, spd: c.spd * (o.trait === 'Fleet' ? 1.15 : 1), mor: o.morale,
         trait: o.trait, face: side ? -1 : 1, cd: rnd(0, 0.5), loaded: true, rl: 0, aimT: 0, aimNeed: rnd(0.5, 1),
         tgt: null, ret: 0, anim: rnd(0, 1), moving: false, swing: 0, flash: 0, hurt: 0, kills: 0,
         dead: false, fled: false, routing: false, mode: 'idle', run: 0
@@ -811,7 +811,7 @@ function resolveBattle(st, c, b) {
             continue;
         s.kills += u.kills;
         st.stats.kills += u.kills;
-        const line = { id: s.id, name: s.name, cls: s.cls, kills: u.kills, fate: 'unhurt', xp: 0, scar: null };
+        const line = { id: s.id, name: s.name, cls: s.cls, wpn: s.wpn, arm: s.arm, kills: u.kills, fate: 'unhurt', xp: 0, scar: null };
         if (u.dead) {
             let p = c.duel ? 0.2 : 0.42;
             if (st.staff.surgeon)

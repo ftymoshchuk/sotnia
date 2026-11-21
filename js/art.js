@@ -12,132 +12,6 @@ const SKINS = {
     raider: { coat: PAL.green, trim: PAL.ochre }, imperial: { coat: PAL.ochre, trim: PAL.ink }, swede: { coat: PAL.blue, trim: PAL.ochre },
     champion: { coat: PAL.plum, trim: PAL.ochre }, black: { coat: PAL.black, trim: PAL.red }, muscovite: { coat: PAL.russet, trim: PAL.ochre }
 };
-/* ---------- sprites ---------- */
-function drawSoldier(g, x, y, o) {
-    const f = o.face || 1, sk = SKINS[o.skin] || SKINS.own;
-    const R = (dx, dy, w, h, c) => { g.fillStyle = c; g.fillRect(f > 0 ? x + dx : x - dx - w + 1, y + dy, w, h); };
-    const hat = o.cls === 'pike' ? PAL.helm : o.cls === 'shot' ? INK : PAL.fur;
-    if (o.dead) {
-        R(-7, 0, 13, 1, PAL.red);
-        R(-9, -2, 4, 2, INK);
-        R(-5, -3, 8, 3, sk.coat);
-        R(3, -4, 3, 3, PAL.skin);
-        R(7, -2, 3, 2, hat);
-        return;
-    }
-    // hurt, flash, swing and anim may be left out (see SoldierLook): the ! below only quiets "possibly undefined", and undefined > 0 is false
-    const coat = o.hurt > 0.1 ? PAL.white : sk.coat;
-    g.fillStyle = 'rgba(28,26,23,.22)';
-    g.fillRect(x - 4, y, 9, 1);
-    const step = o.moving ? Math.floor(o.anim) % 2 : -1;
-    if (step === 0) {
-        R(-3, -4, 2, 4, INK);
-        R(2, -4, 2, 4, INK);
-        R(-2, -5, 5, 1, INK);
-    }
-    else if (step === 1)
-        R(-1, -5, 3, 5, INK);
-    else {
-        R(-2, -5, 2, 5, INK);
-        R(1, -5, 2, 5, INK);
-    }
-    const b = step === 1 ? -1 : 0;
-    R(-2, -11 + b, 5, 6, coat);
-    R(-3, -7 + b, 7, 2, coat);
-    R(-2, -8 + b, 5, 1, sk.trim);
-    R(-3, -11 + b, 1, 4, INK);
-    R(-1, -14 + b, 3, 3, PAL.skin);
-    R(1, -13 + b, 1, 1, INK);
-    if (o.cls === 'pike') {
-        R(-3, -15 + b, 7, 1, PAL.steel);
-        R(-1, -17 + b, 3, 2, PAL.helm);
-        R(0, -18 + b, 1, 1, PAL.helm);
-    }
-    else if (o.cls === 'shot') {
-        R(-3, -15 + b, 7, 1, INK);
-        R(-1, -17 + b, 3, 2, INK);
-        R(-3, -18 + b, 2, 2, sk.trim);
-    }
-    else {
-        R(-2, -16 + b, 5, 2, PAL.fur);
-        R(-1, -17 + b, 3, 1, sk.coat);
-        R(-3, -16 + b, 1, 3, sk.coat);
-    }
-    const m = o.flash > 0 ? 'aim' : o.mode, sw = o.swing > 0;
-    if (m === 'rout') {
-        R(-4, -15 + b, 1, 5, coat);
-        R(3, -15 + b, 1, 5, coat);
-        return;
-    }
-    if (o.cls === 'pike') {
-        if (m === 'fight' || o.level) {
-            const t = sw ? 3 : 0;
-            R(1, -10 + b, 3, 2, coat);
-            R(2 + t, -9 + b, 18, 1, PAL.wood);
-            R(20 + t, -9 + b, 2, 1, PAL.steel);
-        }
-        else {
-            R(2, -10 + b, 1, 4, coat);
-            R(3, -27 + b, 1, 24, PAL.wood);
-            R(3, -29 + b, 1, 2, PAL.steel);
-        }
-    }
-    else if (o.cls === 'shot') {
-        if (m === 'aim') {
-            R(1, -11 + b, 3, 2, coat);
-            R(-1, -12 + b, 2, 2, PAL.wood);
-            R(1, -12 + b, 9, 1, INK);
-            if (o.flash > 0) {
-                R(10, -14 + b, 3, 4, PAL.flash);
-                R(13, -13 + b, 3, 2, PAL.white);
-            }
-        }
-        else if (m === 'reload') {
-            R(2, -10 + b, 2, 2, coat);
-            R(4, -17 + b, 1, 12, INK);
-            R(3, -19 + b + (Math.floor((o.t || 0) * 5) % 2) * 2, 1, 4, PAL.wood);
-        }
-        else if (m === 'fight') {
-            const t = sw ? 3 : 0;
-            R(1, -11 + b, 3, 2, coat);
-            R(1 + t, -11 + b, 8, 1, PAL.wood);
-        }
-        else {
-            R(2, -10 + b, 1, 4, coat);
-            R(-3, -7 + b, 2, 2, PAL.wood);
-            R(-2, -7 + b, 10, 1, INK);
-        }
-    }
-    else {
-        R(1, -10 + b, 3, 2, coat);
-        if (sw) {
-            R(3, -10 + b, 5, 1, PAL.steel);
-            R(7, -9 + b, 2, 1, PAL.steel);
-            R(8, -8 + b, 1, 1, PAL.steel);
-        }
-        else if (m === 'fight') {
-            for (let i = 0; i < 4; i++)
-                R(3 + i, -11 - i + b, 1, 1, PAL.steel);
-        }
-        else {
-            R(3, -12 + b, 1, 3, PAL.steel);
-            R(4, -14 + b, 1, 2, PAL.steel);
-            R(5, -15 + b, 1, 1, PAL.steel);
-        }
-        R(3, -9 + b, 1, 1, sk.trim);
-    }
-}
-const iconCache = {};
-function icon(cls, skin) {
-    const k = cls + skin;
-    if (iconCache[k])
-        return iconCache[k];
-    const c = document.createElement('canvas');
-    c.width = 16;
-    c.height = 31;
-    drawSoldier(c.getContext('2d'), 6, 30, { cls, skin, face: 1, mode: 'idle', anim: 0 });
-    return (iconCache[k] = c.toDataURL());
-}
 /* ---------- backdrop: a woodcut landscape ---------- */
 function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 function pxLine(g, x0, y0, x1, y1, c) {
@@ -302,9 +176,7 @@ function makeBackdrop(seed, weather) {
 }
 /* ---------- the field ---------- */
 function newView(cv, seed, weather, names) {
-    const buf = document.createElement('canvas');
-    buf.width = LW;
-    buf.height = LH;
+    const buf = sceneCanvas(LW, LH); // SS times finer than the scene, for the figures (see SS)
     const v = { cv, ctx: cv.getContext('2d'), buf, g: buf.getContext('2d'), back: makeBackdrop(seed, weather), parts: [], names, weather }; // css and dpr: fitView sets them next
     fitView(v);
     return v;
@@ -389,19 +261,19 @@ function drawField(v, b, t) {
     const us = b.units.filter(u => !u.fled).sort((a, c) => a.y - c.y);
     for (const u of us)
         if (u.dead)
-            drawSoldier(g, Math.round(u.x), FY + Math.round(u.y), { dead: true, cls: u.cls, skin: u.skin, face: u.face });
+            drawSoldier(g, Math.round(u.x * SS) / SS, FY + Math.round(u.y * SS) / SS, { dead: true, cls: u.cls, skin: u.skin, face: u.face, wpn: u.wpn, arm: u.arm, man: manNo(u.sid) });
     for (const u of us) {
         if (u.dead)
             continue;
-        const x = Math.round(u.x), y = FY + Math.round(u.y);
-        drawSoldier(g, x, y, { cls: u.cls, skin: u.skin, face: u.face, mode: u.mode, moving: u.moving, anim: u.anim * 2, swing: u.swing, flash: u.flash, hurt: u.hurt, t, level: u.cls === 'pike' && u.tgt && dist(u, u.tgt) < 44 });
+        const x = Math.round(u.x * SS) / SS, y = FY + Math.round(u.y * SS) / SS;
+        drawSoldier(g, x, y, { cls: u.cls, skin: u.skin, face: u.face, mode: u.mode, moving: u.moving, anim: u.anim * 2, swing: u.swing, flash: u.flash, hurt: u.hurt, t, level: u.cls === 'pike' && u.tgt && dist(u, u.tgt) < 44, wpn: u.wpn, arm: u.arm, man: manNo(u.sid) });
         if (!u.routing) {
             g.fillStyle = INK;
-            g.fillRect(x - 5, y - 23, 11, 3);
+            g.fillRect(x - 5, y - 27, 11, 3);
             g.fillStyle = PAL.paperHi;
-            g.fillRect(x - 4, y - 22, 9, 1);
+            g.fillRect(x - 4, y - 26, 9, 1);
             g.fillStyle = (SKINS[u.skin] || SKINS.own).coat;
-            g.fillRect(x - 4, y - 22, Math.max(1, Math.round(9 * u.hp / u.max)), 1);
+            g.fillRect(x - 4, y - 26, Math.max(1, Math.round(9 * u.hp / u.max)), 1);
         }
     }
     for (const p of v.parts) {
@@ -433,9 +305,8 @@ function drawField(v, b, t) {
         for (let i = 0; i < 2; i++)
             g.fillRect(-30 + Math.sin(t * 0.17 + i * 2.3) * 26, 84 + i * 21, LW + 60, 4);
     }
+    present(v.ctx, v.buf, v.cv.width, v.cv.height);
     const c = v.ctx;
-    c.imageSmoothingEnabled = false;
-    c.drawImage(v.buf, 0, 0, v.cv.width, v.cv.height);
     if (v.names && v.css >= 1.5) {
         const sc = v.cv.width / LW;
         c.font = Math.round(clamp(v.css * 4.5, 10, 15) * v.dpr) + "px 'Alegreya SC', Georgia, serif";
@@ -447,7 +318,7 @@ function drawField(v, b, t) {
         for (const u of b.units) {
             if (u.side !== 0 || !alive(u) || u.routing)
                 continue;
-            const n = u.name.split(' ')[0], X = u.x * sc, Y = (FY + u.y - 26) * sc;
+            const n = u.name.split(' ')[0], X = u.x * sc, Y = (FY + u.y - 30) * sc;
             c.strokeText(n, X, Y);
             c.fillText(n, X, Y);
         }
@@ -629,131 +500,7 @@ function drawMap(cv, st, plan) {
     }
 }
 /* ---------- the company in camp: sitting, lying, foraging, and the people of the baggage train ---------- */
-const HATS = {
-    pike: (R, d, sk) => { R(-3, -15 + d, 7, 1, PAL.steel); R(-1, -17 + d, 3, 2, PAL.helm); R(0, -18 + d, 1, 1, PAL.helm); },
-    shot: (R, d, sk) => { R(-3, -15 + d, 7, 1, INK); R(-1, -17 + d, 3, 2, INK); R(-3, -18 + d, 2, 2, sk.trim); },
-    sabre: (R, d, sk) => { R(-2, -16 + d, 5, 2, PAL.fur); R(-1, -17 + d, 3, 1, sk.coat); R(-3, -16 + d, 1, 3, sk.coat); R(1, -11 + d, 2, 1, INK); }
-};
-// pose: 'sit' (on a log, facing the fire), 'lie' (abed, or fallen), 'forage' (walking out with a basket); anything else stands, as on the field.
-function drawCamper(g, x, y, o) {
-    if (o.pose !== 'sit' && o.pose !== 'lie' && o.pose !== 'forage') {
-        drawSoldier(g, x, y, o);
-        if (o.bandage) {
-            const f = o.face || 1;
-            g.fillStyle = PAL.white;
-            g.fillRect(f > 0 ? x - 1 : x - 1, y - 14, 3, 1);
-        }
-        return;
-    }
-    const f = o.face || 1, sk = SKINS[o.skin] || SKINS.own;
-    const R = (dx, dy, w, h, c) => { g.fillStyle = c; g.fillRect(f > 0 ? x + dx : x - dx - w + 1, y + dy, w, h); };
-    if (o.pose === 'lie') {
-        R(-8, -2, 18, 2, PAL.drab);
-        R(-3, -4, 11, 2, sk.coat);
-        R(-1, -5, 9, 1, PAL.drab);
-        R(-7, -5, 3, 3, PAL.skin);
-        R(8, -5, 2, 3, INK);
-        R(-5, -3, 1, 1, INK);
-        if (o.bandage !== false) {
-            R(-7, -6, 3, 1, PAL.white);
-            R(-8, -5, 1, 2, PAL.white);
-        }
-        return;
-    }
-    if (o.pose === 'sit') {
-        R(-3, -10, 1, 4, INK);
-        R(1, -4, 5, 2, INK);
-        R(5, -3, 2, 3, INK);
-        R(-2, -10, 5, 5, sk.coat);
-        R(-3, -6, 5, 2, sk.coat);
-        R(-2, -7, 5, 1, sk.trim);
-        R(-1, -13, 3, 3, PAL.skin);
-        R(1, -12, 1, 1, INK);
-        HATS[o.cls](R, 1, sk);
-        if (o.prop === 'bandura') {
-            R(2, -9, 2, 2, sk.coat);
-            R(1, -7, 5, 3, PAL.wood);
-            R(5, -12, 1, 5, PAL.wood);
-            R(2, -6, 3, 1, INK);
-            R(4, o.strum ? -7 : -8, 1, 1, PAL.skin);
-        }
-        else if (o.prop === 'pipe') {
-            R(2, -9, 2, 2, sk.coat);
-            R(3, -10, 1, 1, sk.coat);
-            R(3, -11, 1, 1, PAL.skin);
-            R(2, -11, 3, 1, INK);
-            R(5, -12, 1, 2, PAL.wood);
-        }
-        else {
-            R(2, -9, 2, 2, sk.coat);
-            R(4, -7, 2, 1, sk.coat);
-            R(6, -7, 1, 1, PAL.skin);
-        }
-        return;
-    }
-    const step = Math.floor(o.anim || 0) % 2;
-    if (step === 0) {
-        R(-3, -4, 2, 4, INK);
-        R(2, -4, 2, 4, INK);
-        R(-2, -5, 5, 1, INK);
-    }
-    else
-        R(-1, -5, 3, 5, INK);
-    const b = step === 1 ? -1 : 0;
-    R(-2, -11 + b, 5, 6, sk.coat);
-    R(-3, -7 + b, 7, 2, sk.coat);
-    R(-2, -8 + b, 5, 1, sk.trim);
-    R(-3, -11 + b, 1, 4, INK);
-    R(-1, -14 + b, 3, 3, PAL.skin);
-    R(1, -13 + b, 1, 1, INK);
-    HATS[o.cls](R, b, sk);
-    R(2, -10 + b, 1, 4, sk.coat);
-    R(2, -7 + b, 5, 3, PAL.wood);
-    R(2, -7 + b, 5, 1, INK);
-    R(3, -8 + b, 3, 1, PAL.green);
-}
 const STAFF_LOOK = { surgeon: { coat: PAL.black, trim: INK }, drill: { coat: PAL.red, trim: PAL.ochre }, qm: { coat: PAL.blue, trim: PAL.ochre }, chaplain: { coat: INK, trim: INK } };
-function drawCivilian(g, x, y, k, face) {
-    const f = face || 1, L = STAFF_LOOK[k];
-    const R = (dx, dy, w, h, c) => { g.fillStyle = c; g.fillRect(f > 0 ? x + dx : x - dx - w + 1, y + dy, w, h); };
-    g.fillStyle = 'rgba(28,26,23,.22)';
-    g.fillRect(x - 4, y, 9, 1);
-    R(-2, -5, 2, 5, INK);
-    R(1, -5, 2, 5, INK);
-    R(-2, -11, 5, 6, L.coat);
-    R(-3, -7, 7, 2, L.coat);
-    R(-2, -8, 5, 1, L.trim);
-    R(-3, -11, 1, 4, INK);
-    R(-1, -14, 3, 3, PAL.skin);
-    R(1, -13, 1, 1, INK);
-    R(-4, -15, 9, 1, INK);
-    R(-2, -17, 5, 2, INK);
-    if (k === 'surgeon') {
-        R(-1, -11, 3, 1, PAL.white);
-        R(-1, -10, 3, 5, PAL.white);
-        R(2, -10, 1, 4, L.coat);
-        R(3, -8, 4, 1, PAL.steel);
-        R(4, -7, 3, 1, PAL.steel);
-    }
-    else if (k === 'drill') {
-        R(2, -10, 1, 4, L.coat);
-        R(3, -16, 1, 16, PAL.wood);
-        R(3, -17, 1, 1, PAL.ochre);
-        R(-1, -16, 3, 1, PAL.white);
-    }
-    else if (k === 'qm') {
-        R(2, -10, 2, 3, L.coat);
-        R(2, -9, 4, 4, PAL.white);
-        R(2, -9, 4, 1, INK);
-        R(-1, -18, 3, 1, PAL.ochre);
-    }
-    else {
-        R(-1, -11, 3, 1, PAL.white);
-        R(2, -10, 1, 4, L.coat);
-        R(3, -12, 1, 5, PAL.ochre);
-        R(2, -11, 3, 1, PAL.ochre);
-    }
-}
 // An ox, standing or lying, in the colour it should have by day or by firelight.
 function drawOx(g, x, y, f, lying, hide) {
     const R = (dx, dy, w, h, c) => { g.fillStyle = c; g.fillRect(f > 0 ? x + dx : x - dx - w + 1, y + dy, w, h); };
@@ -836,10 +583,7 @@ const artCache = {};
 function artURL(key, W, H, fn) {
     if (artCache[key])
         return artCache[key];
-    const c = document.createElement('canvas');
-    c.width = W;
-    c.height = H;
-    const g = c.getContext('2d');
+    const c = sceneCanvas(W, H), g = c.getContext('2d');
     fn(g, W, H);
     return (artCache[key] = c.toDataURL());
 }
@@ -875,22 +619,22 @@ function landscape(g, W, H, seed) {
         g.fillRect(r() * W | 0, hz + 2 + (r() * (H - hz - 3) | 0), 2 + (r() * 5 | 0), 1);
     }
 }
-// A man of the company on his card: standing with his arms, or abed.
-function soldierArt(s) {
-    const seed = s.id % 5, pose = s.wound ? 'lie' : 'stand';
-    return artURL('m' + s.cls + pose + seed, 48, 36, (g, W, H) => { landscape(g, W, H, seed); drawCamper(g, 24, H - 3, { cls: s.cls, skin: 'own', face: 1, mode: 'idle', anim: 0, pose }); });
+// A man of the company on his card: standing in his arms and armour, or abed. gear tries other levels than he has, for a card to show what buying them would make of him.
+function soldierArt(s, gear) {
+    const seed = s.id % 5, pose = s.wound ? 'lie' : 'stand', wpn = gear && gear.wpn != null ? gear.wpn : s.wpn, arm = gear && gear.arm != null ? gear.arm : s.arm;
+    return artURL('m' + s.id + s.cls + pose + wpn + arm, 48, 36, (g, W, H) => { landscape(g, W, H, seed); drawCamper(g, 24, H - 3, { cls: s.cls, skin: 'own', face: 1, mode: 'idle', anim: 0, pose, wpn, arm, man: s.id }); });
 }
 // After a fight: how each man came out of it.
-function fateArt(cls, fate, id) {
-    const seed = id % 5;
-    return artURL('f' + cls + fate + seed, 48, 36, (g, W, H) => {
+function fateArt(l) {
+    const seed = l.id % 5, cls = l.cls, fate = l.fate, kit = { wpn: l.wpn, arm: l.arm, man: l.id };
+    return artURL('f' + l.id + cls + fate + l.wpn + l.arm, 48, 36, (g, W, H) => {
         landscape(g, W, H, seed);
         if (fate === 'killed' || fate === 'struck down')
-            drawCamper(g, 24, H - 3, { cls, skin: 'own', pose: 'lie', bandage: fate !== 'killed' });
+            drawCamper(g, 24, H - 3, { cls, skin: 'own', pose: 'lie', bandage: fate !== 'killed', ...kit });
         else if (fate === 'fled')
-            drawCamper(g, 24, H - 3, { cls, skin: 'own', face: -1, mode: 'rout', moving: true, anim: 1 });
+            drawCamper(g, 24, H - 3, { cls, skin: 'own', face: -1, mode: 'rout', moving: true, anim: 1, ...kit });
         else
-            drawCamper(g, 24, H - 3, { cls, skin: 'own', face: 1, mode: 'idle', anim: 0, bandage: fate === 'wounded' });
+            drawCamper(g, 24, H - 3, { cls, skin: 'own', face: 1, mode: 'idle', anim: 0, bandage: fate === 'wounded', ...kit });
     });
 }
 // The other side of a contract or an ambush, facing the reader's company.
@@ -899,7 +643,7 @@ function foesArt(c) {
     return artURL('e' + c.id + us.map(u => u.cls).join(''), 72, 36, (g, W, H) => {
         landscape(g, W, H, c.id % 5);
         const step = us.length > 4 ? 10 : 12, x0 = Math.round(W / 2 - (us.length - 1) * step / 2);
-        us.forEach((u, i) => drawSoldier(g, x0 + i * step, H - 3 - (i % 2) * 2, { cls: u.cls, skin: c.skin || u.skin, face: -1, mode: 'idle', anim: 0 }));
+        us.forEach((u, i) => drawSoldier(g, x0 + i * step, H - 3 - (i % 2) * 2, { cls: u.cls, skin: c.skin || u.skin, face: -1, mode: 'idle', anim: 0, wpn: u.wpn, arm: u.arm, man: i + 2 }));
     });
 }
 function staffArt(k) { return artURL('s' + k, 48, 36, (g, W, H) => { landscape(g, W, H, k.length); drawCivilian(g, 24, H - 3, k, 1); }); }
@@ -995,8 +739,8 @@ function eventArt() {
 const CW = 320, CH = 151;
 const CAMP = {
     rest: [[130, 100, 1], [141, 90, 1], [179, 90, -1], [190, 100, -1], [136, 114, 1], [184, 114, -1], [150, 124, 1], [172, 124, -1]],
-    drill: [[207, 130, 1], [221, 116, 1], [195, 141, 1], [225, 143, 1], [240, 138, -1]],
-    forage: [[20, 130, -1], [40, 138, -1], [10, 118, -1], [59, 142, -1], [30, 146, -1]],
+    drill: [[204, 126, 1], [228, 112, 1], [274, 132, 1], [196, 142, 1], [226, 140, 1], [258, 147, -1], [288, 144, -1], [242, 129, -1]],
+    forage: [[20, 130, -1], [40, 138, -1], [10, 118, -1], [59, 142, -1], [30, 146, -1], [50, 124, -1], [70, 134, -1], [16, 146, -1]],
     abed: [[103, 88, 1], [87, 95, 1], [119, 95, -1], [103, 101, 1], [88, 106, 1], [118, 107, -1], [96, 112, 1], [112, 116, -1]],
     staff: { surgeon: [124, 86, -1], drill: [252, 121, -1], qm: [76, 98, -1], chaplain: [242, 90, -1] }
 };
@@ -1091,12 +835,7 @@ function campBack(st) {
     return c;
 }
 function newCamp(cv, pos) {
-    const buf = document.createElement('canvas');
-    buf.width = CW;
-    buf.height = CH;
-    const sel = document.createElement('canvas');
-    sel.width = 44;
-    sel.height = 44;
+    const buf = sceneCanvas(CW, CH), sel = sceneCanvas(44, 44); // SS times finer than the scene, for the figures (see SS)
     const v = { cv, ctx: cv.getContext('2d'), buf, g: buf.getContext('2d'), sel, back: null, key: '', pos: pos || {}, parts: [], t: 0, btns: null };
     fitCamp(v);
     return v;
@@ -1194,23 +933,24 @@ function drawCamp(v, st, sel, dt, still) {
     }
     const draw = (gg, p, x, y) => {
         const c = v.pos[p.id], s = p.s;
+        const me = { cls: s.cls, skin: 'own', wpn: s.wpn, arm: s.arm, man: s.id };
         if (c.moving)
-            return drawCamper(gg, x, y, { cls: s.cls, skin: 'own', face: c.face, mode: 'idle', moving: true, anim: c.anim });
+            return drawCamper(gg, x, y, { ...me, face: c.face, mode: 'idle', moving: true, anim: c.anim });
         if (p.k === 'abed')
-            return drawCamper(gg, x, y, { cls: s.cls, skin: 'own', face: p.f, pose: 'lie' });
+            return drawCamper(gg, x, y, { ...me, face: p.f, pose: 'lie' });
         if (p.k === 'rest')
-            return drawCamper(gg, x, y, { cls: s.cls, skin: 'own', face: p.f, pose: 'sit', prop: p.prop, strum: Math.floor(t * 5) % 2 });
+            return drawCamper(gg, x, y, { ...me, face: p.f, pose: 'sit', prop: p.prop, strum: Math.floor(t * 5) % 2 });
         if (p.k === 'forage')
-            return drawCamper(gg, x, y, { cls: s.cls, skin: 'own', face: p.f, pose: 'forage', anim: t * 1.6 + p.id });
+            return drawCamper(gg, x, y, { ...me, face: p.f, pose: 'forage', anim: t * 1.6 + p.id });
         const ph = (t + p.id * 0.7) % 3;
         if (s.cls === 'sabre')
-            return drawCamper(gg, x, y, { cls: 'sabre', skin: 'own', face: p.f, mode: 'fight', swing: ph % 1 < 0.35 ? 1 : 0 });
+            return drawCamper(gg, x, y, { ...me, face: p.f, mode: 'fight', swing: ph % 1 < 0.35 ? 1 : 0 });
         if (s.cls === 'shot')
-            return drawCamper(gg, x, y, { cls: 'shot', skin: 'own', face: p.f, mode: ph > 1.2 ? 'aim' : 'idle', flash: ph > 2.6 && ph < 2.75 ? 1 : 0 });
-        return drawCamper(gg, x, y, { cls: 'pike', skin: 'own', face: p.f, mode: 'idle', level: ph % 1.5 > 0.75 });
+            return drawCamper(gg, x, y, { ...me, face: p.f, mode: ph > 1.2 ? 'aim' : 'idle', flash: ph > 2.6 && ph < 2.75 ? 1 : 0 });
+        return drawCamper(gg, x, y, { ...me, face: p.f, mode: 'idle', level: ph % 1.5 > 0.75 });
     };
     for (const p of plan.slice().sort((a, b) => v.pos[a.id].y - v.pos[b.id].y)) {
-        const c = v.pos[p.id], x = Math.round(c.x), y = Math.round(c.y);
+        const c = v.pos[p.id], x = Math.round(c.x * SS) / SS, y = Math.round(c.y * SS) / SS;
         if (p.id === sel) {
             const sg = v.sel.getContext('2d');
             sg.clearRect(0, 0, 44, 44);
@@ -1219,8 +959,8 @@ function drawCamp(v, st, sel, dt, still) {
             sg.fillStyle = '#e8c46a';
             sg.fillRect(0, 0, 44, 44);
             sg.globalCompositeOperation = 'source-over';
-            for (const o of [[1, 0], [-1, 0], [0, 1], [0, -1]])
-                g.drawImage(v.sel, x - 22 + o[0], y - 40 + o[1]);
+            for (const o of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]])
+                g.drawImage(v.sel, x - 22 + o[0] / SS, y - 40 + o[1] / SS, 44, 44);
         }
         draw(g, p, x, y);
     }
@@ -1286,9 +1026,7 @@ function drawCamp(v, st, sel, dt, still) {
         }
         g.globalAlpha = 1;
     }
-    const c = v.ctx;
-    c.imageSmoothingEnabled = false;
-    c.drawImage(v.buf, 0, 0, v.cv.width, v.cv.height);
+    present(v.ctx, v.buf, v.cv.width, v.cv.height);
     // keep the clickable figures over the drawn ones as they walk
     if (v.btns)
         for (const b of v.btns) {

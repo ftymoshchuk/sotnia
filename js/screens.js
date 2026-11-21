@@ -25,7 +25,7 @@ const roman = (n) => ROMAN[n] || String(n);
 // The campaign in play: null until one is raised or continued, so on the title screen. The screens after it are built only with a
 // campaign in hand, which is why they write G!; save(), barHTML() and the frame loop are what look.
 let G = null;
-const ui = { screen: 'title', tab: 'market', course: null, open: null, c: null, pick: [], stance: null, odds: null, b: null, speed: 1, rep: null, modal: null, news: null, sound: true, music: true, view: null, camp: null, campPos: {}, demo: null, overT: 0, verdict: false };
+const ui = { screen: 'title', tab: 'market', course: null, open: null, c: null, pick: [], stance: null, odds: null, b: null, speed: 1, rep: null, modal: null, news: null, sound: true, music: true, view: null, camp: null, campPos: {}, demo: null, overT: 0, verdict: false, fresh: null };
 /* ---------- saving ---------- */
 const SAVE = 'sotnia-save-2';
 function save() { try {
@@ -106,13 +106,19 @@ function barHTML() {
     return h + toolsHTML() + '</header>';
 }
 /* ---------- the cards ---------- */
+/**
+ * One slot of a man's kit as a ladder of its four pieces, worst to best: the ones he has passed lit but faded, the one he has framed
+ * in gilt, the next in grey with its price, and the rest as silhouettes. The button buys the next piece, and a card shows the man in
+ * it while the button is under the pointer or has focus (see tryOn in main.ts), even when he cannot yet pay.
+ */
 function gearHTML(s, k) {
-    const names = k === 'wpn' ? WPN[s.cls] : ARM, t = s[k], what = k === 'wpn' ? 'arms' : 'armour';
-    let h = '<span class="gear">' + ic(k === 'wpn' ? s.cls : 'cuirass') + '<span class="gname">' + esc(names[t]) + '</span>' + pips(t + 1, 4, names[t] + ', ' + (t + 1) + ' of 4');
+    const names = k === 'wpn' ? WPN[s.cls] : ARM, t = s[k], what = k === 'wpn' ? 'arms' : 'armour', fresh = !!ui.fresh && ui.fresh.id === s.id && ui.fresh.k === k;
+    const rungs = '<span class="rungs" role="img" aria-label="' + esc(names[t] + ', ' + (t + 1) + ' of 4') + '">' + names.map((n, i) => '<span class="rung ' + (i < t ? 'was' : i === t ? 'now' + (fresh ? ' fresh' : '') : i === t + 1 ? 'next' : 'far') + '" title="' + esc(n + (i === t ? ', his now' : i === t + 1 ? ', ' + gearPrice(G, t) + ' thalers' : '')) + '"><img src="' + gearArt(k, s.cls, i) + '" alt=""></span>').join('') + '</span>';
+    const head = '<span class="gname">' + ic(k === 'wpn' ? s.cls : 'cuirass') + '<span>' + esc(names[t]) + '</span></span>';
     if (t >= 3)
-        return h + '<span class="best" title="The best there is">' + ic('star', 'The best there is') + '</span></span>';
+        return '<span class="gear" data-slot="' + k + '">' + head + rungs + '<span class="best" title="The best there is">' + ic('star', 'The best there is') + '</span></span>';
     const p = gearPrice(G, t), shop = has(G, 'market');
-    return h + '<button class="mini" data-act="up" data-id="' + s.id + '" data-k="' + k + '"' + (!shop || G.thalers < p ? ' disabled' : '') +
+    return '<span class="gear" data-slot="' + k + '">' + head + rungs + '<button class="mini" data-act="up" data-id="' + s.id + '" data-k="' + k + '"' + (!shop || G.thalers < p ? ' aria-disabled="true"' : '') +
         ' aria-label="' + esc('Better ' + what + ' for ' + s.name + ': ' + names[t + 1] + ', ' + p + ' thalers') + '" title="' + esc(shop ? names[t + 1] + ', ' + p + ' thalers' : 'Bought only where there is a market') + '">' + ic('up') + p + '</button></span>';
 }
 function soldierCard(s, where) {
@@ -141,7 +147,7 @@ function soldierCard(s, where) {
         body += '<button class="link" data-act="dismiss" data-id="' + s.id + '">Strike from the roll</button>';
     return cardHTML({
         cls: 'soldier' + (s.promos ? ' gilt' : '') + (where === 'camp' ? ' side-card' : ''), attrs: ' aria-label="' + esc(s.name) + '"', title: esc(s.name) + '<small>' + esc(s.origin) + '</small>',
-        art: soldierArt(s), artCls: s.wound ? 'hurt' : '', badges, body,
+        art: soldierArt(s), artCls: (s.wound ? 'hurt' : '') + (ui.fresh && ui.fresh.id === s.id ? ' fresh' : ''), badges, body,
         type: { look: LOOK[s.cls], text: c.name, coin: wageOf(s), coinLabel: 'Wage, thalers a month', lvl: roman(s.level) }
     });
 }
@@ -441,7 +447,7 @@ function reportHTML() {
             s && s.promos ? ['star', 'Promotion earned'] : l.fate === 'fled' ? ['run', 'Ran from the field'] : l.fate === 'wounded' ? ['drop', 'Cut, but standing'] : ['check', 'Not a scratch'];
         return cardHTML({
             cls: 'fate' + (dead ? ' dead' : '') + (s && s.promos ? ' gilt' : ''), attrs: ' aria-label="' + esc(l.name + ': ' + F.word) + '"', title: esc(l.name),
-            art: fateArt(l.cls, l.fate, l.id), artCls: dead ? 'dead' : l.fate === 'struck down' ? 'hurt' : '',
+            art: fateArt(l), artCls: dead ? 'dead' : l.fate === 'struck down' ? 'hurt' : '',
             badges: '<span class="stamp ' + F.tone + '">' + ic(F.icon) + F.word + '</span>',
             body: '<span class="strip">' + stat('swords', l.kills, l.kills === 1 ? 'kill' : 'kills') + stat('star', l.xp ? '+' + l.xp : '—', 'experience') + '</span>' + fxLine(note),
             type: { look: dead ? 'grey' : LOOK[l.cls], text: CLS[l.cls].name }
