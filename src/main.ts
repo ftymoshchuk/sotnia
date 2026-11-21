@@ -51,9 +51,14 @@ function startPass(kind: 'rest' | 'march', go: () => DayNews | null) {
   const ledger = ledgerOf(G), day0 = G.day, oldBack = ui.camp ? ui.camp.back : null;
   const r = go(); if (!r) return;
   const days = G.day - day0;
+  // The page the day was ordered from (the road, say) is put away first. It is drawn over the camp, so it would hide the time going by, and
+  // after it the old road would still be on show: what a day brings is told over the camp, not over a page.
+  ui.panel = null;
   if (calm || !ui.camp || ui.screen !== 'camp' || days < 1) { finishDay(r, ledger); render(); ui.deltas = null; return; }
   ui.pass = { kind, days, t: 0, dur: kind === 'rest' ? 2.4 : clamp(1.6 + 0.5 * days, 2.2, 3.6), res: r, ledger, oldBack, swapped: false };
   ui.open = null; ui.deltas = null;
+  // render() is not called while the day goes by, so the page is taken off the screen here, and the camp is given back its clicks
+  hideTip(); renderPanel(); $('.hub')?.removeAttribute('inert');
   document.querySelectorAll('.pop, .dawn').forEach(el => el.remove());
   document.body.classList.add('passing');
   const veil = document.createElement('div'); veil.className = 'passveil'; veil.dataset.act = 'passSkip';
@@ -74,6 +79,11 @@ function setStance(s: Stance) {
 /** Keeps the address in step with the encyclopedia (#encyclopedia-units), so that a page of it can be linked to; where the page may not touch its address, nothing happens. */
 function codexAddress(open: boolean) {
   try { history.replaceState(null, '', open ? '#encyclopedia-' + ui.codex : location.pathname + location.search); } catch (e) { /* no address to keep */ }
+}
+/** Puts the keyboard back on what opened a page, once it is put away: the thing in the camp, or its button under the scene where that is what shows. */
+function focusOpener(k: TabId) {
+  const b = Array.from(document.querySelectorAll<HTMLElement>('[data-act="panel"][data-k="' + k + '"]')).find(el => el.offsetParent !== null);
+  if (b) b.focus();
 }
 /** The data- attributes of the element that was clicked, which hold what its action needs (the HTML that sets them is in screens.ts). */
 type ActData = Record<string, string>;
@@ -99,7 +109,7 @@ function act(a: string, d: ActData) {
       if (!panelsHere().includes(d.k as TabId)) return;
       ui.panel = d.k as TabId; if (d.post) ui.post = d.post as CommandView; break;
     }
-    case 'panelClose': { const k = ui.panel; ui.panel = null; render(); if (k) { const b = $('.menu [data-act="panel"][data-k="' + k + '"]'); if (b) b.focus(); } return; }
+    case 'panelClose': { const k = ui.panel; ui.panel = null; render(); if (k) focusOpener(k); return; }
     case 'card': ui.open = +d.id; ui.panel = 'roll'; ui.scrollCard = +d.id; break;
     case 'newsClose': ui.news = null; break;
     case 'codex': if (ui.modal || ui.screen === 'battle' || ui.screen === 'codex') return; ui.codexFrom = ui.screen; ui.screen = 'codex'; codexAddress(true); break;
@@ -175,6 +185,10 @@ document.addEventListener('click', e => {
   if ((e.target as HTMLElement).id === 'camp' && ui.open != null && !ui.modal) { ui.open = null; render(); return; }
   // A click on the map picks the place nearest it as the course.
   if ((e.target as HTMLElement).id === 'map' && G && ui.screen === 'camp' && !ui.modal) { const id = placeAt(e.target as HTMLCanvasElement, e.offsetX, e.offsetY); if (id) act('course-pick', { v: id }); return; }
+  // Where there is no pointer to rest on a thing, a tap on one that only has a note (a figure in the ledger) shows it, and a second puts it away; a tap elsewhere puts it away.
+  const tipEl = (e.target as HTMLElement).closest<HTMLElement>('[data-tip]');
+  if (tipEl && !tipEl.dataset.act && noHover()) { if (tipOf === tipEl) hideTip(); else showTip(tipEl); return; }
+  if (tipOf && tipOf !== tipEl) hideTip();
   const el = (e.target as HTMLElement).closest<HTMLButtonElement | HTMLSelectElement>('[data-act]'); if (el && !el.disabled && el.getAttribute('aria-disabled') !== 'true') act(el.dataset.act!, el.dataset as ActData);
 });
 // Trying on: while the pointer or focus is on the button that buys a man's next arms or armour, his card shows him wearing them. Not while
@@ -194,8 +208,49 @@ function tryOff(e: Event) {
 }
 document.addEventListener('mouseover', tryOn); document.addEventListener('focusin', tryOn);
 document.addEventListener('mouseout', tryOff); document.addEventListener('focusout', tryOff);
+
+/* ---------- notes on hover ---------- */
+// A thing with a data-tip (tipAttr in screens.ts) shows a note beside it while the pointer rests on it or it has the keyboard, and on a screen with no
+// pointer, for a tap. The note is only for the eye: whatever a reader of the screen needs is on the thing itself, so the note is hidden from it.
+let tipOf: HTMLElement | null = null, tipTimer = 0;
+// On a screen with no pointer to rest on a thing, the mouse events a tap leaves behind (the pointer "arriving" and then "leaving" at once) mean nothing: a tap shows a note and another tap puts it away.
+const noHover = () => !!window.matchMedia && window.matchMedia('(hover: none)').matches;
+function hideTip() {
+  clearTimeout(tipTimer); tipOf = null;
+  const box = $('#tip'); if (box) box.hidden = true;
+}
+function showTip(el: HTMLElement) {
+  const box = $('#tip'); if (!box || !el.isConnected) return;
+  let t: Tip; try { t = JSON.parse(el.dataset.tip || ''); } catch (e) { return; }
+  box.innerHTML = '<b>' + esc(t.title) + '</b>' + t.lines.map(l => '<p>' + esc(l) + '</p>').join('') + (t.warns || []).map(l => '<p class="w">' + ic('warn') + esc(l) + '</p>').join('');
+  box.hidden = false; tipOf = el;
+  // Under the thing (and the label it has in the scene, if it has one), or over it where there is no room under it; and never off the page.
+  const r = el.getBoundingClientRect(), p = el.querySelector('.plate')?.getBoundingClientRect(), top = p ? Math.min(r.top, p.top) : r.top, bottom = p ? Math.max(r.bottom, p.bottom) : r.bottom;
+  const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight, w = box.offsetWidth, h = box.offsetHeight;
+  const y = bottom + 10 + h <= vh - 8 || top - h - 10 < 8 ? bottom + 10 : top - h - 10;
+  box.style.transform = 'translate(' + Math.round(clamp(r.left + r.width / 2 - w / 2, 8, Math.max(8, vw - w - 8))) + 'px,' + Math.round(y) + 'px)';
+}
+// A short wait before the first note, so that a pointer crossing the bar does not flash them all; from one thing to the next it changes at once.
+function tipOn(e: Event) {
+  const el = (e.target as Element).closest<HTMLElement>('[data-tip]');
+  if (!el || el === tipOf) return;
+  if (e.type === 'mouseover' && noHover()) return;
+  if (e.type === 'focusin' && !el.matches(':focus-visible')) return; // the focus that follows a mouse click (a page put away, say) is not the keyboard's
+  clearTimeout(tipTimer);
+  if (tipOf) showTip(el); else tipTimer = setTimeout(() => showTip(el), 120);
+}
+function tipOff(e: Event) {
+  const el = (e.target as Element).closest<HTMLElement>('[data-tip]'), to = (e as MouseEvent | FocusEvent).relatedTarget as Element | null;
+  if (e.type === 'mouseout' && noHover()) return;
+  if (!el || (to && to.closest && (el.contains(to) || to.closest('[data-tip]')))) return; // still on it, or on to another, which takes the note over
+  hideTip();
+}
+document.addEventListener('mouseover', tipOn); document.addEventListener('focusin', tipOn);
+document.addEventListener('mouseout', tipOff); document.addEventListener('focusout', tipOff);
+window.addEventListener('scroll', hideTip, true);
 document.addEventListener('change', e => { const el = e.target as HTMLSelectElement; if (el.dataset && el.dataset.act === 'course-pick') act('course-pick', { v: el.value }); });
 document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') hideTip();
   if (ui.pass) { if (e.key === 'Escape' || e.key === ' ' || e.key === 'Enter') { e.preventDefault(); endPass(); } return; }
   if (e.key === 'Escape' && ui.modal && ui.modal.type === 'help') { act('close', {}); return; }
   if (e.key === 'Escape' && ui.screen === 'codex' && !ui.modal) { act('codexBack', {}); return; }
@@ -207,7 +262,7 @@ document.addEventListener('keydown', e => {
   else if (e.key === ' ' && !((e.target as Element).closest && (e.target as Element).closest('button'))) { e.preventDefault(); ui.speed = ui.speed ? 0 : 1; paintHud(); }
 });
 window.addEventListener('resize', () => {
-  fitBar();
+  hideTip(); fitBar();
   if (ui.view) fitView(ui.view);
   if (ui.screen === 'camp' && G) { if (ui.camp) { fitCamp(ui.camp); drawCamp(ui.camp, G, ui.open, 0, calm); } if (ui.panel === 'map') drawMap($<HTMLCanvasElement>('#map'), G, !atEnd(G) && ui.course ? routeTo(G, ui.course) : null); }
 });

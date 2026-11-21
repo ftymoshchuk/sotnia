@@ -50,29 +50,48 @@ img { max-width: 100%; }
 .sheet > :not(.bar) { margin-inline: var(--gutter); }
 
 /* ---------- the bar ---------- */
-.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; padding: 10px var(--gutter); background: var(--walnut); border-bottom: 3px solid var(--weld); box-shadow: 0 2px 0 #120c07, 0 8px 24px rgba(0, 0, 0, .45); }
-.logo { font: 900 40px/0.85 var(--display); color: var(--gilt); padding-bottom: 4px; }
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; padding: 8px var(--gutter); background: var(--walnut); border-bottom: 2px solid var(--weld); box-shadow: 0 6px 18px rgba(0, 0, 0, .4); }
+.logo { font: 900 34px/0.85 var(--display); color: var(--gilt); padding-bottom: 4px; }
 .strap { font: 14px/1.2 var(--caps); letter-spacing: .12em; color: var(--mute); }
 .where { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.where b { font: 500 18px/1.05 var(--caps); letter-spacing: .04em; color: var(--cream); }
-.where span { font-size: 13px; line-height: 1.1; color: var(--mute); }
-.trip { display: inline-flex; align-items: center; gap: 9px; padding: 7px 10px; border: 1px solid var(--walnut-line); border-radius: 7px; background: transparent; color: var(--mute); font: 12.5px/1 var(--caps); letter-spacing: .05em; }
+.where b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 17px/1.05 var(--caps); letter-spacing: .04em; color: var(--cream); }
+.where span { font-size: 13px; line-height: 1.1; color: var(--mute); white-space: nowrap; }
+.trip { display: inline-flex; align-items: center; gap: 9px; padding: 6px 10px; border: 1px solid var(--walnut-line); border-radius: 7px; background: transparent; color: var(--mute); font: 12.5px/1 var(--caps); letter-spacing: .05em; white-space: nowrap; }
 button.trip { cursor: pointer; }
 button.trip:hover { border-color: var(--gilt); color: var(--cream); }
-.track { position: relative; width: 130px; height: 8px; background: #3b2a1c; border: 1px solid #120c07; display: block; }
+.track { position: relative; width: 96px; height: 8px; background: #3b2a1c; border: 1px solid #120c07; display: block; }
 .track i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--madder); }
 .track b { position: absolute; top: -5px; width: 4px; height: 16px; margin-left: -2px; background: var(--gilt); }
-.stats { display: flex; flex-wrap: wrap; gap: 8px 22px; }
-.bar .tools { order: 1; }
-.bar .stats { order: 2; flex: 1 1 100%; padding-top: 8px; border-top: 1px solid var(--walnut-line); }
+.stats { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+/* On a wide screen the bar is one row that never wraps: when a name is long, the names give way (with an ellipsis) before the ledger does. */
+@media (min-width: 1260px) {
+  .bar { flex-wrap: nowrap; }
+  .logo, .stat.due, .stats, .tools { flex: none; }
+  .trip { min-width: 0; }
+  .trip .to { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+}
+/* Where there is not room for it all, the ledger takes a row of its own under the rest, and the name of the place gives way to the tools beside it. */
+@media (max-width: 1259px) {
+  .bar .tools { order: 1; }
+  .bar .stats { order: 2; flex: 1 1 100%; padding-top: 6px; border-top: 1px solid var(--walnut-line); }
+  .bar .grow { display: none; }
+  .where { flex: 1 1 0; min-width: 120px; }
+}
+@media (max-width: 900px) {
+  .trip .to { display: none; }
+  .track { width: 64px; }
+}
 .stat { display: inline-flex; align-items: center; gap: 6px; color: var(--cream); white-space: nowrap; }
-.stat .i { font-size: 21px; color: var(--gilt); }
-.stat b { font: 700 20px/1 var(--body); font-variant-numeric: lining-nums tabular-nums; }
+/* A figure of the ledger is a button only so that it can be reached, and shows its note when it is: it does nothing, so it is drawn as plain as the text it was. */
+button.stat { margin: 0; padding: 4px 6px; border: 0; border-radius: 7px; background: none; cursor: help; }
+button.stat:hover { background: rgba(232, 196, 106, .1); }
+.stat .i { font-size: 20px; color: var(--gilt); }
+.stat b { font: 700 19px/1 var(--body); font-variant-numeric: lining-nums tabular-nums; }
 .stat small { font-size: 12px; color: var(--mute); }
 .stat.due.tight b { color: var(--gilt-hi); }
-.stat.due.late b, .stat.due.late .i { color: var(--alarm); }
+.stat.due.late b, .stat.due.late .i, .stat.short b, .stat.short .i { color: var(--alarm); }
 .tools { display: flex; gap: 6px; }
-.tool { width: 40px; height: 40px; display: grid; place-items: center; background: transparent; color: var(--gilt); border: 1px solid var(--walnut-line); border-radius: 8px; cursor: pointer; padding: 0; font-size: 20px; }
+.tool { width: 38px; height: 38px; display: grid; place-items: center; background: transparent; color: var(--gilt); border: 1px solid var(--walnut-line); border-radius: 8px; cursor: pointer; padding: 0; font-size: 20px; }
 .tool:hover { background: #3a2a1b; color: var(--gilt-hi); }
 .tool.off { color: var(--mute); background: linear-gradient(135deg, transparent 46%, var(--mute) 46%, var(--mute) 54%, transparent 54%); }
 
@@ -238,24 +257,35 @@ button.trip:hover { border-color: var(--gilt); color: var(--cream); }
 
 /* ---------- camp: the hub. The scene fills the screen under the bar; what is done in it is done over it, in pages that open from the things in the camp ---------- */
 .bar { position: sticky; top: 0; z-index: 15; }
-.hub { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+.hub { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
 .stage { display: block; }
 .scene { position: relative; width: 100%; margin: 0 auto; line-height: 0; }
 .scene canvas { display: block; width: 100%; aspect-ratio: 320 / 151; image-rendering: pixelated; background: var(--night); border-radius: 12px; box-shadow: 0 0 0 1px var(--walnut-line), 0 14px 30px rgba(0, 0, 0, .5); }
+/* The grid of buttons under the scene is for a phone, where the labels in the scene are hidden and its things are too small to click (see the phone's media query). */
+.menu { display: none; }
+.menu button { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 8px 2px 7px; border: 1px solid var(--walnut-line); border-radius: 12px; background: var(--walnut); color: var(--cream); font: 12.5px/1 var(--caps); letter-spacing: .03em; cursor: pointer; }
+.menu button .i { font-size: 22px; color: var(--gilt); }
+.menu button:hover { border-color: var(--gilt); background: var(--walnut-hi); }
+.menu button[aria-expanded="true"] { background: var(--thaler); border-color: var(--gilt-hi); color: var(--ink); }
+.menu button[aria-expanded="true"] .i { color: var(--ink); }
+.menu .count { position: absolute; top: 3px; right: 5px; min-width: 18px; height: 18px; padding: 0 5px; font: 700 11.5px/18px var(--body); font-style: normal; }
+/* Trouble in the camp, and the sale at the end of the road, are said over the scene where it is big enough, and under it where it is not. */
+.alerts { display: grid; gap: 6px; padding-top: 8px; line-height: 1.25; }
+.alert { display: inline-flex; align-items: center; justify-self: start; gap: 7px; padding: 5px 12px 6px 10px; border: 1px solid var(--alarm); border-radius: 999px; background: rgba(40, 14, 12, .92); color: var(--alarm); font: 15px/1.2 var(--body); text-align: left; }
+.alert .i { flex: none; }
+button.alert { cursor: pointer; }
+button.alert:hover { background: rgba(74, 22, 18, .96); }
+.deliver { display: grid; justify-items: center; gap: 6px; padding-top: 10px; line-height: 1.2; }
+.deliver .warn, .deliver .meta { padding: 3px 12px 4px; border-radius: 999px; background: rgba(18, 13, 8, .86); }
 @media (min-width: 880px) and (min-height: 600px) {
   body.hubmode .sheet { height: 100dvh; min-height: 0; max-width: 1800px; padding-bottom: 12px; gap: 12px; }
-  .hub { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; column-gap: 12px; }
-  .menu { grid-area: 1 / 1; flex-direction: column; flex-wrap: nowrap; justify-content: center; gap: 6px; }
-  .menu button { flex-direction: column; justify-content: center; gap: 4px; width: 76px; padding: 9px 4px 8px; border-radius: 12px; font-size: 13px; letter-spacing: .04em; }
-  .menu button .i { font-size: 24px; }
-  .menu .count { position: absolute; top: 3px; right: 5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--madder); color: var(--parchment-hi); font: 700 11.5px/18px var(--body); text-align: center; font-style: normal; }
-  .stage { grid-area: 1 / 2; min-height: 0; container-type: size; display: grid; place-items: center; }
+  .hub { display: grid; grid-template-rows: minmax(0, 1fr); }
+  .stage { min-height: 0; container-type: size; display: grid; place-items: center; }
   .scene { width: min(100cqw, calc(100cqh * 320 / 151)); }
-  .dock { grid-column: 1 / -1; }
-}
-@media (min-width: 880px) and (min-height: 600px) and (max-height: 760px) {
-  .menu button { width: 52px; padding: 8px 2px; }
-  .menu button span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  /* both in the sky at the right: nothing stands there to be covered, and the men below it stay in reach (the sale is shown instead of the trouble, never with it) */
+  .alerts, .deliver { position: absolute; right: 10px; top: 10px; z-index: 3; max-width: min(400px, 44%); padding: 0; justify-items: end; }
+  .alert { justify-self: end; box-shadow: 0 4px 14px rgba(0, 0, 0, .45); }
+  .deliver .btn { box-shadow: 0 8px 24px rgba(0, 0, 0, .6); }
 }
 .spot { position: absolute; padding: 0; margin: 0; border: 0; background: transparent; cursor: pointer; border-radius: 6px; line-height: 1; color: var(--parchment); }
 .spot:hover, .spot:focus-visible { background: rgba(232, 196, 106, .1); outline: 2px dashed rgba(232, 196, 106, .8); outline-offset: -2px; }
@@ -309,32 +339,12 @@ body.passing .spot, body.passing .camper .plate { visibility: hidden; }
 .delta.up { color: #a8dca0; }
 .delta.down { color: var(--alarm); }
 @keyframes deltaRise { 0% { opacity: 0; transform: translateY(7px); } 10% { opacity: 1; transform: none; } 72% { opacity: 1; } 100% { opacity: 0; transform: translateY(-5px); } }
-.dock { display: flex; flex-direction: column; gap: 10px; padding: 10px 14px 12px; background: var(--walnut); border: 1px solid var(--walnut-line); border-top: 3px solid var(--weld); border-radius: 12px; }
-.menu { order: 2; display: flex; flex-wrap: wrap; gap: 6px; }
-.menu button { position: relative; display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px 8px; border: 1px solid var(--walnut-line); border-radius: 999px; background: var(--walnut); color: var(--cream); font: 15px/1 var(--caps); letter-spacing: .05em; cursor: pointer; }
-.menu button .i { font-size: 18px; color: var(--gilt); }
-.menu button:hover { border-color: var(--gilt); background: var(--walnut-hi); }
-.menu button[aria-expanded="true"] { background: var(--thaler); border-color: var(--gilt-hi); color: var(--ink); }
-.menu button[aria-expanded="true"] .i { color: var(--ink); }
-.stage { order: 1; }
-.dock { order: 3; }
-.doing { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px 14px; }
-.tally { display: flex; flex-direction: column; justify-content: center; gap: 6px; padding-right: 16px; border-right: 1px solid var(--walnut-line); }
-.tally .chips { display: flex; gap: 6px; }
-.tchip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border: 1px solid var(--walnut-line); border-radius: 6px; font: 700 16px/1 var(--body); color: var(--cream); }
-.tchip .i { color: var(--gilt); }
-.act { min-width: 118px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; background: var(--walnut-hi); color: var(--cream); border: 1.5px solid var(--walnut-line); border-radius: 10px; cursor: pointer; padding: 6px 12px; font: 16px/1.1 var(--caps); letter-spacing: .04em; }
-.act > .i { font-size: 24px; color: var(--gilt); }
-.act small { display: inline-flex; align-items: center; gap: 4px; font: 13px/1.1 var(--body); color: var(--mute); letter-spacing: 0; }
-.act:hover { border-color: var(--gilt); background: #3a2a1b; }
-.course { flex: 1 1 380px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 6px 10px; }
-.course label { display: inline-flex; align-items: center; gap: 6px; font: 13px/1 var(--caps); letter-spacing: .14em; color: var(--gilt); }
-.course select { min-width: 0; width: 100%; font: 16px/1.2 var(--body); color: var(--ink); background: var(--parchment-hi); border: 1.5px solid var(--gilt-lo); border-radius: 6px; padding: 6px 8px; }
+/* the course: where the company is bound, and how it gets there, set on the road's page */
+.course { display: grid; gap: 10px; }
+.course select { min-width: 0; width: 100%; font: 16px/1.2 var(--body); color: var(--ink); background: var(--parchment-hi); border: 1.5px solid var(--gilt-lo); border-radius: 6px; padding: 8px 10px; }
 .course .go-row { display: flex; gap: 8px; flex-wrap: nowrap; }
 .course .go-row .btn.go { flex: 1 1 auto; font-size: 16px; white-space: nowrap; }
-.course .meta, .course .warn { grid-column: 1 / -1; }
-.warns { display: flex; flex-direction: column; justify-content: center; gap: 6px; max-width: 280px; }
-.deliver { flex: 1; display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; }
+.roads { display: grid; gap: 20px; align-content: start; }
 .x { width: 36px; height: 36px; display: grid; place-items: center; padding: 0; border: 1px solid var(--walnut-line); border-radius: 8px; background: transparent; color: var(--gilt); font-size: 19px; cursor: pointer; }
 .x:hover { background: #3a2a1b; color: var(--gilt-hi); }
 /* a page of the company's business, open over the camp and under the bar */
@@ -557,6 +567,15 @@ kbd { font: 11px/1 var(--body); padding: 2px 4px; border: 1px solid currentColor
 .rules .arms .i { font-size: 24px; color: var(--ink); margin: 0; }
 .foot { font-size: 13px; color: var(--mute); border-top: 1px solid var(--walnut-line); padding-top: 10px; margin-top: auto; }
 
+/* ---------- the note beside a figure of the ledger, or a thing in the camp (see showTip in src/main.ts) ---------- */
+#tip { position: fixed; left: 0; top: 0; z-index: 60; width: max-content; max-width: min(320px, calc(100vw - 16px)); padding: 8px 12px 10px; background: rgba(26, 18, 12, .97); color: var(--cream); border: 1px solid var(--weld); border-radius: 9px; box-shadow: 0 10px 28px rgba(0, 0, 0, .6); font: 14.5px/1.35 var(--body); pointer-events: none; animation: tipIn .12s ease-out both; }
+#tip[hidden] { display: none; }
+#tip b { display: block; margin-bottom: 3px; font: 500 14px/1.2 var(--caps); letter-spacing: .1em; color: var(--gilt); }
+#tip p + p { margin-top: 4px; }
+#tip .w { display: flex; align-items: flex-start; gap: 6px; color: var(--alarm); }
+#tip .w .i { flex: none; margin-top: 2px; }
+@keyframes tipIn { from { opacity: 0; } }
+
 @media (max-width: 1100px) {
   .muster { grid-template-columns: 280px minmax(0, 1fr); }
   .verdict-box { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); justify-items: center; }
@@ -568,22 +587,27 @@ kbd { font: 11px/1 var(--body); padding: 2px 4px; border: 1px solid currentColor
 }
 @media (max-width: 640px) {
   body { font-size: 16px; }
-  .logo { font-size: 32px; }
-  .bar { gap: 8px 14px; }
-  .stats { gap: 6px 12px; }
+  /* the bar in three short rows: the name and the tools; where the company is, how far it has come and how long it has; and the ledger */
+  .logo { font-size: 28px; }
+  .bar { gap: 4px 12px; padding-block: 6px 8px; }
+  .bar .tools { flex: 1 1 auto; justify-content: flex-end; }
+  .tool { width: 36px; height: 36px; }
+  .where { order: 2; flex: 1 1 120px; }
+  .trip { order: 3; padding: 5px 8px; }
+  .trip .to { display: none; }
+  .track { width: 56px; }
+  .bar .stat.due { order: 4; }
+  .bar .grow { display: none; }
+  .bar .stats { order: 5; justify-content: space-between; gap: 4px 6px; }
   .stat b { font-size: 17px; }
   .stat small { display: none; }
-  .track { width: 80px; }
   .camper:not(.on) .plate, .spot .plate { display: none; }
-  .tally { border-right: 0; padding-right: 0; flex-basis: 100%; }
-  .course { grid-template-columns: auto minmax(0, 1fr); }
-  .course .go-row { grid-column: 1 / -1; }
+  .menu { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 6px; }
   .pveil { padding: 0; }
   .drawer { border-radius: 0; border-width: 2px 0 0; height: 100%; }
   .dbody { padding: 12px; }
   .dhead h2 { font-size: 22px; }
   .dsub { display: none; }
-  .act { flex: 1 1 120px; }
   .cards { grid-template-columns: repeat(auto-fill, minmax(min(100%, 170px), 1fr)); }
   .log .d { width: 76px; }
   .dialog .banner { font-size: 25px; }

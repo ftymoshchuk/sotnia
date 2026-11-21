@@ -358,17 +358,19 @@ const hub = () => {
 };
 const at = (r, place) => r(`(() => { G = newGame('oxen', { type: 'hussar', name: 'Janos' }); G.at = ${JSON.stringify(place)}; G.thalers = 500; G.renown = 12; arrive(G); ui.screen = 'camp'; ui.panel = null; return 1; })()`);
 
-test('the camp is one screen: the scene with its things to click, and a dock, with the business of the day done in pages over it', () => {
+test('the camp is one screen: the scene with its things to click and nothing round it, with the business of the day done in pages over it', () => {
   const r = hub();
   at(r, 'kamianets');
   const html = r('campHTML()');
-  assert.ok(html.startsWith('<main class="hub">') && html.includes('<section class="stage">') && html.includes('class="dock"'), 'the hub');
+  assert.ok(html.startsWith('<main class="hub">') && html.includes('<section class="stage">'), 'the hub');
+  assert.ok(!/class="(dock|doing|tally|warns|act)"/.test(html) && !html.includes('Tonight'), 'no dock under the scene, with a tally of the night and the day’s buttons that the scene already has');
   assert.ok(!html.includes('role="tablist"') && !html.includes('class="tabs"') && !html.includes('class="side"') && !html.includes('class="news"'), 'no tabs, no side card, no news list beneath the scene');
   for (const k of ['map', 'roll', 'market', 'work', 'command', 'log']) {
     assert.ok(html.includes(`class="spot" data-act="panel" data-k="${k}"`), `${k}: a thing in the camp to click`);
-    assert.ok(html.includes(`<button data-act="panel" data-k="${k}"`), `${k}: a button in the dock, for the keyboard and for the phone`);
+    assert.ok(html.includes(`<button data-act="panel" data-k="${k}"`), `${k}: a button in the grid under the scene, which only a phone shows (the stylesheet hides it, since the scene has the same things)`);
   }
-  assert.ok(html.includes('data-act="halt"') && html.includes('data-act="course"'), 'rest and march are in the dock');
+  assert.equal((html.match(/data-act="halt"/g) || []).length, 2, 'rest is the fire, and a button in that grid for the phone');
+  assert.ok(!html.includes('data-act="course"') && !html.includes('id="course-to"'), 'the course is not set under the scene');
   assert.ok(html.includes('class="camper') && html.includes('data-act="sel"'), 'the men are clickable');
   assert.ok(html.includes('data-post="captain"') && !html.includes('data-post="surgeon"'), 'the captain stands in the camp; a post nobody holds has nobody');
   r('ui.open = G.roster[0].id');
@@ -380,6 +382,100 @@ test('the camp is one screen: the scene with its things to click, and a dock, wi
   const lakes = r('campHTML()');
   for (const k of ['market', 'work']) assert.ok(!lakes.includes(`data-k="${k}"`), `no ${k} at the lakes`);
   for (const k of ['map', 'roll', 'command', 'log']) assert.ok(lakes.includes(`data-k="${k}"`), `${k} is everywhere`);
+});
+
+// The notes the page carries (data-tip), as the objects they were made from
+const tipsOf = html => [...html.matchAll(/data-tip="([^"]*)"/g)].map(m => JSON.parse(m[1].replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')));
+const unesc = s => s.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+
+test('the road page sets the course, with the legs one at a time under it, since the camp has no dock to set it from', () => {
+  const r = hub();
+  at(r, 'kamianets');
+  r("ui.panel = 'map'");
+  const road = r('panelHTML()');
+  assert.ok(road.includes('id="course-to"') && road.includes('data-act="course"') && road.includes('data-act="march"'), 'the course and the legs are on the road’s page');
+  assert.ok(road.indexOf('Set a course') > 0 && road.indexOf('Set a course') < road.indexOf('One leg at a time'), 'the course comes first, the legs after it');
+  assert.ok(/March · \d+ days?/.test(road.replace(/<[^>]*>/g, '')), 'the course has its march and what it costs in days');
+  assert.ok(!/undefined|NaN|\[object|\bnull\b/.test(road.replace(/<[^>]*>/g, ' ')), 'no stray words');
+  // at the end of the road there is only the map: nothing to set out for
+  at(r, 'breslau');
+  r("ui.panel = 'map'");
+  assert.ok(!r('panelHTML()').includes('data-act="course"') && !r('panelHTML()').includes('data-act="march"'), 'no course at the end of the road');
+});
+
+test('every figure in the ledger says on hover what it is and what it comes to, and says the same to a reader, with no native titles left on the bar', () => {
+  const r = hub();
+  at(r, 'kamianets');
+  const bar = r('barHTML()');
+  const g = JSON.parse(r('JSON.stringify({ thalers: G.thalers, bread: G.bread, powder: G.powder, renown: G.renown, cargo: G.cargo, cargo0: G.cargo0, need: breadDue(G), pay: wagesDue(G), due: dateText(G.payDue, true), left: daysLeft(G), next: nextSlotRenown(G), value: cargoValue(G), togo: daysToGo(G), loaf: breadPrice(G), horn: powderPrice(G) })'));
+  const figures = [...bar.matchAll(/<button type="button" class="stat([^"]*)" aria-label="([^"]*)" data-tip="([^"]*)"/g)].map(m => ({ cls: m[1], label: unesc(m[2]), tip: JSON.parse(unesc(m[3])) }));
+  assert.deepEqual(figures.map(f => f.tip.title), ['Days to the deadline', 'Oxen', 'Thalers', 'Bread', 'Powder', 'Renown'], 'the days left, and the five things the company has');
+  const [due, cargo, thalers, bread, powder, renown] = figures.map(f => f.tip.lines.join(' '));
+  assert.ok(due.includes(`${g.left} days until`) && due.includes(`${g.togo} days away`), 'days left, and how far it is');
+  assert.ok(cargo.includes(`${g.cargo} of the ${g.cargo0}`) && cargo.includes(`${g.value} thalers`), 'cargo: what is left of what set out, and what it would fetch');
+  assert.ok(thalers.includes(`${g.thalers} in the purse`) && thalers.includes(`${g.pay} of pay fall due on ${g.due}`), 'thalers: the purse, and the pay due and when');
+  assert.ok(bread.includes(`${g.bread} loaves`) && bread.includes(`eats ${g.need} a day`) && bread.includes(`${Math.floor(g.bread / g.need)} days`) && bread.includes(`${g.loaf} thalers`), 'bread: what there is, what is eaten, how long it lasts, what ten cost');
+  assert.ok(powder.includes(`${g.powder} charges`) && powder.includes(`${g.horn} thalers`), 'powder: the charges, and what ten cost');
+  assert.ok(renown.includes(`${g.renown}:`) && renown.includes(`${g.next} renown`), 'renown: what it is, and what the next place needs');
+  for (const f of figures) {
+    for (const line of [f.tip.title, ...f.tip.lines, ...(f.tip.warns || [])]) assert.ok(f.label.includes(line.replace(/[.!?]$/, '')), `${f.tip.title}: a reader of the screen is told “${line}” too`);
+    assert.ok(!/undefined|NaN|\[object|\bnull\b/.test(f.label), `${f.tip.title}: no stray words`);
+  }
+  assert.ok(!bar.includes(' title="'), 'the notes are the bar’s only tooltips: no native title beside them');
+  // the tools beside them have a styled note too, and the switches still say whether they are on
+  const tools = r('toolsHTML()');
+  assert.deepEqual(tipsOf(tools).map(t => t.title), ['Encyclopedia', 'Standing orders', 'Music', 'Sound']);
+  assert.ok(tools.includes('data-act="music" aria-pressed="true"') && !tools.includes(' title="'), 'on, with no native title beside the note');
+  r('ui.music = false');
+  assert.ok(r('toolsHTML()').includes('class="tool off" data-act="music" aria-pressed="false"'), 'and off');
+  r('ui.music = true');
+  // the road the figures are heading along opens the map, as a button: it once asked for an act nothing answered
+  assert.ok(bar.includes('class="trip" data-act="panel" data-k="map"') && !bar.includes('data-act="tab"'), 'the road in the bar opens the road’s page');
+  r("ui.screen = 'muster'");
+  assert.ok(!r('barHTML()').includes('data-act="panel"') && r('barHTML()').includes('<span class="trip" aria-hidden="true">'), 'away from the camp it is only a picture');
+});
+
+test('trouble in the camp shows in the ledger and over the scene: no men, a short chest, too little bread; and the end of the road has the sale instead', () => {
+  const r = hub();
+  at(r, 'kamianets');
+  const quiet = r('campHTML()');
+  assert.ok(!quiet.includes('class="alerts"') && !/class="stat[^"]* short"/.test(r('barHTML()')), 'all is well: nothing is said');
+  r('G.bread = 1');
+  let html = r('campHTML()'), bar = r('barHTML()');
+  assert.ok(html.includes('Not enough bread for tomorrow') && html.includes('<button class="alert" data-act="panel" data-k="market">'), 'short of bread, with the market at hand to answer it');
+  assert.ok(/class="stat short" aria-label="Bread\./.test(bar) && tipsOf(bar).find(t => t.title === 'Bread').warns.includes('Not enough bread for tomorrow'), 'and the figure is marked, and its note warns');
+  assert.ok(!/class="stat short" aria-label="Thalers/.test(bar), 'the purse is not');
+  r('G.thalers = 1');
+  html = r('campHTML()');
+  assert.ok(/The pay chest is short: \d+ due, 1 in hand/.test(html), 'short of the pay');
+  assert.ok(tipsOf(r('barHTML()')).find(t => t.title === 'Thalers').warns.length === 1, 'and the thalers’ note says so');
+  r('G.roster = []');
+  html = r('campHTML()');
+  assert.ok(html.includes('Nobody to drive the train: hire at the market') && !html.includes('pay chest') && !html.includes('Not enough bread'), 'with nobody on the roll, that is the only trouble');
+  // where there is no market the trouble is said, but is not a button to one
+  at(r, 'syvash'); r('G.bread = 1');
+  html = r('campHTML()');
+  assert.ok(html.includes('<span class="alert">') && !html.includes('<button class="alert"'), 'no market at the lakes');
+  // at the end of the road: the sale, over the scene, and no trouble (there is nothing left to feed)
+  at(r, 'breslau'); r('G.bread = 1');
+  html = r('campHTML()');
+  assert.ok(!html.includes('class="alerts"'), 'no trouble is told at the end of the road');
+  const sale = html.slice(html.indexOf('<div class="deliver">'));
+  assert.ok(/data-act="deliver"[^>]*>[\s\S]*Sell the oxen · \d+ thalers/.test(sale) && sale.includes('In time'), 'the sale, with what the cargo fetches, and that it is in time');
+  r('G.date = questOf(G).deadline + 3');
+  assert.ok(/3 days late: the price has fallen/.test(r('campHTML()')), 'late, it says what that costs');
+});
+
+test('the things in the camp explain themselves on hover, and the fire says what a day costs', () => {
+  const r = hub();
+  at(r, 'kamianets');
+  const tips = tipsOf(r('campHTML()')), by = t => tips.find(x => x.title === t);
+  for (const [title, words] of [['The roll', 'their kit'], ['The market', 'men to hire'], ['Work', 'paid fights'], ['The road', 'the way on'], ['Command', 'the officers'], ['The chronicle', 'the banner']]) assert.ok(by(title) && by(title).lines.join(' ').includes(words), `${title}: what it is for`);
+  const need = r('breadDue(G)');
+  assert.ok(by('Rest a day') && by('Rest a day').lines.join(' ').includes(`eats ${need} loaves`), 'the fire: a day, and its bread');
+  assert.ok(r('campHTML()').includes('aria-label="Rest a day by the fire"'), 'and its label for a reader is as it was');
+  r('G.roster = []');
+  assert.ok(tipsOf(r('campHTML()')).some(t => t.title === 'Wait a day'), 'with nobody to rest, the company waits');
 });
 
 test('every page of the business has its content, and the command page lists the people, offers the men in a town and none out of one', () => {
