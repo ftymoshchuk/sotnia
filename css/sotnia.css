@@ -70,6 +70,10 @@ button.trip:hover { border-color: var(--gilt); color: var(--cream); }
   .trip { min-width: 0; }
   .trip .to { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 }
+/* On a laptop the destination's name gives its room to the place and the ledger (the note on the road, and the road's page, still name it); a wider screen has room for it. */
+@media (min-width: 1260px) and (max-width: 1399px) {
+  .trip .to { display: none; }
+}
 /* Where there is not room for it all, the ledger takes a row of its own under the rest, and the name of the place gives way to the tools beside it. */
 @media (max-width: 1259px) {
   .bar .tools { order: 1; }
@@ -94,6 +98,30 @@ button.stat:hover { background: rgba(232, 196, 106, .1); }
 .tool { width: 38px; height: 38px; display: grid; place-items: center; background: transparent; color: var(--gilt); border: 1px solid var(--walnut-line); border-radius: 8px; cursor: pointer; padding: 0; font-size: 20px; }
 .tool:hover { background: #3a2a1b; color: var(--gilt-hi); }
 .tool.off { color: var(--mute); background: linear-gradient(135deg, transparent 46%, var(--mute) 46%, var(--mute) 54%, transparent 54%); }
+/*
+ * A phone's bar, and a small tablet's: three short rows, in a grid so that they stay three whatever the names are. The name and the tools; where the company
+ * is, how far it has come and how long it has; and the ledger. The place gets the room the road and the days leave, and a long name takes a second line rather
+ * than be cut short. (Below about 700 pixels the single row of the tablet's bar, with its tools, has no room, and its tools would wrap on a row of their own.)
+ * It comes after the rules for the figures and the tools, which it changes, since it would lose to them otherwise.
+ */
+@media (max-width: 720px) {
+  .logo { font-size: 28px; }
+  .bar { gap: 4px 12px; padding-block: 6px 8px; }
+  .bar:has(.where) { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; }
+  .bar:has(.where) .logo { grid-area: 1 / 1; }
+  .bar:has(.where) .tools { grid-area: 1 / 2 / 2 / 4; justify-self: end; }
+  .bar:has(.where) .where { grid-area: 2 / 1; }
+  .bar:has(.where) .trip { grid-area: 2 / 2; }
+  .bar:has(.where) .stat.due { grid-area: 2 / 3; }
+  .bar:has(.where) .stats { grid-area: 3 / 1 / 4 / 4; justify-content: space-between; gap: 4px 6px; }
+  .tool { width: 36px; height: 36px; }
+  .where b { white-space: normal; text-overflow: clip; }
+  .trip { padding: 5px 8px; }
+  .track { width: 56px; }
+  .bar .grow { display: none; }
+  .stat b { font-size: 17px; }
+  .stat small { display: none; }
+}
 
 /* ---------- buttons ---------- */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1.5px solid var(--walnut-line); background: var(--walnut-hi); color: var(--cream); font: 15px/1 var(--caps); letter-spacing: .06em; padding: 10px 14px 11px; cursor: pointer; border-radius: 8px; text-decoration: none; text-align: center; }
@@ -286,6 +314,8 @@ button.alert:hover { background: rgba(74, 22, 18, .96); }
   .alerts, .deliver { position: absolute; right: 10px; top: 10px; z-index: 3; max-width: min(400px, 44%); padding: 0; justify-items: end; }
   .alert { justify-self: end; box-shadow: 0 4px 14px rgba(0, 0, 0, .45); }
   .deliver .btn { box-shadow: 0 8px 24px rgba(0, 0, 0, .6); }
+  /* the news of the road comes with the sale when the company marches in, and it would lie over the button on a narrow window: it keeps to the left of it */
+  .scene.sale .dawn { max-width: min(520px, 58%, calc(100% - 410px)); }
 }
 .spot { position: absolute; padding: 0; margin: 0; border: 0; background: transparent; cursor: pointer; border-radius: 6px; line-height: 1; color: var(--parchment); }
 .spot:hover, .spot:focus-visible { background: rgba(232, 196, 106, .1); outline: 2px dashed rgba(232, 196, 106, .8); outline-offset: -2px; }
@@ -587,20 +617,6 @@ kbd { font: 11px/1 var(--body); padding: 2px 4px; border: 1px solid currentColor
 }
 @media (max-width: 640px) {
   body { font-size: 16px; }
-  /* the bar in three short rows: the name and the tools; where the company is, how far it has come and how long it has; and the ledger */
-  .logo { font-size: 28px; }
-  .bar { gap: 4px 12px; padding-block: 6px 8px; }
-  .bar .tools { flex: 1 1 auto; justify-content: flex-end; }
-  .tool { width: 36px; height: 36px; }
-  .where { order: 2; flex: 1 1 120px; }
-  .trip { order: 3; padding: 5px 8px; }
-  .trip .to { display: none; }
-  .track { width: 56px; }
-  .bar .stat.due { order: 4; }
-  .bar .grow { display: none; }
-  .bar .stats { order: 5; justify-content: space-between; gap: 4px 6px; }
-  .stat b { font-size: 17px; }
-  .stat small { display: none; }
   .camper:not(.on) .plate, .spot .plate { display: none; }
   .menu { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 6px; }
   .pveil { padding: 0; }

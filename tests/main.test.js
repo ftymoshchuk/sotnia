@@ -53,6 +53,7 @@ test('a march that cannot be made leaves the page open: nothing happened, so the
 // A thing with a note, as a test makes it: where its box is, and what the note says. The page's own #tip is the one the game writes to.
 const thing = (rect, tip, extra = {}) => ({
   dataset: { tip: JSON.stringify(tip) }, isConnected: true, querySelector: () => null, matches: () => true, closest(sel) { return sel === '[data-tip]' ? this : null; }, contains(other) { return other === this; },
+  classList: { contains: () => false }, id: '',
   getBoundingClientRect: () => ({ left: rect[0], top: rect[1], right: rect[0] + rect[2], bottom: rect[1] + rect[3], width: rect[2], height: rect[3] }), ...extra
 });
 const notes = opts => {
@@ -138,4 +139,62 @@ test('on a screen with no pointer the mouse events a tap leaves behind mean noth
   const key = at('key', thing([100, 10, 60, 30], TIP, { matches: sel => sel === ':focus-visible' }));
   p.run(`tipOn({ type: 'focusin', target: ${key} })`); p.tick();
   assert.equal(box.hidden, false);
+});
+
+/* ---------- the clicks and the keys that the notes and the pages meet ---------- */
+test('a tap on a figure shows its note on a screen with no pointer, a second tap or a tap elsewhere puts it away, and with a pointer a click shows nothing of its own', () => {
+  const { p, box, at } = notes({ touch: true });
+  // the things themselves are what an event is aimed at; at() also puts each in the game's scope under a name, for code that runs there
+  const A = thing([100, 10, 60, 30], { ...TIP, title: 'A' }), B = thing([200, 10, 60, 30], { ...TIP, title: 'B' });
+  const floor = { classList: { contains: () => false }, id: '', dataset: {}, closest: () => null };
+  at('a', A); at('b', B);
+  p.fire('click', { target: A });
+  assert.ok(!box.hidden && box.innerHTML.includes('<b>A</b>'), 'a tap shows the note, at once');
+  p.fire('click', { target: A });
+  assert.ok(box.hidden, 'a second tap puts it away');
+  p.fire('click', { target: A }); p.fire('click', { target: B });
+  assert.ok(!box.hidden && box.innerHTML.includes('<b>B</b>'), 'a tap on another figure swaps it');
+  p.fire('click', { target: floor });
+  assert.ok(box.hidden, 'a tap elsewhere puts it away');
+  // a figure that is also a control (a thing in the camp) is for its action, and shows no note on a tap
+  const spot = thing([100, 10, 60, 30], TIP, { dataset: { tip: JSON.stringify(TIP), act: 'panel', k: 'roll' } });
+  p.fire('click', { target: spot });
+  assert.ok(box.hidden, 'a tap on a control acts, and shows no note');
+  // with a pointer, the hover shows the note, and a click on the figure neither toggles it nor takes it away
+  const mouse = notes({ touch: false }), M = thing([100, 10, 60, 30], TIP), m = mouse.at('m', M);
+  mouse.p.fire('click', { target: M });
+  assert.ok(mouse.box.hidden, 'a click shows nothing of its own');
+  mouse.p.run(`showTip(${m})`);
+  mouse.p.fire('click', { target: M });
+  assert.ok(!mouse.box.hidden, 'and does not take the hover’s note away');
+});
+
+test('Escape puts a note away, and a click on the dimmed ground round a page puts the page away', () => {
+  const p = camp();
+  p.give('a', thing([100, 10, 60, 30], TIP));
+  p.run("$('#tip').hidden = true; showTip(a)");
+  p.fire('keydown', { key: 'Escape', target: { closest: () => null } });
+  assert.equal(p.found['#tip'].hidden, true, 'Escape puts the note away');
+  p.run("act('panel', { k: 'roll' })");
+  p.fire('keydown', { key: 'Escape', target: { closest: () => null } });
+  assert.equal(p.run('ui.panel'), null, 'and the page, if there is one');
+  p.run("act('panel', { k: 'roll' })");
+  p.fire('click', { target: { classList: { contains: c => c === 'pveil' }, id: '', closest: () => null, dataset: {} } });
+  assert.equal(p.run('ui.panel'), null, 'a click on the dimmed ground puts the page away');
+  assert.equal(p.found['#panel'].innerHTML, '');
+});
+
+test('Space pauses a fight, unless it is for a button that does something with it: a figure of the ledger is a button that does nothing, and keeps no space', () => {
+  const p = page();
+  p.run("G = newGame('oxen', { type: 'hussar', name: 'Janos' }); G.at = 'kamianets'; arrive(G); ui.screen = 'camp'; render(); act('muster', { id: G.contracts[0].id }); act('fight', {});");
+  assert.equal(p.run('ui.screen'), 'battle', 'a fight is on');
+  const space = target => { p.fire('keydown', { key: ' ', target }); return p.run('ui.speed'); };
+  const nothing = { closest: () => null };
+  const figure = { closest: sel => (sel === 'button' ? figure : null) };                     // a button, but not "button:not(.stat)": it is a figure
+  const control = { closest: sel => (sel === 'button' || sel === 'button:not(.stat)' ? control : null) }; // a button that is for something
+  assert.equal(space(nothing), 0, 'with nothing focused, it pauses');
+  assert.equal(space(nothing), 1, 'and resumes');
+  assert.equal(space(figure), 0, 'with a figure of the ledger focused, it still pauses');
+  assert.equal(space(figure), 1, 'and resumes');
+  assert.equal(space(control), 1, 'with a button that is for something focused, the space is its: nothing is paused');
 });

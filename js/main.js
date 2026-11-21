@@ -518,6 +518,13 @@ document.addEventListener('focusout', tryOff);
 let tipOf = null, tipTimer = 0;
 // On a screen with no pointer to rest on a thing, the mouse events a tap leaves behind (the pointer "arriving" and then "leaving" at once) mean nothing: a tap shows a note and another tap puts it away.
 const noHover = () => !!window.matchMedia && window.matchMedia('(hover: none)').matches;
+// Whether the keyboard put the focus on a thing, and not a mouse click. An engine too old to know the difference (it would throw) says yes.
+const keyFocus = (el) => { try {
+    return el.matches(':focus-visible');
+}
+catch (e) {
+    return true;
+} };
 function hideTip() {
     clearTimeout(tipTimer);
     tipOf = null;
@@ -552,7 +559,7 @@ function tipOn(e) {
         return;
     if (e.type === 'mouseover' && noHover())
         return;
-    if (e.type === 'focusin' && !el.matches(':focus-visible'))
+    if (e.type === 'focusin' && !keyFocus(el))
         return; // the focus that follows a mouse click (a page put away, say) is not the keyboard's
     clearTimeout(tipTimer);
     if (tipOf)
@@ -611,7 +618,8 @@ document.addEventListener('keydown', e => {
     const k = { '1': 'hold', '2': 'advance', '3': 'charge' }[e.key];
     if (k && !(ui.c.duel && k === 'hold'))
         setStance(k);
-    else if (e.key === ' ' && !(e.target.closest && e.target.closest('button'))) {
+    // Space pauses, unless it is for a button that does something with it. A figure of the ledger is a button only to be reached, and does nothing: it does not keep the space.
+    else if (e.key === ' ' && !(e.target.closest && e.target.closest('button:not(.stat)'))) {
         e.preventDefault();
         ui.speed = ui.speed ? 0 : 1;
         paintHud();

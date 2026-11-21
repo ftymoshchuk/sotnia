@@ -432,7 +432,7 @@ function deliverBlock() {
 function campScene() {
   const g = G!, plan = campPlan(g), q = questOf(g), here0 = panelsHere(), rest = restTip();
   const label = 'The company in camp at ' + here(g).name + ': ' + (plan.length ? plan.map(p => p.s.name + (p.k === 'abed' ? ' abed' : p.k === 'rest' ? ' by the fire' : p.k === 'drill' ? ' at drill' : ' foraging')).join(', ') : 'nobody under the banner') + '. The ' + q.cargo.many + ' wait by the tents.';
-  let h = '<div class="scene"><canvas id="camp" role="img" aria-label="' + esc(label) + '"></canvas>' + newsRibbon();
+  let h = '<div class="scene' + (atEnd(g) ? ' sale' : '') + '"><canvas id="camp" role="img" aria-label="' + esc(label) + '"></canvas>' + newsRibbon();
   for (const s of HOTSPOTS) {
     if (!here0.includes(s.k)) continue;
     const P = PANELS[s.k], n = panelCount(s.k);
@@ -727,8 +727,8 @@ function modalHTML() {
       choiceHTML(' data-act="payoff" data-k="coin"', 'Pay them out of your own purse', short ? [] : [['coin', '−' + c.payoff.coin, 'thalers'], ['check', 'whole', 'the cargo stays whole']], 'More than the company has: ' + c.payoff.coin + ' thalers.', short) + '</div>';
   } else {
     inner = '<h2 class="banner" id="mt">Standing orders</h2><div class="rules">' + ([
-      ['tent', 'The camp', 'Everything in the camp can be clicked. The tents, the wagon, the noticeboard, the signpost and the banner open the company’s business in a page over the camp, and Esc puts it away; pick a man to give him his order for the day; the fire rests a day. The same pages are the buttons beside the scene.'],
-      ['road', 'The road', 'A commission names a cargo, a destination and a day. Each road takes as many days as the distance needs at the pace of the cargo. A forced march gets there sooner, but costs cargo and wears the men down. Arriving late is never the end of it, but the price falls every day. Set a course to march several legs at once: the company keeps going until something needs you.'],
+      ['tent', 'The camp', 'Everything in the camp can be clicked. The tents, the wagon, the noticeboard, the signpost and the banner open the company’s business in a page over the camp, and Esc puts it away; pick a man to give him his order for the day; the fire rests a day. On a phone the same pages are the buttons under the scene. Rest the pointer on a figure in the bar (or tap it) to see what it comes to.'],
+      ['road', 'The road', 'A commission names a cargo, a destination and a day. Each road takes as many days as the distance needs at the pace of the cargo. A forced march gets there sooner, but costs cargo and wears the men down. Arriving late is never the end of it, but the price falls every day. Open the road at the signpost, and set a course there to march several legs at once: the company keeps going until something needs you.'],
       ['men', 'The company', 'Every man eats a loaf a day, and wages fall due once a month. Unpaid or hungry men lose spirit, and men without spirit desert. Buy bread before empty country: there are no markets in the Wild Fields. A day in camp lets each man drill, rest or forage: you see where each one goes.'],
       ['warn', 'Trouble on the road', 'Raiders fall on the train. Fight them, or pay them off in cargo or coin. Beaten, or sounding the retreat, costs cargo. Towns post paid work; a fight there takes the day.'],
       ['swords', 'The three arms', 'Pikemen hold a line and keep sabres off. Musketeers kill from afar, burn powder, and die quickly in a brawl. Sabreurs are fast and hunt musketeers.'],

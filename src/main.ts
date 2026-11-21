@@ -215,6 +215,8 @@ document.addEventListener('mouseout', tryOff); document.addEventListener('focuso
 let tipOf: HTMLElement | null = null, tipTimer = 0;
 // On a screen with no pointer to rest on a thing, the mouse events a tap leaves behind (the pointer "arriving" and then "leaving" at once) mean nothing: a tap shows a note and another tap puts it away.
 const noHover = () => !!window.matchMedia && window.matchMedia('(hover: none)').matches;
+// Whether the keyboard put the focus on a thing, and not a mouse click. An engine too old to know the difference (it would throw) says yes.
+const keyFocus = (el: Element) => { try { return el.matches(':focus-visible'); } catch (e) { return true; } };
 function hideTip() {
   clearTimeout(tipTimer); tipOf = null;
   const box = $('#tip'); if (box) box.hidden = true;
@@ -235,7 +237,7 @@ function tipOn(e: Event) {
   const el = (e.target as Element).closest<HTMLElement>('[data-tip]');
   if (!el || el === tipOf) return;
   if (e.type === 'mouseover' && noHover()) return;
-  if (e.type === 'focusin' && !el.matches(':focus-visible')) return; // the focus that follows a mouse click (a page put away, say) is not the keyboard's
+  if (e.type === 'focusin' && !keyFocus(el)) return; // the focus that follows a mouse click (a page put away, say) is not the keyboard's
   clearTimeout(tipTimer);
   if (tipOf) showTip(el); else tipTimer = setTimeout(() => showTip(el), 120);
 }
@@ -259,7 +261,8 @@ document.addEventListener('keydown', e => {
   if ((e.key === 'o' || e.key === 'O') && !e.ctrlKey && !e.metaKey && !e.altKey) { act('captain', {}); return; }
   const k = ({ '1': 'hold', '2': 'advance', '3': 'charge' } as Partial<Record<string, Stance>>)[e.key];
   if (k && !(ui.c!.duel && k === 'hold')) setStance(k);
-  else if (e.key === ' ' && !((e.target as Element).closest && (e.target as Element).closest('button'))) { e.preventDefault(); ui.speed = ui.speed ? 0 : 1; paintHud(); }
+  // Space pauses, unless it is for a button that does something with it. A figure of the ledger is a button only to be reached, and does nothing: it does not keep the space.
+  else if (e.key === ' ' && !((e.target as Element).closest && (e.target as Element).closest('button:not(.stat)'))) { e.preventDefault(); ui.speed = ui.speed ? 0 : 1; paintHud(); }
 });
 window.addEventListener('resize', () => {
   hideTip(); fitBar();

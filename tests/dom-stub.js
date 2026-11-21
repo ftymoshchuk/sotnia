@@ -29,14 +29,17 @@ function element(tag, base) {
 
 /**
  * The game loaded into a page of this kind, booted as the page boots it (the title screen is drawn). Returns run, which runs code in the game's
- * scope; found, the elements by the selector that asked for them; tick, which lets the timers the game has set go off (none does by itself); and give,
- * which puts a thing of the test's own in the game's scope under a name. reduced is a visitor who asked for less motion, touch one whose screen has no
- * pointer to rest on a thing.
+ * scope; found, the elements by the selector that asked for them; tick, which lets the timers the game has set go off (none does by itself); fire, which
+ * hands an event of the test's own (its type, and the fields the game reads: key, target) to the game's handlers for that type; and give, which puts a
+ * thing of the test's own in the game's scope under a name. reduced is a visitor who asked for less motion, touch one whose screen has no pointer to rest
+ * on a thing.
  */
 function page({ reduced = false, touch = false } = {}) {
-  const found = {}, root = element('html', { clientWidth: 1280, clientHeight: 720 }), body = element('body'), timers = new Map();
+  const found = {}, root = element('html', { clientWidth: 1280, clientHeight: 720 }), body = element('body'), timers = new Map(), listeners = {};
   let nextTimer = 1;
-  const win = { devicePixelRatio: 1, addEventListener() {}, scrollTo() {}, matchMedia: q => ({ matches: (reduced && /reduce/.test(q)) || (touch && /hover:\s*none/.test(q)) }) };
+  const on = (type, fn) => { (listeners[type] = listeners[type] || []).push(fn); };
+  const fire = (type, event) => (listeners[type] || []).forEach(fn => fn({ type, preventDefault() {}, ...event }));
+  const win = { devicePixelRatio: 1, addEventListener: on, scrollTo() {}, matchMedia: q => ({ matches: (reduced && /reduce/.test(q)) || (touch && /hover:\s*none/.test(q)) }) };
   const tick = () => { const due = [...timers.values()]; timers.clear(); due.forEach(fn => fn()); };
   let scope;
   const run = load(SCRIPTS, ctx => {
@@ -45,16 +48,16 @@ function page({ reduced = false, touch = false } = {}) {
       window: win, location: { hash: '', pathname: '/', search: '' }, history: { replaceState() {} }, performance: { now: () => 0 }, requestAnimationFrame: () => 0, setInterval: () => 0,
       setTimeout: fn => { timers.set(nextTimer, fn); return nextTimer++; }, clearTimeout: id => { timers.delete(id); }
     });
-    ctx.__page = { element, found, body, root };
+    ctx.__page = { element, found, body, root, on };
     vm.runInContext(`(() => {
       const make = document.createElement;
       document.createElement = tag => Object.assign(__page.element(tag), make(tag));
       document.querySelector = sel => __page.found[sel] || (__page.found[sel] = /^#(camp|field|map)$/.test(sel) ? Object.assign(__page.element('canvas'), make('canvas')) : __page.element('div'));
       document.querySelectorAll = () => [];
-      document.addEventListener = () => {};
+      document.addEventListener = __page.on;
       Object.assign(document, { body: __page.body, documentElement: __page.root, activeElement: null, hidden: false });
     })()`, ctx);
   });
-  return { run, found, body, root, tick, give: (name, value) => { scope[name] = value; } };
+  return { run, found, body, root, tick, fire, give: (name, value) => { scope[name] = value; } };
 }
 module.exports = { page, element };

@@ -1,7 +1,8 @@
 'use strict';
 /* Who leads the company, run headless: the captain, the four officers and the retainer, and what each changes in the rules (js/command.js and
- * the hooks it has in js/core.js and js/journey.js); the captain's order in a fight; and the camp that is the hub of the game (its page of
- * business, its dock, the light of a day passing over it), which is built from the same tables. A seeded Math.random makes every run repeat.
+ * the hooks it has in js/core.js and js/journey.js); the captain's order in a fight; and the camp that is the hub of the game (its things to
+ * click, its pages of business, the notes on its ledger and the trouble told over it, the light of a day passing over it), which is built from
+ * the same tables. A seeded Math.random makes every run repeat.
  * How the pages look, and how a day feels going by, are for the eye (the browser); what these check is the rules and the tables. */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -440,6 +441,7 @@ test('trouble in the camp shows in the ledger and over the scene: no men, a shor
   at(r, 'kamianets');
   const quiet = r('campHTML()');
   assert.ok(!quiet.includes('class="alerts"') && !/class="stat[^"]* short"/.test(r('barHTML()')), 'all is well: nothing is said');
+  assert.ok(quiet.includes('<div class="scene">') && !quiet.includes('scene sale'), 'and the scene is not one with a sale on it');
   r('G.bread = 1');
   let html = r('campHTML()'), bar = r('barHTML()');
   assert.ok(html.includes('Not enough bread for tomorrow') && html.includes('<button class="alert" data-act="panel" data-k="market">'), 'short of bread, with the market at hand to answer it');
@@ -462,6 +464,7 @@ test('trouble in the camp shows in the ledger and over the scene: no men, a shor
   assert.ok(!html.includes('class="alerts"'), 'no trouble is told at the end of the road');
   const sale = html.slice(html.indexOf('<div class="deliver">'));
   assert.ok(/data-act="deliver"[^>]*>[\s\S]*Sell the oxen · \d+ thalers/.test(sale) && sale.includes('In time'), 'the sale, with what the cargo fetches, and that it is in time');
+  assert.ok(html.includes('<div class="scene sale">'), 'the scene says so, for the stylesheet to keep the road’s news clear of the button');
   r('G.date = questOf(G).deadline + 3');
   assert.ok(/3 days late: the price has fallen/.test(r('campHTML()')), 'late, it says what that costs');
 });
