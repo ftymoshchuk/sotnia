@@ -1,0 +1,3 @@
+# js/ is compiled from src/ by `npm run build`. GitHub collapses generated files
+# in pull request diffs, so a review reads the TypeScript.
+js/*.js linguist-generated=true

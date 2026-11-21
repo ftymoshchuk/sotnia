@@ -23,13 +23,36 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
-      # The game is plain scripts with no build step, so a script that does not
-      # parse ships as a blank page.
+      # TypeScript is the only dependency, and it is only needed to build the
+      # game. package-lock.json pins it, so this installs exactly what was used
+      # to write js/.
+      - name: Install
+        run: npm ci
+      - name: Types check
+        run: npm run typecheck
+      # The game is written in src/*.ts, but the browser runs js/, which is
+      # committed so the game works from a clone with no build. Build it again
+      # and fail if the committed copy differs, so a change to src/ that forgot
+      # to rebuild never merges. `git status` also catches a file that was
+      # built but never added.
+      - name: js/ is what src/ builds
+        run: |
+          npm run build
+          for f in js/*.js; do
+            [ -f "src/$(basename "$f" .js).ts" ] || { echo "::error::$f has no source in src/"; exit 1; }
+          done
+          if [ -n "$(git status --porcelain --untracked-files=all js/)" ]; then
+            git status --short js/
+            echo "::error::js/ does not match src/. Run 'npm run build' and commit the result."
+            exit 1
+          fi
+      # The game is plain scripts, so a script that does not parse ships as a
+      # blank page.
       - name: Every script parses
         run: for f in js/*.js; do node --check "$f"; done
-      # Node's own test runner: the repository has no npm dependencies to install.
+      # Node's own test runner. The tests load the compiled js/ the page runs.
       - name: Tests
-        run: node --test tests/*.test.js
+        run: npm test
 
   # One check to require on main, so adding a job above does not mean editing
   # the branch ruleset to match.

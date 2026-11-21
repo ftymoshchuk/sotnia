@@ -1,0 +1,20 @@
+{
+  // The game is plain <script> tags that share one global scope, so every file
+  // in src/ is a script (no import or export) and tsc only erases the types:
+  // src/core.ts becomes js/core.js, line for line the same program.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "lib": ["ES2022", "DOM", "DOM.iterable"],
+    "types": [],
+    "rootDir": "src",
+    "outDir": "js",
+    "newLine": "lf",
+    "alwaysStrict": true,
+    "erasableSyntaxOnly": true,
+    "noEmitOnError": true,
+    "skipLibCheck": true,
+    "strict": true
+  },
+  "include": ["src"]
+}
