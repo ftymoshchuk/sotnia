@@ -8,8 +8,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { load, plain } = require('./canvas-stub');
 
-const book = () => load(['core', 'journey', 'geo', 'art', 'figures', 'terrain', 'icons', 'screens', 'encyclopedia']);
-const TABS = ['nations', 'units', 'foes', 'lands', 'goods'];
+const book = () => load(['core', 'journey', 'command', 'geo', 'art', 'figures', 'terrain', 'icons', 'screens', 'encyclopedia']);
+const TABS = ['nations', 'units', 'foes', 'lands', 'command', 'goods'];
 const page = (r, tab) => { r(`ui.codex = ${JSON.stringify(tab)}`); return r('codexHTML()'); };
 // what a reader sees of a page: its words, one space apart
 const words = html => html.replace(/<[^>]*>/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/\s+/g, ' ');
@@ -105,19 +105,36 @@ test('the Foes tab has every people the game can send against the company, where
   assert.equal(new Set(drill).size, new Set(plain(r, 'TIER.map((_, t) => Math.max(0, t - 1))')).size, 'the degrees are told apart as far as the field tells them apart');
 });
 
-test('the Train and goods tab has every hand, both supplies and every commission, none of them to be started from here', () => {
+test('the Goods tab has both supplies and every commission, none of them to be started from here', () => {
   const r = book(), html = page(r, 'goods'), text = words(html);
-  for (const [k, s] of Object.entries(plain(r, 'STAFF'))) {
-    assert.ok(text.includes(s.name), `${k}: ${s.name}`);
-    assert.ok(text.includes(`+${s.wage} a month`), `${s.name}: wage`);
-    assert.ok(html.includes(`>${s.fee}</span>`) || new RegExp(`\\b${s.fee}\\b`).test(text), `${s.name}: fee`);
-  }
   const [bread, powder] = plain(r, '[BREAD_COST, POWDER_COST]');
   for (const w of ['Bread', 'Powder', 'Each man eats one a day', 'One charge a shot']) assert.ok(text.includes(w), w);
   assert.ok(new RegExp(`\\b${bread}\\b`).test(text) && new RegExp(`\\b${powder}\\b`).test(text), 'the prices of ten');
   for (const q of plain(r, 'QUESTS')) assert.ok(text.includes(q.title), q.title);
-  assert.ok(!html.includes('data-act="new"'), 'a commission can be raised only from the title');
+  assert.ok(!html.includes('data-act="new"') && !html.includes('data-act="captains"'), 'a commission can be raised only from the title');
   assert.ok(html.includes('class="pile"'), 'the supplies are in their piles, as in the market');
+});
+
+test('the Command tab has every captain, every kind of officer, every retainer and every faith, in the game\'s own words and numbers', () => {
+  const r = book(), html = page(r, 'command'), text = words(html);
+  const caps = plain(r, 'Object.entries(CAPTAINS).map(([id, c]) => ({ id, ...c }))'), kinds = plain(r, 'Object.entries(SPECIALTIES).map(([id, s]) => ({ id, ...s }))');
+  const rets = plain(r, 'Object.entries(RETAINERS).map(([id, t]) => ({ id, ...t }))'), faiths = plain(r, 'Object.values(FAITHS).map(f => f.name)'), orders = plain(r, 'Object.values(ORDERS)');
+  assert.equal(cards(html, 'captain').length, caps.length, 'a card for each captain, no more');
+  for (const c of caps) { assert.ok(text.includes(c.title), c.title); assert.ok(text.includes(c.perk.name) && text.includes(c.flaw.name), `${c.title}: perk and flaw`); }
+  for (const o of orders) assert.ok(text.includes(o.name) && text.includes(o.text), o.name);
+  assert.equal(cards(html, 'officer').length, kinds.length + rets.length, 'a card for each officer kind and each retainer');
+  for (const k of kinds) {
+    assert.ok(text.includes(k.title.replace(/^an? /i, '').replace(/^./, c => c.toUpperCase())), k.title);
+    assert.ok(text.includes(k.blurb), `${k.id}: its blurb`);
+    assert.ok(text.includes(`${k.fee} thalers to engage, then ${k.wage} a month`), `${k.id}: fee and wage`);
+  }
+  for (const t of rets) { assert.ok(text.includes(t.blurb), `${t.id}: its blurb`); assert.ok(text.includes(`${t.wage} a month`), `${t.id}: wage`); }
+  for (const f of faiths) assert.ok(text.includes(f), `the ${f} faith`);
+  for (const st of plain(r, 'STATIONS.map(k => STAFF[k])')) assert.ok(text.includes(st.name) && text.includes(st.owns), st.name);
+  assert.ok(text.includes('third at 8 renown') && text.includes('fourth at 20'), 'the places that open with renown');
+  assert.ok(!html.includes('data-act="engage"') && !html.includes('data-act="new"'), 'nobody can be engaged from the book');
+  const pics = pictures(html);
+  assert.equal(new Set(pics).size, pics.length, 'every portrait is its own');
 });
 
 test('no page shows undefined, NaN, null or a stray object, and each tab opens its own page', () => {

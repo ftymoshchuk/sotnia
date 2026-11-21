@@ -7,7 +7,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { load, plain } = require('./canvas-stub');
 
-const game = () => load(['core', 'journey', 'geo', 'art', 'figures', 'terrain']);
+const game = () => load(['core', 'journey', 'command', 'geo', 'art', 'figures', 'terrain']);
 const LANDS = ['steppe', 'ukraine', 'poland', 'prussia', 'lithuania', 'front', 'silesia', 'saxony'], WEATHER = ['clear', 'rain', 'fog'];
 const pic = (r, seed, weather, setting) => r(`makeBackdrop(${seed}, '${weather}', ${JSON.stringify(setting)}).toDataURL()`);
 

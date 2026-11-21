@@ -13,21 +13,15 @@ const DUEL_STANCE = {
     advance: { name: 'Measure him', icon: 'eye', fx: [['eye', 'Close with care'], ['swords', 'Trade cuts']] },
     charge: { name: 'Rush him', icon: 'forced', fx: [['swords', 'A heavy first blow'], ['shield', 'A poorer guard after']] }
 };
-const STAFF_FX = {
-    surgeon: [['cross', 'Rest heals faster'], ['skull', 'Fewer of the fallen die']],
-    drill: [['drill', 'Drill teaches half as much again']],
-    qm: [['loaf', 'The company eats a quarter less'], ['scales', 'Market prices 15% lower']],
-    chaplain: [['flame', 'Spirits rise a little every day']]
-};
 const LOOK = { pike: 'woad', shot: 'steel', sabre: 'madder' };
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 const roman = (n) => ROMAN[n] || String(n);
 // The campaign in play: null until one is raised or continued, so on the title screen. The screens after it are built only with a
 // campaign in hand, which is why they write G!; save(), barHTML() and the frame loop are what look.
 let G = null;
-const ui = { screen: 'title', tab: 'market', course: null, open: null, c: null, pick: [], stance: null, odds: null, b: null, speed: 1, rep: null, modal: null, news: null, sound: true, music: true, view: null, camp: null, campPos: {}, demo: null, overT: 0, verdict: false, fresh: null, codex: 'nations', codexFrom: 'title' };
+const ui = { screen: 'title', panel: null, scrollCard: null, course: null, open: null, c: null, pick: [], stance: null, odds: null, b: null, speed: 1, rep: null, modal: null, news: null, sound: true, music: true, view: null, camp: null, campPos: {}, demo: null, overT: 0, verdict: false, fresh: null, codex: 'nations', codexFrom: 'title', captains: null, post: 'captain', pass: null, deltas: null };
 /* ---------- saving ---------- */
-const SAVE = 'sotnia-save-2';
+const SAVE = 'sotnia-save-3';
 function save() { try {
     if (G && !G.over)
         localStorage.setItem(SAVE, JSON.stringify(G));
@@ -37,11 +31,15 @@ function save() { try {
 catch (e) { /* no storage here */ } }
 function loadSave() { try {
     const s = JSON.parse(localStorage.getItem(SAVE) || 'null');
-    return s && s.v === 2 && !s.over && PLACES[s.at] ? s : null;
+    return s && s.v === 3 && !s.over && PLACES[s.at] ? s : null;
 }
 catch (e) {
     return null;
 } }
+try {
+    localStorage.removeItem('sotnia-save-2');
+}
+catch (e) { /* no storage here */ } // the campaigns of the old shape are dropped
 try {
     ui.sound = localStorage.getItem('sotnia-sound') !== 'off';
     ui.music = localStorage.getItem('sotnia-music') !== 'off';
@@ -60,7 +58,7 @@ const oddsPips = (p) => (p >= 0.85 ? 5 : p >= 0.65 ? 4 : p >= 0.42 ? 3 : p >= 0.
 const stat = (icon, v, label) => '<span class="st" title="' + esc(label) + '">' + ic(icon) + '<b>' + v + '</b>' + sr(' ' + esc(label)) + '</span>';
 // An effect: an icon, an amount and what it is of, coloured by whether it helps.
 function fxChip(f) {
-    const tone = /^\+/.test(f[1]) ? 'up' : /^[−-]/.test(f[1]) ? 'down' : 'even';
+    const tone = f[3] || (/^\+/.test(f[1]) ? 'up' : /^[−-]/.test(f[1]) ? 'down' : 'even');
     return '<span class="fx ' + tone + '">' + ic(f[0]) + '<b>' + esc(f[1]) + '</b><span>' + esc(f[2]) + '</span></span>';
 }
 const fxLine = (f) => '<span class="line">' + ic(f[0]) + '<span>' + esc(f[1]) + '</span></span>';
@@ -98,20 +96,21 @@ function toolsHTML() {
 }
 function barHTML() {
     let h = '<header class="bar"><h1 class="logo">Sotnia</h1>';
-    if (!G || ui.screen === 'title' || ui.screen === 'end' || ui.screen === 'codex')
+    if (!G || ui.screen === 'title' || ui.screen === 'captain' || ui.screen === 'end' || ui.screen === 'codex')
         return h + '<p class="strap">A free company · Anno 1633</p><span class="grow"></span>' + toolsHTML() + '</header>';
     const q = questOf(G), left = daysLeft(G), done = Math.round(100 * progress(G)), camp = ui.screen === 'camp';
+    const dl = (k) => { const v = ui.deltas && ui.deltas[k]; return v ? '<i class="delta ' + (v > 0 ? 'up' : 'down') + '" aria-hidden="true">' + (v > 0 ? '+' : '−') + Math.abs(v) + '</i>' : ''; };
     const due = left >= 0 ? plural(left, 'day', 'days') + ' until ' + q.until : plural(-left, 'day', 'days') + ' late: the price is falling';
     const trip = '<span>' + esc(cap1(PLACES[q.from].name)) + '</span><span class="track"><i style="width:' + done + '%"></i><b style="left:' + done + '%"></b></span><span>' + esc(PLACES[q.to].name) + '</span>';
     h += '<div class="where"><b>' + esc(cap1(here(G).name)) + '</b><span>' + dateText(G.date) + '</span></div>' +
         (camp ? '<button class="trip" data-act="tab" data-k="map" aria-label="' + esc('The map: ' + done + '% of the way to ' + PLACES[q.to].name) + '">' + trip + '</button>' : '<span class="trip" aria-hidden="true">' + trip + '</span>') +
         '<span class="stat due' + (left < 0 ? ' late' : left < daysToGo(G) ? ' tight' : '') + '" title="' + esc(due) + '">' + ic('hourglass') + '<b>' + Math.abs(left) + '</b><small>' + (left < 0 ? 'late' : 'days') + '</small>' + sr(' ' + esc(due)) + '</span>' +
         '<span class="grow"></span><div class="stats" aria-label="The company ledger">' +
-        '<span class="stat" title="' + esc(cap1(q.cargo.unit)) + '">' + ic(q.kind === 'commission' ? 'coin' : 'barrel') + '<b>' + G.cargo + '</b><small>of ' + G.cargo0 + '</small>' + sr(' ' + esc(q.cargo.unit)) + '</span>' +
-        '<span class="stat" title="Thalers: ' + wagesDue(G) + ' of pay fall due on ' + dateText(G.payDue, true) + '">' + ic('coin') + '<b>' + G.thalers + '</b><small>pay ' + wagesDue(G) + '</small>' + sr(' thalers, ' + wagesDue(G) + ' of pay due on ' + dateText(G.payDue, true)) + '</span>' +
-        '<span class="stat" title="Bread: the company eats ' + breadDue(G) + ' a day">' + ic('loaf') + '<b>' + G.bread + '</b><small>−' + breadDue(G) + ' a day</small>' + sr(' bread') + '</span>' +
-        '<span class="stat" title="Charges of powder">' + ic('horn') + '<b>' + G.powder + '</b>' + sr(' charges of powder') + '</span>' +
-        '<span class="stat" title="Renown">' + ic('mace') + '<b>' + G.renown + '</b>' + sr(' renown') + '</span></div>';
+        '<span class="stat" title="' + esc(cap1(q.cargo.unit)) + '">' + ic(q.kind === 'commission' ? 'coin' : 'barrel') + '<b>' + G.cargo + '</b>' + dl('cargo') + '<small>of ' + G.cargo0 + '</small>' + sr(' ' + esc(q.cargo.unit)) + '</span>' +
+        '<span class="stat" title="Thalers: ' + wagesDue(G) + ' of pay fall due on ' + dateText(G.payDue, true) + '">' + ic('coin') + '<b>' + G.thalers + '</b>' + dl('thalers') + '<small>pay ' + wagesDue(G) + '</small>' + sr(' thalers, ' + wagesDue(G) + ' of pay due on ' + dateText(G.payDue, true)) + '</span>' +
+        '<span class="stat" title="Bread: the company eats ' + breadDue(G) + ' a day">' + ic('loaf') + '<b>' + G.bread + '</b>' + dl('bread') + '<small>−' + breadDue(G) + ' a day</small>' + sr(' bread') + '</span>' +
+        '<span class="stat" title="Charges of powder">' + ic('horn') + '<b>' + G.powder + '</b>' + dl('powder') + sr(' charges of powder') + '</span>' +
+        '<span class="stat" title="Renown">' + ic('mace') + '<b>' + G.renown + '</b>' + dl('renown') + sr(' renown') + '</span></div>';
     return h + toolsHTML() + '</header>';
 }
 /* ---------- the cards ---------- */
@@ -130,7 +129,7 @@ function gearHTML(s, k) {
     return '<span class="gear" data-slot="' + k + '">' + head + rungs + '<button class="mini" data-act="up" data-id="' + s.id + '" data-k="' + k + '"' + (!shop || G.thalers < p ? ' aria-disabled="true"' : '') +
         ' aria-label="' + esc('Better ' + what + ' for ' + s.name + ': ' + names[t + 1] + ', ' + p + ' thalers') + '" title="' + esc(shop ? names[t + 1] + ', ' + p + ' thalers' : 'Bought only where there is a market') + '">' + ic('up') + p + '</button></span>';
 }
-function soldierCard(s, where) {
+function soldierCard(s) {
     const c = CLS[s.cls], skill = s.cls === 'shot' ? s.aim : s.mel, T = s.trait && TRAITS[s.trait];
     let badges = '';
     if (T)
@@ -152,23 +151,22 @@ function soldierCard(s, where) {
     body += s.wound ? '<span class="abed">' + ic('moon') + 'Resting until he can stand</span>' :
         '<span class="orders" role="group" aria-label="' + esc('Order in camp for ' + s.name) + '">' + Object.keys(ORDER).map(o => '<button data-act="order" data-id="' + s.id + '" data-o="' + o + '" aria-pressed="' + (s.order === o) + '">' + ic(o === 'rest' ? 'moon' : o) + ORDER[o] + '</button>').join('') + '</span>';
     body += '<span class="gears">' + gearHTML(s, 'wpn') + gearHTML(s, 'arm') + '</span>';
-    if (where === 'roll')
-        body += '<button class="link" data-act="dismiss" data-id="' + s.id + '">Strike from the roll</button>';
+    body += '<button class="link" data-act="dismiss" data-id="' + s.id + '">Strike from the roll</button>';
     return cardHTML({
-        cls: 'soldier' + (s.promos ? ' gilt' : '') + (where === 'camp' ? ' side-card' : ''), attrs: ' aria-label="' + esc(s.name) + '"', title: esc(s.name) + '<small>' + flagHTML(s.origin) + esc(s.origin) + '</small>',
+        cls: 'soldier' + (s.promos ? ' gilt' : '') + (s.id === ui.open ? ' sel' : ''), attrs: ' data-card="' + s.id + '" aria-label="' + esc(s.name) + '"', title: esc(s.name) + '<small>' + flagHTML(s.origin) + esc(s.origin) + '</small>',
         art: soldierArt(s), artCls: (s.wound ? 'hurt' : '') + (ui.fresh && ui.fresh.id === s.id ? ' fresh' : ''), badges, body,
-        type: { look: LOOK[s.cls], text: c.name, coin: wageOf(s), coinLabel: 'Wage, thalers a month', lvl: roman(s.level) }
+        type: { look: LOOK[s.cls], text: c.name, coin: wageOf(s, G), coinLabel: 'Wage, thalers a month', lvl: roman(s.level) }
     });
 }
 function recruitCard(r, i, full) {
-    const s = r.s, c = CLS[s.cls], T = s.trait && TRAITS[s.trait], off = full || G.thalers < r.price;
+    const s = r.s, c = CLS[s.cls], T = s.trait && TRAITS[s.trait], off = full || G.thalers < recruitPrice(G, r);
     const badges = T ? '<span class="badge' + (T.good ? '' : ' bad') + '" title="' + esc(T.desc) + '">' + ic(T.good ? 'star' : 'warn') + esc(s.trait) + '</span>' : '';
     return cardHTML({
-        tag: 'button', cls: 'buy', attrs: ' data-act="hire" data-i="' + i + '"' + (off ? ' disabled' : '') + ' aria-label="' + esc('Hire ' + s.name + ', ' + s.origin + ' ' + c.name.toLowerCase() + ', level ' + s.level + (s.trait ? ', ' + s.trait.toLowerCase() : '') + ', for ' + r.price + ' thalers') + '"',
+        tag: 'button', cls: 'buy', attrs: ' data-act="hire" data-i="' + i + '"' + (off ? ' disabled' : '') + ' aria-label="' + esc('Hire ' + s.name + ', ' + s.origin + ' ' + c.name.toLowerCase() + ', level ' + s.level + (s.trait ? ', ' + s.trait.toLowerCase() : '') + ', for ' + recruitPrice(G, r) + ' thalers') + '"',
         title: esc(s.name) + '<small>' + flagHTML(s.origin) + esc(s.origin) + '</small>', art: soldierArt(s), badges,
         body: '<span class="strip">' + stat('heart', s.vig, 'Vigour') + stat(s.cls, s.cls === 'shot' ? s.aim : s.mel, c.skill) + stat('shield', s.grd, 'Guard') + '</span>' +
-            '<span class="line">' + ic('coin') + '<span>Wage ' + wageOf(s) + ' a month</span></span>',
-        type: { look: LOOK[s.cls], text: c.name + ' · ' + roman(s.level), coin: r.price, coinLabel: 'Price to hire, thalers' }
+            '<span class="line">' + ic('coin') + '<span>Wage ' + wageOf(s, G) + ' a month</span></span>',
+        type: { look: LOOK[s.cls], text: c.name + ' · ' + roman(s.level), coin: recruitPrice(G, r), coinLabel: 'Price to hire, thalers' }
     });
 }
 function supplyCard(k) {
@@ -189,14 +187,83 @@ function cargoCard() {
             '<span class="choose">' + sell(1, '−1 ' + ic('barrel'), 'Sell one ' + esc(q.cargo.one) + ' for ' + p + ' thalers') + sell(5, '−5 ' + ic('barrel'), 'Sell five ' + esc(q.cargo.many) + ' for ' + 5 * p + ' thalers') + '</span>';
     return cardHTML({ cls: 'cargo', attrs: ' aria-label="' + (chest ? 'The Crown’s chest' : 'The cargo') + '"', title: chest ? 'The Crown’s chest' : 'The ' + esc(q.cargo.many), art: questArt(q), body, type: { look: 'wood', text: 'Cargo · ' + G.cargo } });
 }
-function staffCard(k) {
-    const s = STAFF[k], hired = !!G.staff[k];
+/* ---------- the command: the captain, the officers and the retainer ---------- */
+const fxRow = (chips) => chips.length ? '<span class="fxrow">' + chips.map(fxChip).join('') + '</span>' : '';
+const modChips = (mods) => mods.map(m => modChip(m).chip);
+const trait = (kind, icon, name) => '<span class="trait ' + kind + '">' + ic(icon) + '<b>' + esc(name) + '</b></span>';
+/** A captain: where he is from, what he is good and bad at, and the order he gives in a fight. pick makes the card the button that takes him as the captain of the commission. */
+function captainCard(c, pick) {
+    const T = CAPTAINS[c.type], O = ORDERS[T.order], label = originLabel(T.origin);
     return cardHTML({
-        tag: 'button', cls: 'buy' + (hired ? ' hired' : ''), attrs: ' data-act="staff" data-k="' + k + '"' + (hired || G.thalers < s.fee ? ' disabled' : '') + ' aria-label="' + esc(hired ? s.name + ', in your pay' : 'Engage the ' + s.name.toLowerCase() + ' for ' + s.fee + ' thalers, then ' + s.wage + ' a month: ' + s.desc) + '"',
-        title: s.name, art: staffArt(k), badges: hired ? '<span class="badge moss right">' + ic('check') + 'In your pay</span>' : '',
-        body: STAFF_FX[k].map(fxLine).join(''),
-        type: { look: 'moss', text: '+' + s.wage + ' a month', coin: s.fee, coinLabel: 'Fee to engage, thalers' }
+        tag: pick ? 'button' : 'article', cls: 'captain' + (pick ? ' buy' : ''), attrs: pick ? ' data-act="new" data-q="' + pick.q + '" data-c="' + pick.i + '" aria-label="' + esc('Take ' + c.name + ', ' + T.title.toLowerCase() + ', as captain') + '"' : ' aria-label="' + esc(c.name) + '"',
+        title: esc(c.name) + '<small>' + flagHTML(label) + esc(label) + '</small>', art: captainArt(c),
+        body: '<span class="flavour">' + esc(T.blurb) + '</span>' + trait('good', 'star', T.perk.name) + fxRow(modChips(T.perk.mods)) + trait('bad', 'warn', T.flaw.name) + fxRow(modChips(T.flaw.mods)) +
+            trait('order', O.icon, 'Order: ' + O.name) + '<span class="line">' + ic('flag') + '<span>' + esc(O.text) + ' Given once in a fight.</span></span>',
+        type: { look: LOOK[T.cls], text: esc(T.title), end: pick ? '<span class="btn go sm">' + ic('flag') + 'Take command</span>' : undefined }
     });
+}
+/** An officer: in post (seated, with the button that lets him go), or one of the men looking for the post (an offer, the button that engages him). */
+function officerCard(o, how, i = 0) {
+    const S = SPECIALTIES[o.kind], seated = how === 'seated', label = originLabel(o.origin), g = G;
+    const held = !!g.officers[o.station], place = held || officersOf(g).length < officerSlots(g), off = !seated && (g.thalers < o.fee || !place);
+    const why = seated ? '' : !place ? 'No place for another officer until ' + nextSlotRenown(g) + ' renown' : g.thalers < o.fee ? 'The fee is ' + o.fee + ' thalers' : '';
+    let body = '<span class="flavour">' + esc(S.blurb) + '</span>' + fxRow(officerChips(o.kind).map(c => c.chip));
+    body += seated ? '<button class="link" data-act="letgo" data-k="' + o.station + '">Let him go</button>' : fxLine(['coin', 'Then ' + o.wage + ' thalers a month']) + (held ? fxLine(['up', 'Takes the place of ' + g.officers[o.station].name]) : '');
+    return cardHTML({
+        tag: seated ? 'article' : 'button', cls: 'officer ' + (seated ? 'hired' : 'buy'),
+        attrs: seated ? ' aria-label="' + esc(o.name + ', ' + STAFF[o.station].name.toLowerCase() + ', in your pay') + '"' :
+            ' data-act="engage" data-k="' + o.station + '" data-i="' + i + '"' + (off ? ' disabled title="' + esc(why) + '"' : '') + ' aria-label="' + esc('Engage ' + o.name + ', ' + S.title.toLowerCase() + ', for ' + o.fee + ' thalers, then ' + o.wage + ' a month' + (why ? '. ' + why : '')) + '"',
+        title: esc(o.name) + '<small>' + flagHTML(label) + esc(label) + '</small>', art: officerArt(o.kind),
+        badges: seated ? '<span class="badge moss right">' + ic('check') + 'In your pay</span>' : '', body,
+        type: { look: 'moss', text: esc(cap1(S.title.replace(/^an? /i, ''))), coin: seated ? o.wage : o.fee, coinLabel: seated ? 'Wage, thalers a month' : 'Fee to engage, thalers' }
+    });
+}
+function retainerCard(r) {
+    const T = RETAINERS[r.type];
+    return cardHTML({
+        cls: 'officer hired', attrs: ' aria-label="' + esc(r.name + ', ' + T.title.toLowerCase() + ', with the train') + '"', title: esc(r.name), art: retainerArt(r.type),
+        badges: '<span class="badge moss right">' + ic('check') + 'With the train</span>',
+        body: '<span class="flavour">' + esc(T.blurb) + '</span>' + fxRow(modChips(T.mods)) + '<button class="link" data-act="letgoR">Pay ' + (T.she ? 'her' : 'him') + ' off</button>',
+        type: { look: 'moss', text: esc(cap1(T.title.replace(/^an? /i, ''))), coin: r.wage, coinLabel: 'Wage, thalers a month' }
+    });
+}
+const vacant = (icon, title, text) => '<div class="vacant">' + ic(icon) + '<b>' + esc(title) + '</b><span>' + esc(text) + '</span></div>';
+function commandPanel() {
+    const g = G, held = officersOf(g).length, slots = officerSlots(g), next = nextSlotRenown(g), town = has(g, 'staff');
+    const item = (k, icon, title, sub) => '<button role="tab" data-act="post" data-k="' + k + '" aria-selected="' + (ui.post === k) + '">' + ic(icon) + '<span><b>' + title + '</b><small>' + esc(sub) + '</small></span></button>';
+    let rail = item('captain', 'flag', 'Captain', g.captain.name);
+    for (const k of STATIONS)
+        rail += item(k, STAFF[k].icon, STAFF[k].name, g.officers[k] ? g.officers[k].name : held >= slots ? 'No place yet' : 'Vacant');
+    rail += item('retainer', 'wagon', 'Retainer', g.retainer ? g.retainer.name : 'None');
+    let h = '<div class="command"><nav class="rail" role="tablist" aria-label="Who leads the company" aria-orientation="vertical">' + rail +
+        '<p class="slots">' + ic('men') + '<span>' + held + ' of ' + slots + ' places held' + (next != null ? '; the next opens at ' + next + ' renown' : '') + '</span></p></nav><section class="post" role="tabpanel">';
+    if (ui.post === 'captain') {
+        const T = CAPTAINS[g.captain.type], O = ORDERS[T.order];
+        h += sectHTML('The captain', 'commands from the first day to the last') + '<div class="duo"><div class="cards">' + captainCard(g.captain) + '</div><div class="prose">' +
+            '<p><b>His ways.</b> ' + esc(T.perk.name) + ' and ' + esc(T.flaw.name.charAt(0).toLowerCase() + T.flaw.name.slice(1)) + ' hold for the whole road, in everything the company does.</p>' +
+            '<p><b>His order.</b> ' + esc(g.captain.name.split(' ')[0]) + ' leads from behind the line and does not fight in it. In a fight, ' + esc(O.name.toLowerCase()) + ' can be called once, at the moment you choose: ' + esc(O.text.charAt(0).toLowerCase() + O.text.slice(1)) + ' It lasts ' + O.secs + ' seconds, and the scouts do not count on it.</p>' +
+            '<p><b>The rest of the command.</b> ' + (held ? held + ' of ' + slots + ' places held' : 'No officer is engaged yet') + (next != null ? '; a place opens at ' + next + ' renown' : '') + '. A surgeon, a drillmaster, a quartermaster and a chaplain are engaged in the towns, three men to choose from for each post. Now and then someone asks to ride with the train.</p></div></div>';
+    }
+    else if (ui.post === 'retainer') {
+        h += sectHTML('The retainer', 'one at a time, and not for hire in a market') + (g.retainer ? '<div class="cards">' + retainerCard(g.retainer) + '</div>' :
+            vacant('wagon', 'Nobody rides with the train', 'Now and then, in a town, someone asks for a place: an engineer, a map-maker, a singer, a merchant. Take one on, and the company has a new way of its own. They are not found by looking.'));
+    }
+    else {
+        const k = ui.post, O = g.officers[k], offers = g.pool[k] || [];
+        h += sectHTML(STAFF[k].name, esc(STAFF[k].owns)) + (O ? '<div class="cards">' + officerCard(O, 'seated') + '</div>' : vacant(STAFF[k].icon, held >= slots ? 'No place for another officer' : 'The post is vacant', held >= slots ? 'The company holds ' + held + ' officers, as many as its renown allows' + (next != null ? ' until ' + next + ' renown' : '') + '. Let one go, or engage a man in the place of one in post.' : 'Nobody holds it. Engage one of the men below.'));
+        if (town)
+            h += sectHTML(O ? 'Or in his place' : 'Looking for the post', 'in ' + esc(here(g).name)) + (offers.length ? '<div class="cards">' + offers.map((o, i) => officerCard(o, 'offer', i)).join('') + '</div>' : '<p class="empty">' + ic('hourglass') + 'Nobody else is looking for this post today. New faces come every few days.</p>');
+        else
+            h += '<p class="empty">' + ic('hourglass') + 'Nobody here is looking for a post. Officers are found in the towns.</p>';
+    }
+    return h + '</section></div>';
+}
+/** The page where the captain of a new company is chosen: three men, each with a perk and a flaw and an order of his own. */
+function captainsHTML() {
+    const cs = ui.captains, q = QUESTS.find(x => x.id === cs.q);
+    return '<section class="captains">' + sectHTML('Who leads the company?', 'chosen once, for the whole road') +
+        '<p class="lede">' + esc(q.title) + ': ' + esc(cap1(PLACES[q.from].name)) + ' to ' + esc(PLACES[q.to].name) + '. Three captains are willing to take the banner. Each is good at something and bad at something, and each calls one order in a fight. The company is his from the first morning.</p>' +
+        '<div class="cards wide">' + cs.list.map((c, i) => captainCard(c, { q: cs.q, i })).join('') + '</div><div><button class="btn ghost" data-act="title">' + ic('retreat') + 'Back to the commissions</button></div></section>';
 }
 function oddsFor(c) {
     if (!G.odds[c.id]) {
@@ -212,7 +279,7 @@ function contractCard(c, where) {
     if (c.weather !== 'clear')
         badges += '<span class="badge light right" title="' + esc(WEATHER[c.weather]) + '">' + ic(WEATHER_ICON[c.weather]) + esc(WEATHER[c.weather].split(':')[0]) + sr(': ' + esc(WEATHER[c.weather].split(':')[1] || '')) + '</span>';
     let body = '<span class="who">' + esc(c.who) + '</span><span class="flavour">' + esc(c.text) + '</span>';
-    const terms = c.ambush ? [] : [stat('mace', '+' + c.renown, 'renown'), stat('men', c.cap, c.cap === 1 ? 'one man' : 'men at most')];
+    const terms = c.ambush ? [] : [stat('mace', '+' + renownFor(G, c), 'renown'), stat('men', c.cap, c.cap === 1 ? 'one man' : 'men at most')];
     if (!c.ambush && !c.final)
         terms.push(stat('hourglass', c.ttl, c.ttl > 1 ? 'days open' : 'last day'));
     if (c.bonus)
@@ -226,19 +293,78 @@ function contractCard(c, where) {
     const end = where === 'work' ? '<button class="btn go sm" data-act="muster" data-id="' + c.id + '"' + (o && o.none ? ' disabled' : '') + '>' + ic('swords') + 'Muster</button>' : '';
     return cardHTML({
         cls: 'contract' + (c.final ? ' gilt' : ''), attrs: ' aria-label="' + esc(c.title) + '"', title: esc(c.title), art: foesArt(c), artCls: 'wide', badges, body,
-        type: c.ambush ? { look: 'ink', text: 'No pay · ' + esc(cap1(c.foe)) } : { look: 'ink', text: c.duel ? 'Cold steel' : esc(cap1(c.foe)), coin: c.pay, coinLabel: 'Pay, thalers', end }
+        type: c.ambush ? { look: 'ink', text: 'No pay · ' + esc(cap1(c.foe)) } : { look: 'ink', text: c.duel ? 'Cold steel' : esc(cap1(c.foe)), coin: payFor(G, c), coinLabel: 'Pay, thalers', end }
     });
 }
-/* ---------- camp: the company round its fire, the way on, and the work of the day ---------- */
+const PANELS = {
+    map: { icon: 'map', title: 'The road', short: 'Road' },
+    roll: { icon: 'men', title: 'The roll', short: 'Roll' },
+    market: { icon: 'scales', title: 'The market', short: 'Market', need: 'market' },
+    work: { icon: 'swords', title: 'Work', short: 'Work', need: 'work' },
+    command: { icon: 'flag', title: 'Command', short: 'Command' },
+    log: { icon: 'book', title: 'The chronicle', short: 'Chronicle' }
+};
+const PANEL_ORDER = ['map', 'roll', 'market', 'work', 'command', 'log'];
+const panelsHere = () => PANEL_ORDER.filter(k => !PANELS[k].need || has(G, PANELS[k].need));
+/** How many things a page holds, for the dock and the scene to say. */
+const panelCount = (k) => k === 'roll' ? G.roster.length : k === 'market' ? (has(G, 'recruits') ? G.recruits.length : null) : k === 'work' ? G.contracts.length : k === 'command' ? officersOf(G).length : null;
+const HOTSPOTS = [
+    { k: 'roll', what: 'the men, their orders, their kit and their promotions', rect: [76, 44, 54, 42] },
+    { k: 'command', what: 'the captain, the officers and the retainer', rect: [190, 44, 46, 38] },
+    { k: 'market', what: 'bread, powder, the cargo, and men to hire', rect: [8, 72, 64, 28] },
+    { k: 'work', what: 'the paid fights posted here', rect: [258, 66, 30, 40] },
+    { k: 'map', what: 'the map, and the way on', rect: [294, 56, 24, 52] },
+    { k: 'log', what: 'what has happened on the road, told on the banner', rect: [157, 15, 28, 22] }
+];
+/** A rectangle of the scene (scene pixels) as the style that lays a button over it. */
+const sceneRect = (x, y, w, h) => 'left:' + (x / CW * 100).toFixed(2) + '%;top:' + (y / CH * 100).toFixed(2) + '%;width:' + (w / CW * 100).toFixed(2) + '%;height:' + (h / CH * 100).toFixed(2) + '%';
+/** The little card that opens over the man picked in camp: his blood and spirit, his order for the day, and the way to his whole card. */
+function camperPop(s) {
+    const c = CLS[s.cls];
+    return '<div class="pop" role="group" aria-label="' + esc('Orders for ' + s.name) + '"><span class="pn"><b>' + esc(s.name) + '</b><small>' + c.name + ' · ' + roman(s.level) + '</small></span>' +
+        '<span class="pb">' + ic('drop') + meter('hp', s.hp, s.vig) + ic('flame') + meter('mo', s.morale, 100) + '</span>' +
+        (s.wound ? '<span class="pa">' + ic('moon') + 'Abed ' + plural(s.wound, 'day', 'days') + '</span>' :
+            '<span class="po">' + Object.keys(ORDER).map(o => '<button data-act="order" data-id="' + s.id + '" data-o="' + o + '" aria-pressed="' + (s.order === o) + '" aria-label="' + ORDER[o] + '" title="' + ORDER[o] + '">' + ic(o === 'rest' ? 'moon' : o) + '</button>').join('') + '</span>') +
+        '<button class="pc" data-act="card" data-id="' + s.id + '">' + ic('scroll') + 'Card' + (s.promos ? ic('star', 'Promotion earned') : '') + '</button></div>';
+}
+/** What the last march or day in camp reported, over the top of the scene until it is put away. */
+function newsRibbon() {
+    if (!ui.news || !ui.news.length)
+        return '';
+    const news = [];
+    for (const t of ui.news) {
+        const prev = news[news.length - 1];
+        if (prev && prev.t === t)
+            prev.k++;
+        else
+            news.push({ t, k: 1 });
+    }
+    return '<aside class="dawn" aria-label="On the road"><ul>' + news.slice(-5).map(n => '<li>' + ic('lantern') + '<span>' + esc(n.t) + (n.k > 1 ? ' <small>(' + n.k + ' days)</small>' : '') + '</span></li>').join('') + '</ul>' +
+        '<button class="x" data-act="newsClose" aria-label="Put the news away">' + ic('x') + '</button></aside>';
+}
 function campScene() {
-    const plan = campPlan(G), q = questOf(G);
-    const label = 'The company in camp at ' + here(G).name + ': ' + (plan.length ? plan.map(p => p.s.name + (p.k === 'abed' ? ' abed' : p.k === 'rest' ? ' by the fire' : p.k === 'drill' ? ' at drill' : ' foraging')).join(', ') : 'nobody under the banner') + '. The ' + q.cargo.many + ' wait by the tents.';
-    let h = '<div class="scene"><canvas id="camp" role="img" aria-label="' + esc(label) + '"></canvas>';
+    const g = G, plan = campPlan(g), q = questOf(g), here0 = panelsHere();
+    const label = 'The company in camp at ' + here(g).name + ': ' + (plan.length ? plan.map(p => p.s.name + (p.k === 'abed' ? ' abed' : p.k === 'rest' ? ' by the fire' : p.k === 'drill' ? ' at drill' : ' foraging')).join(', ') : 'nobody under the banner') + '. The ' + q.cargo.many + ' wait by the tents.';
+    let h = '<div class="scene"><canvas id="camp" role="img" aria-label="' + esc(label) + '"></canvas>' + newsRibbon();
+    for (const s of HOTSPOTS) {
+        if (!here0.includes(s.k))
+            continue;
+        const P = PANELS[s.k], n = panelCount(s.k);
+        h += '<button class="spot" data-act="panel" data-k="' + s.k + '" style="' + sceneRect(...s.rect) + '" aria-label="' + esc(P.title + ': ' + s.what) + '"><span class="plate">' + ic(P.icon) + esc(P.short) + (n ? '<b>' + n + '</b>' : '') + '</span></button>';
+    }
+    h += '<button class="spot fire" data-act="halt" style="' + sceneRect(147, 82, 28, 28) + '" aria-label="Rest a day by the fire"><span class="plate">' + ic('moon') + 'Rest a day</span></button>';
+    // the people of the command stand where the camp puts them; a click on one opens his page
+    const person = (post, slot, name, what) => '<button class="spot person" data-act="panel" data-k="command" data-post="' + post + '" style="' + sceneRect(slot[0] - 9, slot[1] - 31, 18, 32) + '" aria-label="' + esc(what + ', ' + name) + '"><span class="plate">' + esc(what) + '</span></button>';
+    h += person('captain', CAMP.captain, g.captain.name, 'Captain');
+    for (const o of officersOf(g))
+        h += person(o.station, CAMP.staff[o.station], o.name, STAFF[o.station].name);
+    if (g.retainer)
+        h += person('retainer', CAMP.retainer, g.retainer.name, cap1(RETAINERS[g.retainer.type].title.replace(/^an? /i, '')));
     for (const p of plan) {
         const on = p.id === ui.open, w = p.k === 'abed' ? 20 : 18, hh = p.k === 'abed' ? 9 : p.k === 'rest' ? 19 : 32, top = p.y - (p.k === 'abed' ? 8 : p.k === 'rest' ? 18 : 31);
-        h += '<button class="camper' + (on ? ' on' : '') + '" data-act="sel" data-id="' + p.id + '" data-k="' + p.k + '" aria-pressed="' + on + '" aria-label="' + esc(p.s.name + ', ' + CLS[p.s.cls].name.toLowerCase() + (p.k === 'abed' ? ', abed' : ', ' + ORDER[p.k].toLowerCase())) + '"' +
-            ' style="left:' + ((p.x - 9) / CW * 100).toFixed(2) + '%;top:' + (top / CH * 100).toFixed(2) + '%;width:' + (w / CW * 100).toFixed(2) + '%;height:' + (hh / CH * 100).toFixed(2) + '%">' +
-            '<span class="plate">' + ic(p.k === 'abed' ? 'cross' : p.k === 'rest' ? 'moon' : p.k) + esc(p.s.name.split(' ')[0]) + '</span></button>';
+        h += '<div class="camper' + (on ? ' on' : '') + '" data-id="' + p.id + '" data-k="' + p.k + '" style="' + sceneRect(p.x - 9, top, w, hh) + '">' +
+            '<button class="hit" data-act="sel" data-id="' + p.id + '" aria-pressed="' + on + '" aria-label="' + esc(p.s.name + ', ' + CLS[p.s.cls].name.toLowerCase() + (p.k === 'abed' ? ', abed' : ', ' + ORDER[p.k].toLowerCase())) + '">' +
+            '<span class="plate">' + ic(p.k === 'abed' ? 'cross' : p.k === 'rest' ? 'moon' : p.k) + esc(p.s.name.split(' ')[0]) + (p.s.promos ? ic('star', 'Promotion earned') : '') + '</span></button>' + (on ? camperPop(p.s) : '') + '</div>';
     }
     return h + '</div>';
 }
@@ -260,16 +386,23 @@ function courseBlock(off) {
         h += '<span class="warn">' + ic('warn') + 'Bread for ' + plural(fed, 'day', 'days') + '; first market ' + md + ' days on</span>';
     return h + '</div>';
 }
+/** The company's pages as a column of buttons beside the scene (along the foot of it, where there is no room), for the keyboard and for the phone as much as for the mouse. */
+function menuHTML() {
+    return '<nav class="menu" aria-label="The company’s business">' + panelsHere().map(k => {
+        const P = PANELS[k], n = panelCount(k);
+        return '<button data-act="panel" data-k="' + k + '" aria-haspopup="dialog" aria-expanded="' + (ui.panel === k) + '" title="' + esc(P.title) + '">' + ic(P.icon) + '<span>' + P.short + '</span>' + (n ? '<i class="count">' + n + '</i>' : '') + '</button>';
+    }).join('') + '</nav>';
+}
 function dockHTML() {
     const q = questOf(G), nobody = !G.roster.length, off = nobody ? ' disabled' : '', need = breadDue(G);
     const t = { drill: 0, rest: 0, forage: 0, abed: 0 };
     G.roster.forEach(s => t[s.wound ? 'abed' : s.order]++);
-    let h = '<div class="dock"><div class="tally"><span class="k">Tonight</span><span class="chips">' +
+    let h = '<div class="dock"><div class="doing"><div class="tally"><span class="k">Tonight</span><span class="chips">' +
         [['drill', 'drill', 'at drill'], ['rest', 'moon', 'resting'], ['forage', 'forage', 'foraging'], ['abed', 'cross', 'abed']].map(x => '<span class="tchip" title="' + x[2] + '">' + ic(x[1]) + '<b>' + t[x[0]] + '</b>' + sr(' ' + x[2]) + '</span>').join('') +
         '</span><span class="meta">' + ic('coin') + wagesDue(G) + ' pay on ' + dateText(G.payDue, true) + '</span></div>';
     if (atEnd(G)) {
         return h + '<div class="deliver"><button class="btn go big" data-act="deliver">' + ic(q.kind === 'commission' ? 'coin' : 'scales') + (q.kind === 'commission' ? 'Hand over the chest' : 'Sell the ' + esc(q.cargo.many)) + ' · ' + cargoValue(G) + ' thalers</button>' +
-            (lateDays(G) ? '<span class="warn">' + ic('hourglass') + plural(lateDays(G), 'day', 'days') + ' late: the price has fallen</span>' : '<span class="meta">' + ic('check') + 'In time</span>') + '</div></div>';
+            (lateDays(G) ? '<span class="warn">' + ic('hourglass') + plural(lateDays(G), 'day', 'days') + ' late: the price has fallen</span>' : '<span class="meta">' + ic('check') + 'In time</span>') + '</div></div></div>';
     }
     h += '<button class="act" data-act="halt" title="Each man drills, rests or forages, as ordered">' + ic('moon') + '<span>' + (nobody ? 'Wait a day' : 'Rest a day') + '</span><small>' + (need ? '−' + need + ' ' + ic('loaf') : 'new faces may come') + '</small></button>';
     h += courseBlock(off);
@@ -282,7 +415,7 @@ function dockHTML() {
         warns.push(['loaf', 'Not enough bread for tomorrow']);
     if (warns.length)
         h += '<div class="warns">' + warns.map(w => '<span class="warn">' + ic(w[0]) + esc(w[1]) + '</span>').join('') + '</div>';
-    return h + '</div>';
+    return h + '</div></div>';
 }
 function mapPanel() {
     const q = questOf(G), T = transportOf(G), need = breadDue(G), fed = need ? Math.floor(G.bread / need) : 99, to = PLACES[q.to], togo = daysToGo(G), left = daysLeft(G);
@@ -314,51 +447,32 @@ function marketPanel() {
     h += '<section>' + sectHTML('Supplies and cargo') + '<div class="cards">' + supplyCard('bread') + supplyCard('powder') + (atEnd(G) ? '' : cargoCard()) + '</div></section>';
     return h;
 }
-function campHTML() {
-    let h = '';
-    if (ui.news && ui.news.length) {
-        const news = [];
-        for (const t of ui.news) {
-            const prev = news[news.length - 1];
-            if (prev && prev.t === t)
-                prev.k++;
-            else
-                news.push({ t, k: 1 });
-        }
-        h += '<ul class="news" aria-label="On the road">' + news.map(n => '<li>' + ic('lantern') + '<span>' + esc(n.t) + (n.k > 1 ? ' <small>(' + n.k + ' days)</small>' : '') + '</span></li>').join('') + '</ul>';
-    }
-    if (!man(ui.open))
-        ui.open = G.roster.length ? G.roster[0].id : null;
-    const sel = man(ui.open);
-    h += '<section class="stage">' + campScene() + '<aside class="side">' + (sel ? soldierCard(sel, 'camp') :
-        '<div class="card side-card empty-card"><span class="face"><span class="banner">Nobody under the banner</span><span class="line">' + ic('men') + '<span>Hire men at the market before marching.</span></span></span></div>') + '</aside></section>';
-    h += dockHTML();
-    const tabs = [['map', 'map', 'The road']];
-    tabs.push(['roll', 'men', 'The roll', G.roster.length]);
-    if (has(G, 'market'))
-        tabs.push(['market', 'scales', 'Market', has(G, 'recruits') ? G.recruits.length : null]);
-    if (has(G, 'work'))
-        tabs.push(['work', 'swords', 'Work', G.contracts.length]);
-    if (has(G, 'staff'))
-        tabs.push(['staff', 'wagon', 'Baggage train']);
-    tabs.push(['log', 'book', 'Chronicle']);
-    if (!tabs.some(t => t[0] === ui.tab))
-        ui.tab = tabs[0][0];
-    h += '<nav class="tabs" role="tablist" aria-label="The company’s business">' + tabs.map(t => '<button role="tab" data-act="tab" data-k="' + t[0] + '" aria-selected="' + (ui.tab === t[0]) + '">' + ic(t[1]) + t[2] +
-        (t[3] ? '<span class="count">' + t[3] + '</span>' : '') + '</button>').join('') + '</nav><div class="panel" role="tabpanel">';
-    if (ui.tab === 'map')
-        h += mapPanel();
-    else if (ui.tab === 'roll')
-        h += G.roster.length ? '<div class="cards">' + G.roster.map(s => soldierCard(s, 'roll')).join('') + '</div>' : '<p class="empty">' + ic('men') + 'Nobody stands under the banner. Hire men at the market.</p>';
-    else if (ui.tab === 'market')
-        h += marketPanel();
-    else if (ui.tab === 'work')
-        h += G.contracts.length ? '<div class="cards wide">' + G.contracts.map(c => contractCard(c, 'work')).join('') + '</div>' : '<p class="empty">' + ic('swords') + 'No work posted here today.</p>';
-    else if (ui.tab === 'staff')
-        h += '<div class="cards">' + Object.keys(STAFF).map(staffCard).join('') + '</div>';
-    else
-        h += '<ol class="log">' + G.log.map(l => '<li><span class="d">' + (l.n != null ? dateText(l.n, true) : 'Day ' + l.d) + '</span><span>' + esc(l.t) + '</span></li>').join('') + '</ol>';
-    return h + '</div>';
+/** What a page of the company's business holds. */
+function panelBody(k) {
+    if (k === 'map')
+        return mapPanel();
+    if (k === 'roll')
+        return G.roster.length ? '<div class="cards">' + G.roster.map(soldierCard).join('') + '</div>' : '<p class="empty">' + ic('men') + 'Nobody stands under the banner. Hire men at the market.</p>';
+    if (k === 'market')
+        return marketPanel();
+    if (k === 'work')
+        return G.contracts.length ? '<div class="cards wide">' + G.contracts.map(c => contractCard(c, 'work')).join('') + '</div>' : '<p class="empty">' + ic('swords') + 'No work posted here today.</p>';
+    if (k === 'command')
+        return commandPanel();
+    return '<ol class="log">' + G.log.map(l => '<li><span class="d">' + (l.n != null ? dateText(l.n, true) : 'Day ' + l.d) + '</span><span>' + esc(l.t) + '</span></li>').join('') + '</ol>';
+}
+/** The camp: the scene, with everything in it that can be clicked, and the dock beneath with the day's orders. A page of the business opens over it (see panelHTML). */
+function campHTML() { return '<main class="hub">' + menuHTML() + '<section class="stage">' + campScene() + '</section>' + dockHTML() + '</main>'; }
+/** The page open over the camp: a drawer under the bar, so that the ledger stays in view, with the page in it. */
+function panelHTML() {
+    const k = ui.panel;
+    if (!k || !G || ui.screen !== 'camp')
+        return '';
+    const P = PANELS[k], q = questOf(G);
+    const sub = k === 'map' ? esc(cap1(PLACES[q.from].name)) + ' to ' + esc(PLACES[q.to].name) : k === 'roll' ? G.roster.length + ' of ' + ROSTER_MAX + ' on the roll' : k === 'market' ? esc(cap1(here(G).name)) :
+        k === 'work' ? plural(G.contracts.length, 'fight', 'fights') + ' posted in ' + esc(here(G).name) : k === 'command' ? officersOf(G).length + ' of ' + officerSlots(G) + ' places held' : 'day ' + G.day;
+    return '<div class="pveil"><section class="drawer p-' + k + '" role="dialog" aria-modal="true" aria-labelledby="pt"><header class="dhead"><h2 id="pt">' + ic(P.icon) + P.title + '</h2><span class="dsub">' + sub + '</span>' +
+        '<button class="x" data-act="panelClose" aria-label="Close ' + esc(P.title.toLowerCase()) + '">' + ic('x') + '</button></header><div class="dbody">' + panelBody(k) + '</div></section></div>';
 }
 /* ---------- muster: who fights, and how they open ---------- */
 function tokenHTML(s, on, full) {
@@ -389,19 +503,25 @@ function musterHTML() {
         '<span class="chips">' + stat('men', ui.pick.length + ' of ' + cap, 'chosen') + (cur ? stat((c.duel ? DUEL_STANCE : STANCE)[cur].icon, (c.duel ? DUEL_STANCE : STANCE)[cur].name, 'opening order') : '') + (c.duel ? '' : stat('horn', G.powder, 'powder')) + '</span>' +
         (G.powder < 1 && shots && !c.duel ? '<span class="warn">' + ic('horn') + 'No powder: muskets fight with the butt</span>' : '') +
         '<span class="meta">' + ic(c.ambush ? 'warn' : 'sun') + (c.ambush ? 'They are on the train. No going back.' : 'Fighting takes the whole day.') + '</span>' +
+        (c.duel ? '' : '<span class="meta">' + ic('flag') + esc(G.captain.name.split(' ')[0]) + ' can call ' + esc(ORDERS[CAPTAINS[G.captain.type].order].name.toLowerCase()) + ' once; the scouts do not count on it.</span>') +
         '<button class="btn go huge" data-act="fight"' + (ui.pick.length ? '' : ' disabled') + '>' + ic('swords') + 'To arms</button>' +
         (c.ambush ? '' : '<button class="btn ghost" data-act="back">' + ic('tent') + 'Back to camp</button>') + '</aside></div>';
     h += '<section class="who">' + sectHTML('Who fights', ui.pick.length + ' of ' + cap + ' chosen') + '<div class="tokens" role="group" aria-label="Who fights">' + G.roster.map(s => tokenHTML(s, ui.pick.includes(s.id))).join('') + '</div></section>';
     return h;
 }
 /* ---------- the fight ---------- */
+/** The button of the captain's order: its name, and what the order does as its hint. */
+function orderButton() {
+    const O = ORDERS[CAPTAINS[G.captain.type].order];
+    return '<button class="btn order" id="captain" data-act="captain" aria-label="' + esc(G.captain.name.split(' ')[0] + ' calls ' + O.name.toLowerCase() + ': ' + O.text) + '" title="' + esc(O.text) + '">' + ic(O.icon) + '<span><b>' + esc(O.name) + '</b><small id="capsub"></small></span><kbd>O</kbd></button>';
+}
 function battleHTML() {
     const c = ui.c, key = (k, s, label, icon) => '<button data-act="cmd" data-s="' + s + '">' + ic(icon) + label + '<kbd>' + k + '</kbd></button>';
     return '<section class="fight"><div class="plate field"><canvas id="field" role="img" aria-label="The fight, drawn as it happens"></canvas><div id="verdict"></div></div>' +
         '<p class="caption"><span>' + esc(c.title) + ', as it befell on ' + dateText(G.date) + '.</span><span id="clock" class="num"></span></p>' +
         '<div class="cmd"><div class="seg big" role="group" aria-label="Order to the company" id="orders">' +
         (c.duel ? key('1', 'advance', 'Measure', 'eye') + key('2', 'charge', 'Rush', 'forced') : key('1', 'hold', 'Hold', 'wall') + key('2', 'advance', 'Advance', 'boot') + key('3', 'charge', 'Charge', 'forced')) + '</div>' +
-        '<button class="btn ghost" data-act="retreat" id="retreat">' + ic('white') + (c.duel ? 'Yield' : 'Sound the retreat') + '</button><span class="spacer"></span>' +
+        '<button class="btn ghost" data-act="retreat" id="retreat">' + ic('white') + (c.duel ? 'Yield' : 'Sound the retreat') + '</button>' + (c.duel ? '' : orderButton()) + '<span class="spacer"></span>' +
         '<div class="seg" role="group" aria-label="Speed" id="speed"><button data-act="speed" data-v="0" aria-label="Pause">' + ic('pause') + '</button><button data-act="speed" data-v="1">1×</button><button data-act="speed" data-v="2">2×</button><button data-act="speed" data-v="4">4×</button></div></div>' +
         '<div class="sides"><div class="side-box"><div class="head">' + ic('flag') + 'Your men<span id="powder"></span></div><div class="units" id="ours"></div></div><div class="side-box theirs"><div class="head">' + ic('swords') + esc(cap1(c.foe)) + '</div><div class="units" id="theirs"></div></div></div>' +
         '<ol class="blog" id="blog" aria-live="polite"></ol></section>';
@@ -420,6 +540,13 @@ function paintHud() {
     document.querySelectorAll('#orders button').forEach(el => { el.setAttribute('aria-pressed', String(b.stance[0] === el.dataset.s)); el.disabled = b.over || b.retreated; });
     document.querySelectorAll('#speed button').forEach(el => el.setAttribute('aria-pressed', String(ui.speed === +el.dataset.v)));
     $('#retreat').disabled = b.over || b.retreated;
+    const ob = $('#captain');
+    if (ob && b.order) {
+        const left = b.buffs[b.order];
+        ob.disabled = !canOrder(b);
+        ob.classList.toggle('on', left != null);
+        $('#capsub').textContent = left != null ? Math.ceil(left) + ' s' : b.ordered ? 'called' : 'once in a fight';
+    }
     $('#blog').innerHTML = b.log.slice(-4).reverse().map(l => '<li class="' + (l.side === 1 ? 'bad' : '') + '">' + esc(l.s) + '</li>').join('');
 }
 function verdictWord(won, c, retreated, draw) {
@@ -519,7 +646,7 @@ function questCard(q, button = true) {
         badges: '<span class="badge">' + (q.kind === 'commission' ? 'Commission' : 'Venture') + '</span><span class="badge gold right" title="Playing time">' + ic('hourglass') + esc(q.play) + '</span>',
         body: '<span class="route">' + esc(cap1(PLACES[q.from].name)) + ic('road') + esc(PLACES[q.to].name) + '</span><span class="who">' + esc(q.who) + '</span><span class="flavour">' + esc(q.text) + '</span>' +
             '<span class="strip">' + stat('calendar', dateText(q.start, true) + '–' + dateText(q.deadline, true), 'from and by') + stat('boot', '~' + days + 'd', 'on the road, ' + (q.deadline - q.start) + ' to spare them') + stat(q.kind === 'commission' ? 'coin' : 'barrel', q.cargo.n, q.cargo.unit) + stat('wagon', esc(TRANSPORT[q.transport].name), 'how it travels') + '</span>',
-        type: { look: 'ink', text: button ? '' : cap1(q.cargo.many), coin: worth, coinLabel: q.kind === 'commission' ? 'Fee, thalers' : 'Worth at the destination, thalers', end: button ? '<button class="btn go sm" data-act="new" data-q="' + q.id + '">' + ic('flag') + 'Raise the banner</button>' : undefined }
+        type: { look: 'ink', text: button ? '' : cap1(q.cargo.many), coin: worth, coinLabel: q.kind === 'commission' ? 'Fee, thalers' : 'Worth at the destination, thalers', end: button ? '<button class="btn go sm" data-act="captains" data-q="' + q.id + '">' + ic('flag') + 'Raise the banner</button>' : undefined }
     });
 }
 function titleHTML() {
@@ -527,7 +654,7 @@ function titleHTML() {
     return '<div class="hero"><div><div class="plate field"><canvas id="field" role="img" aria-label="A skirmish between two small companies"></canvas></div>' +
         '<p class="caption">A true likeness of how such affairs are settled: pike, shot and sabre.</p></div>' +
         '<div class="intro"><p class="lede">The German war is in its fifteenth year, and every prince between the Rhine and the Dnieper is hiring. You have a banner, a handful of men, and a long road.</p>' +
-        '<ol class="how">' + [['flag', 'Take a commission', 'Carry a cargo across the lands of 1633 by the day it names.'], ['road', 'Choose the road', 'March steady or forced; rest, drill and buy bread.'], ['men', 'Keep the roll', 'Hire pike, shot and sabre; pay them; fight what falls on the train.']]
+        '<ol class="how">' + [['flag', 'Take a commission', 'Carry a cargo across the lands of 1633 by the day it names.'], ['star', 'Choose a captain', 'Each has a gift, a flaw and an order to call once in a fight.'], ['road', 'Choose the road', 'March steady or forced; rest, drill and buy bread.'], ['men', 'Keep the roll', 'Hire pike, shot and sabre; engage officers in the towns; pay them; fight what falls on the train.']]
         .map(x => '<li><span class="disc">' + ic(x[0]) + '</span><span><b>' + x[1] + '</b>' + x[2] + '</span></li>').join('') + '</ol>' +
         '<div class="actions">' + (sv ? '<button class="btn go big" data-act="continue">' + ic('tent') + 'Continue: ' + esc(cap1(PLACES[sv.at].name)) + ', ' + dateText(sv.date, true) + '</button>' : '') +
         '<button class="btn big" data-act="codex">' + ic('book') + 'Encyclopedia</button></div></div></div>' +
@@ -544,9 +671,9 @@ function modalHTML() {
         return '';
     let inner = '', cls = '';
     if (m.type === 'event') {
-        const e = EVENTS.find(x => x.id === G.pending.id);
+        const e = eventOf(G.pending.id), id = G.pending.id, ret = id.startsWith('retainer-') ? id.slice(9) : null;
         cls = ' event';
-        inner = '<span class="strip-head woad">' + ic('lantern') + 'Camp event · ' + dateText(G.date, true) + '</span><span class="art wide"><img src="' + eventArt() + '" alt=""></span>' +
+        inner = '<span class="strip-head woad">' + ic('lantern') + (ret ? 'Someone asks for a place' : 'Camp event') + ' · ' + dateText(G.date, true) + '</span><span class="art wide"><img src="' + (ret ? retainerWideArt(ret) : eventArt()) + '" alt=""></span>' +
             '<h2 class="banner" id="mt">' + esc(e.title) + '</h2><p class="flavour">' + esc(e.text(G)) + '</p><div class="choices">' +
             e.choices.map((ch, i) => choiceHTML(' data-act="choice" data-i="' + i + '" aria-label="' + esc(ch.label + ': ' + ch.hint) + '"', ch.label, ch.fx, ch.hint)).join('') + '</div>';
     }
@@ -565,12 +692,14 @@ function modalHTML() {
     }
     else {
         inner = '<h2 class="banner" id="mt">Standing orders</h2><div class="rules">' + [
+            ['tent', 'The camp', 'Everything in the camp can be clicked. The tents, the wagon, the noticeboard, the signpost and the banner open the company’s business in a page over the camp, and Esc puts it away; pick a man to give him his order for the day; the fire rests a day. The same pages are the buttons beside the scene.'],
             ['road', 'The road', 'A commission names a cargo, a destination and a day. Each road takes as many days as the distance needs at the pace of the cargo. A forced march gets there sooner, but costs cargo and wears the men down. Arriving late is never the end of it, but the price falls every day. Set a course to march several legs at once: the company keeps going until something needs you.'],
             ['men', 'The company', 'Every man eats a loaf a day, and wages fall due once a month. Unpaid or hungry men lose spirit, and men without spirit desert. Buy bread before empty country: there are no markets in the Wild Fields. A day in camp lets each man drill, rest or forage: you see where each one goes.'],
             ['warn', 'Trouble on the road', 'Raiders fall on the train. Fight them, or pay them off in cargo or coin. Beaten, or sounding the retreat, costs cargo. Towns post paid work; a fight there takes the day.'],
             ['swords', 'The three arms', 'Pikemen hold a line and keep sabres off. Musketeers kill from afar, burn powder, and die quickly in a brawl. Sabreurs are fast and hunt musketeers.'],
-            ['flag', 'The fight', 'One order to the whole company, changed at any moment: keys 1, 2 and 3, and space to pause. Men whose spirit breaks run. Sounding the retreat saves lives, but costs the fee, or in an ambush, cargo.'],
-            ['cross', 'Afterwards', 'A man struck down either dies or lies abed for days. Promotions, better arms and a barber-surgeon keep them alive longer.']
+            ['flag', 'The fight', 'One order to the whole company, changed at any moment: keys 1, 2 and 3, and space to pause. O calls the captain’s order, once. Men whose spirit breaks run. Sounding the retreat saves lives, but costs the fee, or in an ambush, cargo.'],
+            ['cross', 'Afterwards', 'A man struck down either dies or lies abed for days. Promotions, better arms and a good surgeon keep them alive longer.'],
+            ['flag', 'Command', 'The captain you chose calls one order in every fight. In the towns you can engage officers for four posts, a surgeon, a drillmaster, a quartermaster and a chaplain, three to choose from for each; the places open with renown. Now and then someone asks to ride with the train.']
         ].map(x => '<p>' + ic(x[0]) + '<span><b>' + x[1] + '.</b> ' + x[2] + '</span></p>').join('') +
             '<p class="arms" aria-label="Pike beats sabre, sabre beats shot, shot beats pike">' + ic('pike') + '<span>beats</span>' + ic('sabre') + '<span>beats</span>' + ic('shot') + '<span>beats</span>' + ic('pike') + '</p></div>' +
             '<div><button class="btn go" data-act="close">' + ic('check') + 'Understood</button></div>';
@@ -583,11 +712,40 @@ function renderModal() {
     if (b)
         b.focus();
 }
+/** The page open over the camp is drawn apart from the screen, so that doing business in it does not send it back to the top of its page. */
+function renderPanel() {
+    const el = $('#panel'), body = el.querySelector('.dbody'), same = el.dataset.k === String(ui.panel), top = same && body ? body.scrollTop : 0;
+    el.innerHTML = panelHTML();
+    el.dataset.k = String(ui.panel);
+    const now = el.querySelector('.dbody');
+    if (now)
+        now.scrollTop = top;
+    if (ui.panel && !same) {
+        const x = el.querySelector('.x');
+        if (x)
+            x.focus();
+    }
+    if (ui.panel === 'map')
+        drawMap($('#map'), G, !atEnd(G) && ui.course ? routeTo(G, ui.course) : null);
+    if (ui.panel === 'roll' && ui.scrollCard != null) {
+        const c = el.querySelector('[data-card="' + ui.scrollCard + '"]');
+        if (c)
+            c.scrollIntoView({ block: 'center' });
+        ui.scrollCard = null;
+    }
+}
+/** The height of the bar, which the page open over the camp starts under (see .pveil). */
+function fitBar() { const bar = $('.bar'); if (bar)
+    document.documentElement.style.setProperty('--bar-h', bar.offsetHeight + 'px'); }
 function render() {
-    const a = document.activeElement, key = a && a.dataset && a.dataset.act ? '[data-act="' + a.dataset.act + '"]' + ['id', 'k', 'o', 's', 'i', 'v', 'r', 'f', 'n', 'q'].map(k => (a.dataset[k] != null ? '[data-' + k + '="' + a.dataset[k] + '"]' : '')).join('') : null;
+    const a = document.activeElement, key = a && a.dataset && a.dataset.act ? '[data-act="' + a.dataset.act + '"]' + ['id', 'k', 'o', 's', 'i', 'v', 'r', 'f', 'n', 'q', 'post'].map(k => (a.dataset[k] != null ? '[data-' + k + '="' + a.dataset[k] + '"]' : '')).join('') : null;
+    if (ui.panel && (!G || (ui.screen === 'camp' && !panelsHere().includes(ui.panel))))
+        ui.panel = null; // a page stays open through the muster, and is put away where there is no such business
     let h = barHTML();
     if (ui.screen === 'title')
         h += titleHTML();
+    else if (ui.screen === 'captain')
+        h += captainsHTML();
     else if (ui.screen === 'camp')
         h += campHTML();
     else if (ui.screen === 'muster')
@@ -600,12 +758,19 @@ function render() {
         h += codexHTML();
     else
         h += endHTML();
-    h += '<p class="foot">A prototype. A commission takes from a few weeks to a few months of the year 1633 on the road, and from a quarter of an hour to an hour to play. Your place is kept in this browser. Music and sound are made in the browser as you play.</p>';
+    if (ui.screen !== 'camp')
+        h += '<p class="foot">A prototype. A commission takes from a few weeks to a few months of the year 1633 on the road, and from a quarter of an hour to an hour to play. Your place is kept in this browser. Music and sound are made in the browser as you play.</p>';
     $('#view').innerHTML = h;
+    document.body.classList.toggle('hubmode', ui.screen === 'camp');
+    fitBar();
+    const hubEl = $('.hub');
+    if (hubEl)
+        hubEl.toggleAttribute('inert', !!ui.panel); // with a page open over the camp, the camp beneath is out of reach of the keyboard
     ui.view = null;
     ui.camp = null;
     if (ui.screen === 'battle') {
         ui.view = newView($('#field'), ui.c.id * 7919 + G.day * 31, ui.c.weather, true, settingOf(G, ui.c));
+        ui.view.captain = ui.c.duel ? undefined : G.captain;
         paintHud();
     }
     else if (ui.screen === 'title') {
@@ -618,16 +783,15 @@ function render() {
             ui.camp.btns = Array.from(document.querySelectorAll('.camper'));
             drawCamp(ui.camp, G, ui.open, 0, calm);
         }
-        if (ui.tab === 'map')
-            drawMap($('#map'), G, !atEnd(G) && ui.course ? routeTo(G, ui.course) : null);
     }
     if (ui.screen === 'camp' || ui.screen === 'end')
         save();
+    renderPanel();
     renderModal();
     if (AC)
         setCue(cueForScreen());
     if (key && !ui.modal) {
-        const el = document.querySelector(key);
+        const el = (ui.panel ? $('#panel') : document).querySelector(key);
         if (el && !el.disabled)
             el.focus({ preventScroll: true });
     }

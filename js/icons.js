@@ -55,7 +55,8 @@ const ICON = {
     limp: 'M10 3.5a1.8 1.8 0 1 1 0 3.6a1.8 1.8 0 1 1 0-3.6zM10 8.5v6l-3 6.5M10 14.5l4 2 1 4M10 10.5l4.5 1.5M17.5 8v13',
     surgeon: 'M6 18L18 6M14.5 4.5l5 5M4 20l3-3',
     qm: 'M5 3.5h14v17H5zM8.5 8h7M8.5 12h7M8.5 16h4',
-    chaplain: 'M12 3v18M7 8h10'
+    chaplain: 'M12 3v18M7 8h10',
+    x: 'M6 6l12 12M18 6L6 18'
 };
 // An icon as markup: decorative unless given a label, and sized by the font around it.
 function ic(name, label) {

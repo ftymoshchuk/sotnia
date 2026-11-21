@@ -81,6 +81,10 @@ function sfx(kind) {
         }
         else if (kind === 'fall')
             tone(ac, 'sine', 170, 55, 0.24, 0.5);
+        else if (kind === 'call') {
+            [392, 523, 659, 784].forEach((f, i) => tone(ac, 'sawtooth', f, f * 0.99, i === 3 ? 0.34 : 0.1, 0.16, now + i * 0.1));
+            tone(ac, 'sine', 90, 45, 0.2, 0.7, now);
+        }
         else if (kind === 'drum') {
             for (let i = 0; i < 4; i++)
                 tone(ac, 'sine', 96, 48, 0.16, 0.8, now + [0, 0.22, 0.44, 0.58][i]);

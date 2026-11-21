@@ -15,7 +15,7 @@ const SEEDED = seed => `Math.random = (() => { let a = ${seed}; return () => { a
 function rules(seed) {
   const ctx = vm.createContext({});
   vm.runInContext(SEEDED(seed), ctx);
-  for (const f of ['js/core.js', 'js/journey.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx, { filename: f });
+  for (const f of ['js/core.js', 'js/journey.js', 'js/command.js']) vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx, { filename: f });
   return code => vm.runInContext(code, ctx);
 }
 // Values built inside the VM have its own Array and Object, which strict equality
@@ -43,7 +43,7 @@ const PLAYER = `(questId => {
       if (st.thalers < 40) sellCargo(st, 5);
       while (st.bread < breadDue(st) * (marketDays(st, best) + 4) && st.thalers >= breadPrice(st)) buy(st, 'bread');
     }
-    if (has(st, 'recruits') && st.roster.length < 4) { const spare = st.roster.length ? 30 : 0, i = st.recruits.findIndex(r => r.price <= st.thalers - spare); if (i >= 0) hire(st, i); }
+    if (has(st, 'recruits') && st.roster.length < 4) { const spare = st.roster.length ? 30 : 0, i = st.recruits.findIndex(r => recruitPrice(st, r) <= st.thalers - spare); if (i >= 0) hire(st, i); }
     if (!st.roster.length) { campDay(st); continue; }
     march(st, best.i, false);
   }

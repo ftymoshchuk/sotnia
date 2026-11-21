@@ -34,8 +34,8 @@ function hiss(ac: GameAudioContext, type: BiquadFilterType, f0: number, f1: numb
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   s.connect(f); f.connect(g); g.connect(ac.master); s.start(t); s.stop(t + dur + 0.02);
 }
-/** The sound effects: a musket shot, one that only fizzed, a blow, a clash of blades, a man falling, and the drum that opens a fight. */
-type SfxName = 'shot' | 'fizz' | 'hit' | 'clang' | 'fall' | 'drum';
+/** The sound effects: a musket shot, one that only fizzed, a blow, a clash of blades, a man falling, the drum that opens a fight, and the horn of the captain's order. */
+type SfxName = 'shot' | 'fizz' | 'hit' | 'clang' | 'fall' | 'drum' | 'call';
 function sfx(kind: SfxName) {
   if (!ui.sound) return;
   const ac = audio();
@@ -49,6 +49,7 @@ function sfx(kind: SfxName) {
     else if (kind === 'hit') hiss(ac, 'bandpass', 900, 500, 0.07, 0.4);
     else if (kind === 'clang') { tone(ac, 'square', 1900, 1700, 0.06, 0.13); tone(ac, 'square', 2850, 2600, 0.05, 0.09); }
     else if (kind === 'fall') tone(ac, 'sine', 170, 55, 0.24, 0.5);
+    else if (kind === 'call') { [392, 523, 659, 784].forEach((f, i) => tone(ac, 'sawtooth', f, f * 0.99, i === 3 ? 0.34 : 0.1, 0.16, now + i * 0.1)); tone(ac, 'sine', 90, 45, 0.2, 0.7, now); }
     else if (kind === 'drum') { for (let i = 0; i < 4; i++) tone(ac, 'sine', 96, 48, 0.16, 0.8, now + [0, 0.22, 0.44, 0.58][i]); }
   } catch (e) { /* sound is optional */ }
 }

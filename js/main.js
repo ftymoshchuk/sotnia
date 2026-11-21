@@ -46,6 +46,56 @@ function dayDone(r) {
     else if (r.event)
         ui.modal = { type: 'event' };
 }
+/** A day is done: its news, and what it changed in the ledger (see Ledger), which the bar shows once. */
+function finishDay(r, before) {
+    dayDone(r);
+    const now = ledgerOf(G), d = {};
+    for (const k of Object.keys(now))
+        if (now[k] !== before[k])
+            d[k] = now[k] - before[k];
+    ui.deltas = Object.keys(d).length ? d : null;
+}
+/**
+ * Lets a day, or a march of days, go by. The rules are played out at once; the camp then shows the time passing (the sun going over, the foragers
+ * out and in, or the company leaving one camp and coming to another) before the news is put to the player. Any key or click skips it. go does the
+ * day's work and returns its news, or null if there was nothing to do.
+ */
+function startPass(kind, go) {
+    if (ui.pass || !G)
+        return;
+    const ledger = ledgerOf(G), day0 = G.day, oldBack = ui.camp ? ui.camp.back : null;
+    const r = go();
+    if (!r)
+        return;
+    const days = G.day - day0;
+    if (calm || !ui.camp || ui.screen !== 'camp' || days < 1) {
+        finishDay(r, ledger);
+        render();
+        ui.deltas = null;
+        return;
+    }
+    ui.pass = { kind, days, t: 0, dur: kind === 'rest' ? 2.4 : clamp(1.6 + 0.5 * days, 2.2, 3.6), res: r, ledger, oldBack, swapped: false };
+    ui.open = null;
+    ui.deltas = null;
+    document.querySelectorAll('.pop, .dawn').forEach(el => el.remove());
+    document.body.classList.add('passing');
+    const veil = document.createElement('div');
+    veil.className = 'passveil';
+    veil.dataset.act = 'passSkip';
+    veil.innerHTML = '<span class="passtag">' + ic(kind === 'rest' ? 'moon' : 'boot') + (kind === 'rest' ? 'A day passes' : days > 1 ? days + ' days on the road' : 'On the road') + '<small>click to skip</small></span>';
+    document.body.appendChild(veil);
+}
+function endPass() {
+    const P = ui.pass;
+    if (!P)
+        return;
+    ui.pass = null;
+    document.querySelectorAll('.passveil').forEach(el => el.remove());
+    document.body.classList.remove('passing');
+    finishDay(P.res, P.ledger);
+    render();
+    ui.deltas = null;
+}
 function setStance(s) {
     const b = ui.b;
     if (!b || b.over || b.retreated)
@@ -68,19 +118,37 @@ function codexAddress(open) {
 }
 function act(a, d) {
     wake();
+    if (ui.pass && a !== 'passSkip')
+        return; // a day going by takes no orders
     switch (a) {
-        case 'new':
-            G = newGame(d.q);
+        case 'passSkip':
+            endPass();
+            return;
+        // the banner is raised in two steps: the commission, then the captain (a link to the new game may leave the second out, and gets one at random)
+        case 'captains':
+            if (!QUESTS.some(q => q.id === d.q))
+                return;
+            ui.captains = { q: d.q, list: genCaptains() };
+            ui.screen = 'captain';
+            ui.modal = null;
+            break;
+        case 'new': {
+            const cs = ui.captains, c = cs && cs.q === d.q ? cs.list[+d.c] : undefined;
+            G = newGame(d.q, c);
+            ui.captains = null;
             ui.screen = 'camp';
-            ui.tab = 'market';
+            ui.panel = null;
+            ui.post = 'captain';
             ui.course = null;
             ui.open = null;
             ui.news = null;
             ui.modal = null;
             ui.campPos = {};
             break;
+        }
         case 'title':
             ui.screen = 'title';
+            ui.captains = null;
             ui.modal = null;
             break;
         case 'continue': {
@@ -89,7 +157,8 @@ function act(a, d) {
                 break;
             G = s;
             ui.screen = 'camp';
-            ui.tab = 'market';
+            ui.panel = null;
+            ui.post = 'captain';
             ui.course = null;
             ui.news = null;
             ui.open = null;
@@ -97,8 +166,32 @@ function act(a, d) {
             ui.modal = G.ambush ? { type: 'ambush' } : G.pending && G.pending.id ? { type: 'event' } : null;
             break;
         }
-        case 'tab':
-            ui.tab = d.k;
+        case 'panel': {
+            if (!panelsHere().includes(d.k))
+                return;
+            ui.panel = d.k;
+            if (d.post)
+                ui.post = d.post;
+            break;
+        }
+        case 'panelClose': {
+            const k = ui.panel;
+            ui.panel = null;
+            render();
+            if (k) {
+                const b = $('.menu [data-act="panel"][data-k="' + k + '"]');
+                if (b)
+                    b.focus();
+            }
+            return;
+        }
+        case 'card':
+            ui.open = +d.id;
+            ui.panel = 'roll';
+            ui.scrollCard = +d.id;
+            break;
+        case 'newsClose':
+            ui.news = null;
             break;
         case 'codex':
             if (ui.modal || ui.screen === 'battle' || ui.screen === 'codex')
@@ -117,7 +210,7 @@ function act(a, d) {
             codexAddress(false);
             break;
         case 'sel':
-            ui.open = +d.id;
+            ui.open = ui.open === +d.id ? null : +d.id;
             break;
         case 'order': {
             const s = man(+d.id);
@@ -148,36 +241,41 @@ function act(a, d) {
             if (has(G, 'market'))
                 buy(G, d.k);
             break;
-        case 'staff':
-            if (has(G, 'staff'))
-                hireStaff(G, d.k);
+        case 'post':
+            ui.post = d.k;
+            break;
+        case 'engage':
+            if (has(G, 'staff') && hireOfficer(G, d.k, +d.i)) {
+                ui.post = d.k;
+                sfx('clang');
+            }
+            break;
+        case 'letgo':
+            dismissOfficer(G, d.k);
+            break;
+        case 'letgoR':
+            dismissRetainer(G);
             break;
         case 'sell':
             sellCargo(G, +d.n);
             break;
-        case 'march': {
-            const r = march(G, +d.r, d.f === '1');
-            if (!r)
-                return;
-            dayDone(r);
-            break;
-        }
+        case 'march':
+            startPass('march', () => march(G, +d.r, d.f === '1'));
+            return;
         case 'halt':
-            dayDone(campDay(G));
-            break;
+            startPass('rest', () => campDay(G));
+            return;
         case 'course-pick':
             if (!routeTo(G, d.v))
                 return;
             ui.course = d.v;
             break;
         case 'course': {
-            if (!ui.course)
+            const to = ui.course;
+            if (!to)
                 return;
-            const r = followCourse(G, ui.course, d.f === '1');
-            if (!r.legs && !r.lines.length)
-                return;
-            dayDone(r);
-            break;
+            startPass('march', () => { const r = followCourse(G, to, d.f === '1'); return !r.legs && !r.lines.length ? null : r; });
+            return;
         }
         case 'deliver':
             if (!deliver(G))
@@ -198,6 +296,7 @@ function act(a, d) {
             ui.pick = defaultPick(G, c);
             ui.stance = null;
             ui.modal = null;
+            ui.panel = null;
             ui.screen = 'muster';
             queueOdds();
             break;
@@ -242,12 +341,19 @@ function act(a, d) {
             ui.overT = 0;
             ui.verdict = false;
             acc = 0;
+            ui.panel = null;
             ui.screen = 'battle';
             sfx('drum');
             break;
         }
         case 'cmd':
             setStance(d.s);
+            return;
+        case 'captain':
+            if (ui.b && giveOrder(ui.b)) {
+                sfx('call');
+                paintHud();
+            }
             return;
         case 'retreat':
             if (ui.b) {
@@ -272,11 +378,13 @@ function act(a, d) {
                 ui.screen = 'end';
             else if (ui.rep && ui.rep.ambush)
                 toCamp();
-            else
-                dayDone(campDay(G));
+            else {
+                const before = ledgerOf(G);
+                finishDay(campDay(G), before);
+            }
             break;
         case 'choice': {
-            const e = EVENTS.find(x => x.id === (G.pending && G.pending.id));
+            const e = eventOf(G.pending && G.pending.id);
             const res = applyEvent(G, +d.i);
             ui.modal = { type: 'result', title: e ? e.title : '', text: res };
             break;
@@ -327,10 +435,22 @@ function act(a, d) {
     }
     render();
     ui.fresh = null;
+    ui.deltas = null;
     if (a.slice(0, 5) === 'codex')
         window.scrollTo(0, 0);
 }
 document.addEventListener('click', e => {
+    // a click on the dimmed ground round a page of the business puts it away
+    if (e.target.classList.contains('pveil')) {
+        act('panelClose', {});
+        return;
+    }
+    // and a click on the bare scene puts away the card of the man picked
+    if (e.target.id === 'camp' && ui.open != null && !ui.modal) {
+        ui.open = null;
+        render();
+        return;
+    }
     // A click on the map picks the place nearest it as the course.
     if (e.target.id === 'map' && G && ui.screen === 'camp' && !ui.modal) {
         const id = placeAt(e.target, e.offsetX, e.offsetY);
@@ -374,6 +494,13 @@ document.addEventListener('focusout', tryOff);
 document.addEventListener('change', e => { const el = e.target; if (el.dataset && el.dataset.act === 'course-pick')
     act('course-pick', { v: el.value }); });
 document.addEventListener('keydown', e => {
+    if (ui.pass) {
+        if (e.key === 'Escape' || e.key === ' ' || e.key === 'Enter') {
+            e.preventDefault();
+            endPass();
+        }
+        return;
+    }
     if (e.key === 'Escape' && ui.modal && ui.modal.type === 'help') {
         act('close', {});
         return;
@@ -382,8 +509,21 @@ document.addEventListener('keydown', e => {
         act('codexBack', {});
         return;
     }
+    if (e.key === 'Escape' && ui.screen === 'camp' && !ui.modal) {
+        if (ui.panel)
+            act('panelClose', {});
+        else if (ui.open != null) {
+            ui.open = null;
+            render();
+        }
+        return;
+    }
     if (ui.screen !== 'battle' || ui.modal || !ui.b)
         return;
+    if ((e.key === 'o' || e.key === 'O') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        act('captain', {});
+        return;
+    }
     const k = { '1': 'hold', '2': 'advance', '3': 'charge' }[e.key];
     if (k && !(ui.c.duel && k === 'hold'))
         setStance(k);
@@ -394,6 +534,7 @@ document.addEventListener('keydown', e => {
     }
 });
 window.addEventListener('resize', () => {
+    fitBar();
     if (ui.view)
         fitView(ui.view);
     if (ui.screen === 'camp' && G) {
@@ -401,7 +542,8 @@ window.addEventListener('resize', () => {
             fitCamp(ui.camp);
             drawCamp(ui.camp, G, ui.open, 0, calm);
         }
-        drawMap($('#map'), G, !atEnd(G) && ui.course ? routeTo(G, ui.course) : null);
+        if (ui.panel === 'map')
+            drawMap($('#map'), G, !atEnd(G) && ui.course ? routeTo(G, ui.course) : null);
     }
 });
 document.addEventListener('visibilitychange', () => { if (AC)
@@ -415,7 +557,16 @@ function frame(now) {
     last = now;
     // the camp: the fire burns and the men walk to where their orders put them
     if (ui.screen === 'camp' && ui.camp && G && !calm) {
-        drawCamp(ui.camp, G, ui.open, dt, false);
+        if (ui.pass) {
+            ui.pass.t += dt;
+            if (ui.pass.t >= ui.pass.dur)
+                endPass();
+            else
+                drawCamp(ui.camp, G, null, dt, false, ui.pass);
+            return;
+        }
+        if (!ui.panel)
+            drawCamp(ui.camp, G, ui.open, dt, false);
         return;
     }
     const v = ui.view;
@@ -473,7 +624,7 @@ function frame(now) {
 }
 /* ---------- boot ---------- */
 function start(data) {
-    if (data && data.G && data.G.v === 2) {
+    if (data && data.G && data.G.v === 3) {
         G = data.G;
         ui.screen = G.over ? 'end' : 'camp';
     }

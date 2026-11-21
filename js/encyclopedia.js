@@ -1,5 +1,5 @@
 "use strict";
-const CODEX_TABS = [['nations', 'flag', 'Nations'], ['units', 'men', 'Units'], ['foes', 'swords', 'Foes'], ['lands', 'map', 'Lands'], ['goods', 'wagon', 'Train and goods']];
+const CODEX_TABS = [['nations', 'flag', 'Nations'], ['units', 'men', 'Units'], ['foes', 'swords', 'Foes'], ['lands', 'map', 'Lands'], ['command', 'flag', 'Command'], ['goods', 'wagon', 'Goods']];
 /** What the way back says, by the screen the encyclopedia was opened from. */
 const BACK_WORD = { title: 'Back to the title', camp: 'Back to camp', muster: 'Back to the muster', report: 'Back to the report', end: 'Back to the ledger' };
 /**
@@ -25,8 +25,6 @@ const NATION_TEXT = {
     tatar: { blurb: 'Tatars settled in Lithuania for generations, who serve the Crown with the sabre and keep to their own customs.',
         dress: 'A teal coat and a wound turban, with a jewel and a feather for the better equipped.' }
 };
-/** The men of each class, in the plural. */
-const CLASS_MEN = { pike: 'pikemen', shot: 'musketeers', sabre: 'sabreurs' };
 /** What is said of each class: how he fights. The numbers beside it are read from CLS. */
 const CLASS_TEXT = {
     pike: 'The pike is the company’s wall. A pikeman is slow and tough and wears the heaviest armour, and his reach is the longest on the field: against anything with a shorter weapon he strikes first.',
@@ -291,13 +289,40 @@ function codexLands() {
         '<section>' + sectHTML('The weather', 'the same country on three days') + '<div class="cards wide">' + ['clear', 'rain', 'fog'].map(codexWeather).join('') + '</div></section>' +
         '<section>' + sectHTML('Where a fight is fought', 'a piece of work, or an ambush, may name the place') + '<div class="cards wide">' + sites.map(codexSite).join('') + '</div></section>';
 }
-/* ---------- the train and the goods ---------- */
-function codexHand(k) {
-    const s = STAFF[k];
+/* ---------- the command: captains, officers, retainers ---------- */
+/** A name for an example: the first of the nation's first names and surnames, so that the page is the same each time. */
+const cxName = (o, i = 0) => { const O = ORIGINS.find(x => x.id === o); return O.first[i % O.first.length] + ' ' + O.last[(i * 3 + 1) % O.last.length]; };
+const cxFlags = (peoples) => '<span class="colours">' + peoples.map(o => flagHTML(originLabel(o))).join('') + '<span>' + esc(cxList(peoples.map(originLabel))) + '</span></span>';
+function codexOfficer(kind) {
+    const S = SPECIALTIES[kind];
     return cardHTML({
-        cls: 'cxhand', attrs: ' aria-label="' + esc(s.name) + '"', title: esc(s.name), art: staffArt(k, 'poland'), body: STAFF_FX[k].map(fxLine).join(''),
-        type: { look: 'moss', text: '+' + s.wage + ' a month', coin: s.fee, coinLabel: 'Fee to engage, thalers' }
+        cls: 'officer', attrs: ' aria-label="' + esc(S.title) + '"', title: esc(cap1(S.title.replace(/^an? /i, ''))) + '<small>' + esc(STAFF[S.station].name) + '</small>', art: officerArt(kind, 'poland'),
+        body: '<span class="flavour">' + esc(S.blurb) + '</span>' + fxRow(officerChips(kind).map(c => c.chip)) + '<span class="line">' + ic('men') + cxFlags(S.from) + '</span>' +
+            fxLine(['coin', 'Asks about ' + S.fee + ' thalers to engage, then ' + S.wage + ' a month']),
+        type: { look: 'moss', text: esc(STAFF[S.station].name), coin: S.fee, coinLabel: 'About what he asks to engage, thalers' }
     });
+}
+function codexRetainer(t) {
+    const T = RETAINERS[t];
+    return cardHTML({
+        cls: 'officer', attrs: ' aria-label="' + esc(T.title) + '"', title: esc(cap1(T.title.replace(/^an? /i, ''))) + '<small>' + esc(cxList(T.names.map(n => n))) + '</small>', art: retainerArt(t, 'poland'),
+        body: '<span class="flavour">' + esc(T.blurb) + '</span>' + fxRow(modChips(T.mods)) +
+            cxLine('map', 'Asks for a place in ' + cxList(T.lands.map(l => LANDS[l].name)) + '.') + fxLine(['coin', (T.fee ? 'Asks ' + T.fee + ' thalers, then ' : 'Asks nothing at first, then ') + T.wage + ' a month']),
+        type: { look: 'moss', text: esc(cap1(T.title.replace(/^an? /i, ''))), coin: T.fee, coinLabel: 'What he asks to ride with the train, thalers' }
+    });
+}
+function codexCommand() {
+    const caps = Object.keys(CAPTAINS), retainers = Object.keys(RETAINERS), faiths = Object.keys(FAITHS);
+    let h = '<section>' + sectHTML('The captains', 'three are offered at the start; the company is his for the whole road') +
+        '<p class="lede">The captain does not stand in the line. He is good at something and bad at something, and in a fight he calls one order, once: ' + Object.keys(ORDERS).map(k => '<b>' + esc(ORDERS[k].name) + '</b> (' + esc(ORDERS[k].text.charAt(0).toLowerCase() + ORDERS[k].text.slice(1)).replace(/\.$/, '') + ')').join('; ') + '.</p>' +
+        '<div class="cards">' + caps.map((id, i) => captainCard({ type: id, name: cxName(CAPTAINS[id].origin, i) })).join('') + '</div></section>';
+    h += '<section>' + sectHTML('The officers', 'four posts, three to choose from in each town; the places open with renown') +
+        '<p class="lede">The company has places for ' + OFFICER_RENOWN.filter(r => r === 0).length + ' officers at the start, a third at ' + OFFICER_RENOWN[2] + ' renown and a fourth at ' + OFFICER_RENOWN[3] + '. Each post owns one thing that changes every day, and the five kinds of man who hold it change it in different ways. A man is engaged for a fee and paid by the month; let go, he takes nothing with him.</p></section>';
+    for (const k of STATIONS)
+        h += '<section>' + sectHTML(STAFF[k].name, esc(STAFF[k].owns)) + '<div class="cards">' + Object.keys(SPECIALTIES).filter(x => SPECIALTIES[x].station === k).map(codexOfficer).join('') + '</div></section>';
+    h += '<section>' + sectHTML('The chaplain’s faith', 'whose spirits he lifts') + '<ul class="faiths">' + faiths.map(f => '<li>' + ic('chaplain') + '<b>' + esc(FAITHS[f].name) + '</b><span>' + ic('flame') + '+' + (f === 'open' ? FAITH_OPEN : FAITH_HEART) + ' a day, up to ' + FAITH_CEIL + ': ' + cxFlags(FAITHS[f].peoples) + '</span></li>').join('') + '</ul></section>';
+    h += '<section>' + sectHTML('The retainers', 'one at a time; they come to the company, and are not found by looking') + '<div class="cards">' + retainers.map(codexRetainer).join('') + '</div></section>';
+    return h;
 }
 function codexSupply(k) {
     const bread = k === 'bread';
@@ -308,15 +333,14 @@ function codexSupply(k) {
     }) + '</div>';
 }
 function codexGoods() {
-    return '<section>' + sectHTML('The baggage train', 'hired hands, engaged once and paid by the month') + '<div class="cards">' + Object.keys(STAFF).map(codexHand).join('') + '</div></section>' +
-        '<section>' + sectHTML('Supplies', 'bought ten at a time, wherever there is a market') + '<div class="cards">' + codexSupply('bread') + codexSupply('powder') + '</div></section>' +
+    return '<section>' + sectHTML('Supplies', 'bought ten at a time, wherever there is a market') + '<div class="cards">' + codexSupply('bread') + codexSupply('powder') + '</div></section>' +
         '<section>' + sectHTML('The commissions of 1633', 'the cargoes a company can raise its banner for') + '<div class="cards wide quests">' + QUESTS.map(q => questCard(q, false)).join('') + '</div></section>';
 }
 /** The encyclopedia screen: a way back, the tabs, and the open tab. */
 function codexHTML() {
     const back = BACK_WORD[ui.codexFrom] || 'Back';
     return '<div class="codex"><div class="codex-head"><button class="btn ghost" data-act="codexBack">' + ic('retreat') + esc(back) + '</button>' +
-        '<div><h2 class="codex-title">Encyclopedia</h2><p class="codex-sub">The nations of the company and the men they send, the arms and armour a man can come to, the foes on the road, the lands they are met in, and the baggage train.</p></div></div>' +
+        '<div><h2 class="codex-title">Encyclopedia</h2><p class="codex-sub">The nations of the company and the men they send, the arms and armour a man can come to, the foes on the road, the lands they are met in, and the captains, officers and retainers who lead the company.</p></div></div>' +
         '<nav class="tabs" role="tablist" aria-label="The encyclopedia">' + CODEX_TABS.map(t => '<button role="tab" data-act="codexTab" data-k="' + t[0] + '" aria-selected="' + (ui.codex === t[0]) + '">' + ic(t[1]) + t[2] + '</button>').join('') + '</nav>' +
-        '<div class="panel" role="tabpanel">' + (ui.codex === 'nations' ? codexNations() : ui.codex === 'units' ? codexUnits() : ui.codex === 'foes' ? codexFoes() : ui.codex === 'lands' ? codexLands() : codexGoods()) + '</div></div>';
+        '<div class="panel" role="tabpanel">' + (ui.codex === 'nations' ? codexNations() : ui.codex === 'units' ? codexUnits() : ui.codex === 'foes' ? codexFoes() : ui.codex === 'lands' ? codexLands() : ui.codex === 'command' ? codexCommand() : codexGoods()) + '</div></div>';
 }
