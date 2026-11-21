@@ -327,7 +327,7 @@ TEMPLATES.forEach(t => { t.lands = TEMPLATE_LANDS[t.id]; });
 TEMPLATES.push(
   { id: 'tatarhunt', title: 'Tatars driving off the villages', who: 'A Podolian starosta', lands: ['ukraine', 'steppe'],
     text: 'A Tatar band is driving cattle and captives south. Catch them at the river crossing before they reach the steppe.',
-    skin: 'raider', foe: 'Tatar raiders', mix: ['sabre', 'sabre', 'shot', 'sabre'], tier: 1, ai: 'advance', min: 1, max: 24 },
+    skin: 'tatar', foe: 'Tatar raiders', mix: ['sabre', 'sabre', 'shot', 'sabre'], tier: 1, ai: 'advance', min: 1, max: 24 },
   { id: 'manor', title: 'Deserters in the manor', who: 'A Lithuanian castellan', lands: ['lithuania'],
     text: 'Soldiers who walked away from the Smolensk army without their pay have taken a manor and its cellar.',
     skin: 'deserter', foe: 'deserters', mix: ['shot', 'pike', 'shot'], tier: 1, ai: 'hold', min: 1, max: 24 },
@@ -338,7 +338,7 @@ TEMPLATES.push(
 /** The part of an encounter that depends on who waylays the train; makeAmbush supplies the rest. */
 interface AmbushInfo { title: string; skin: Skin; foe: string; mix: TroopClass[]; text: string }
 const AMBUSHES: Record<AmbushId, AmbushInfo> = {
-  tatars: { title: 'Tatar raiders', skin: 'raider', foe: 'Tatar raiders', mix: ['sabre', 'sabre', 'shot', 'sabre'],
+  tatars: { title: 'Tatar raiders', skin: 'tatar', foe: 'Tatar raiders', mix: ['sabre', 'sabre', 'shot', 'sabre'],
     text: 'A Nogai band rises out of the tall grass and dismounts to take the train.' },
   masterless: { title: 'Masterless men', skin: 'bandit', foe: 'masterless men', mix: ['sabre', 'pike', 'shot'],
     text: 'Runaways who answer to no lord are waiting in a ravine where the road narrows.' },
@@ -352,7 +352,7 @@ const AMBUSHES: Record<AmbushId, AmbushInfo> = {
     text: "Streltsy from Shein's army are out looking for bread, and a train will do." },
   imperials: { title: 'Imperial foragers', skin: 'imperial', foe: 'Imperial foot', mix: ['shot', 'pike', 'sabre', 'shot'],
     text: "Wallenstein's yellow-coats are stripping the country, and they want your carts." },
-  croats: { title: 'Croat horse', skin: 'raider', foe: 'Croats', mix: ['sabre', 'sabre', 'sabre', 'shot'],
+  croats: { title: 'Croat horse', skin: 'croat', foe: 'Croats', mix: ['sabre', 'sabre', 'sabre', 'shot'],
     text: "The Emperor's Croats, the terror of Silesia, come off their horses with sabres out." },
   swedes: { title: 'Swedish foragers', skin: 'swede', foe: 'Swedish foot', mix: ['shot', 'pike', 'shot', 'pike'],
     text: 'Blue-coats in good order block the road and ask for a toll in bread.' }
@@ -366,7 +366,7 @@ interface Ambush extends Contract { ambush: true; payoff: Payoff }
 function makeAmbush(st: Campaign, land: LandId, from: string): Ambush {
   const key = pick(LANDS[land].ambush), A = AMBUSHES[key];
   const c = makeContract(st, Object.assign({ id: key, who: '', tier: 1, ai: 'charge' as const }, A), threat(st) < 6 ? 'easy' : 'fair') as Ambush; // Object.assign and the payoff below make it one
-  Object.assign(c, { ambush: true, grade: 'ambush', who: 'On the road from ' + from, pay: 0, renown: 2, ttl: 1, bonus: null, cap: ROSTER_MAX, weather: st.weather });
+  Object.assign(c, { ambush: true, grade: 'ambush', who: 'On the road from ' + from, pay: 0, renown: 2, ttl: 1, bonus: null, cap: ROSTER_MAX, weather: st.weather, land });
   const share = clamp(Math.ceil(st.cargo * (0.05 + 0.02 * c.units.length)), 1, Math.max(1, st.cargo));
   c.payoff = { cargo: share, coin: Math.round(share * unitPrice(st) * 1.25) };
   return c;

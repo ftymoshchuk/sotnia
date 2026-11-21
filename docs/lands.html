@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sotnia: lands</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,700;1,400&family=Alegreya+SC:wght@400;700&family=Grenze+Gotisch:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  /* The sheet of the lands: the scenery behind a fight in each land of the game, in each weather, with the places a fight can be fought at and
+     the camp's skyline by night, from the same scripts the game loads. Open it from the repository (file:// works) after `npm run build`.
+     It is a tool for the artist, not part of the game. */
+  :root { --table: #1a120c; --walnut: #24180f; --line: #5c4526; --parchment: #e8dcc0; --cream: #f3ead4; --mute: #c4b796; --gilt: #e8c46a; --ink: #1c1a17; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 36px 40px 60px; background: var(--table); color: var(--parchment); font: 16px/1.4 Alegreya, Georgia, serif; }
+  header { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 32px; margin-bottom: 28px; }
+  h1 { margin: 0; font: 900 54px/.95 'Grenze Gotisch', serif; color: var(--cream); }
+  header p { margin: 0; max-width: 62ch; color: var(--mute); }
+  h2 { display: flex; align-items: center; gap: 12px; margin: 38px 0 14px; font: 500 15px/1.1 'Alegreya SC', serif; letter-spacing: .16em; color: var(--gilt); }
+  h2::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+  .note { margin: -6px 0 14px; color: var(--mute); font-size: 14.5px; max-width: 80ch; }
+  .grid { display: flex; flex-wrap: wrap; gap: 14px; }
+  figure { margin: 0; padding: 8px 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--walnut); }
+  figure canvas { display: block; border-radius: 4px; }
+  figcaption { margin-top: 7px; font: 700 14px/1.15 'Alegreya SC', serif; color: var(--cream); }
+  figcaption small { display: block; margin-top: 2px; font: italic 13px/1.2 Alegreya, serif; color: var(--mute); }
+  .row { display: flex; flex-wrap: wrap; align-items: stretch; gap: 14px; }
+  .label { flex: none; width: 100%; font: 500 13px/1 'Alegreya SC', serif; letter-spacing: .14em; color: var(--gilt); margin: 8px 0 -4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Lands</h1>
+  <p>The scenery behind a fight, drawn by the scripts the game loads: each land in each weather, another day in the same land, the places a piece of work can put a fight at, and the camp&rsquo;s skyline by night. Backdrops are drawn at twice the pixels of the scene, as the figures are; <code>?zoom=2</code> shows them larger.</p>
+</header>
+<main id="sheet"></main>
+
+<!-- The same scripts, in the same order, as index.html. -->
+<script src="../js/core.js"></script>
+<script src="../js/journey.js"></script>
+<script src="../js/geo.js"></script>
+<script src="../js/art.js"></script>
+<script src="../js/figures.js"></script>
+<script src="../js/terrain.js"></script>
+<script>
+"use strict";
+const ZOOM = +(new URLSearchParams(location.search).get('zoom') || 1); // screen pixels to a figure pixel
+const sheet = document.getElementById('sheet');
+
+/** A picture in a frame, drawn w by h screen pixels from a canvas, with a caption. */
+function cell(parent, caption, sub, src, w, h) {
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const c = cv.getContext('2d'); c.imageSmoothingEnabled = w < src.width; c.drawImage(src, 0, 0, w, h);
+  const f = document.createElement('figure'); f.appendChild(cv);
+  const cap = document.createElement('figcaption'); cap.innerHTML = caption + (sub ? '<small>' + sub + '</small>' : ''); f.appendChild(cap);
+  parent.appendChild(f);
+}
+function section(title, note) {
+  const h = document.createElement('h2'); h.textContent = title; sheet.appendChild(h);
+  if (note) { const p = document.createElement('p'); p.className = 'note'; p.innerHTML = note; sheet.appendChild(p); }
+  const d = document.createElement('div'); d.className = 'grid'; sheet.appendChild(d);
+  return d;
+}
+const row = (d, label) => { const r = document.createElement('div'); r.className = 'row'; r.innerHTML = '<div class="label">' + label + '</div>'; d.appendChild(r); return r; };
+const LANDS_ALL = Object.keys(LANDS), W = 600 * ZOOM, H = 248 * ZOOM;
+
+// 1. Each land, in each weather
+{
+  const d = section('The lands', 'Each land on a clear day, a wet one and a foggy one. In rain the colours cool and puddles stand; in fog the far country goes and the landmarks are ghosts. Rain itself and the moving banks of fog are drawn over the field as it is played.');
+  for (const land of LANDS_ALL) {
+    const r = row(d, LANDS[land].name);
+    for (const w of ['clear', 'rain', 'fog']) cell(r, w, WEATHER[w], makeBackdrop(7, w, { land }), W, H);
+  }
+}
+// 2. Another day in the same land
+{
+  const d = section('Another day', 'The same land from other seeds: what stands where is dealt afresh each time, so that no two fights look alike.');
+  for (const land of LANDS_ALL) {
+    const r = row(d, LANDS[land].name);
+    for (const seed of [1, 2, 3, 4]) cell(r, 'seed ' + seed, '', makeBackdrop(seed, 'clear', { land }), W / 2, H / 2);
+  }
+}
+// 3. The sites: where a piece of work puts a fight
+{
+  const d = section('Sites', 'Work that names a place is fought there: a contract by its template, an ambush by who lays it. The site is drawn over the land and stands behind the fight. A card of the work shows the window on it.');
+  const home = {};
+  for (const [tpl, site] of Object.entries(SITE_OF)) {
+    const t = TEMPLATES.find(x => x.id === tpl), land = t ? t.lands[0] : LANDS_ALL.find(l => LANDS[l].ambush.includes(tpl)) || 'poland', title = t ? t.title : AMBUSHES[tpl] ? AMBUSHES[tpl].title : 'The Black Regiment at the ford';
+    const h = (home[site] = home[site] || { land, titles: [] }); if (!h.titles.includes(title)) h.titles.push(title);
+  }
+  for (const site of Object.keys(SITE_ART)) cell(d, site, home[site].titles.join(', ') + ' (' + LANDS[home[site].land].name + ')', makeBackdrop(5, 'clear', { land: home[site].land, site }), W / 2, H / 2);
+}
+// 4. The camp by night
+{
+  const d = section('The camp by night', 'The skyline a camp stands against: the land&rsquo;s own hills and landmarks, without the sky, as one dark shape.');
+  for (const land of LANDS_ALL) {
+    const night = document.createElement('canvas'); night.width = 640; night.height = 140;
+    const g = night.getContext('2d'); g.fillStyle = '#0f1520'; g.fillRect(0, 0, 640, 140); g.fillStyle = '#141c2b'; g.fillRect(0, 40, 640, 40); g.fillStyle = '#1e2a42'; g.fillRect(0, 68, 640, 72);
+    g.drawImage(skylineOf(land, 1, 320), 0, 28, 640, 112); g.fillStyle = '#221c15'; g.fillRect(0, 132, 640, 8);
+    cell(d, LANDS[land].name, '', night, 640 * ZOOM, 140 * ZOOM);
+  }
+}
+</script>
+</body>
+</html>

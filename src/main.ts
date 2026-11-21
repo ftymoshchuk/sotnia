@@ -1,7 +1,7 @@
 "use strict";
 /* ===== SOTNIA interface: actions, input, the frame loop and boot. Loaded last. ===== */
 /* ---------- actions ---------- */
-let oddsTimer = 0, acc = 0, hudT = 0, last = 0, demoWait = 0;
+let oddsTimer = 0, acc = 0, hudT = 0, last = 0, demoWait = 0, kittedAt = -9999;
 function queueOdds() {
   ui.odds = null; clearTimeout(oddsTimer);
   oddsTimer = setTimeout(() => {
@@ -12,12 +12,12 @@ function queueOdds() {
   }, 30);
 }
 function newDemo() {
-  const mix = () => (['pike', 'shot', 'sabre', 'pike', 'shot'] as TroopClass[]).map(c => enemyUnit(c, 1, pick(['swede', 'imperial', 'raider', 'bandit'])));
-  const skin: Skin = pick(['swede', 'imperial', 'raider', 'bandit']);
-  const ours = (['pike', 'shot', 'sabre', 'pike', 'shot'] as TroopClass[]).map((c, i) => { const u = enemyUnit(c, 1, 'own') as Foe & { id: number }; u.id = i; u.name = ''; u.morale = 60; return u; });
+  const mix = () => (['pike', 'shot', 'sabre', 'pike', 'shot'] as TroopClass[]).map(c => enemyUnit(c, 1, pick(['swede', 'imperial', 'muscovite', 'tatar', 'croat', 'bandit'])));
+  const skin: Skin = pick(['swede', 'imperial', 'muscovite', 'tatar', 'croat', 'bandit']);
+  const ours = (['pike', 'shot', 'sabre', 'pike', 'shot'] as TroopClass[]).map((c, i) => { const u = enemyUnit(c, 1, 'own') as Foe & { id: number }; u.id = i; u.name = ''; u.morale = 60; u.wpn = ri(0, 3); u.arm = ri(0, 3); u.origin = pick(ORIGINS.filter(o => o.cls.includes(c))).label; return u; });
   const weather: Weather = pick(['clear', 'clear', 'rain', 'fog']);
-  ui.demo = makeBattle(ours, mix().map(u => { u.skin = skin; u.morale = 60; return u; }), { stance: 'advance', ai: 'advance', weather, powder: 99, vis: true });
-  ui.view = newView($<HTMLCanvasElement>('#field')!, (Math.random() * 1e6) | 0, weather, false);
+  ui.demo = makeBattle(ours, mix().map(u => { u.skin = skin; u.morale = 60; u.wpn = ri(0, 2); u.arm = ri(0, 2); return u; }), { stance: 'advance', ai: 'advance', weather, powder: 99, vis: true });
+  ui.view = newView($<HTMLCanvasElement>('#field')!, (Math.random() * 1e6) | 0, weather, false, { land: pick(Object.keys(LANDS) as LandId[]) });
   demoWait = 0;
   drawField(ui.view, ui.demo, 0);
 }
@@ -40,6 +40,10 @@ function setStance(s: Stance) {
   if (s === 'hold') for (const u of b.units) if (u.side === 0) { u.hx = u.x; u.hy = u.y; }
   paintHud();
 }
+/** Keeps the address in step with the encyclopedia (#encyclopedia-units), so that a page of it can be linked to; where the page may not touch its address, nothing happens. */
+function codexAddress(open: boolean) {
+  try { history.replaceState(null, '', open ? '#encyclopedia-' + ui.codex : location.pathname + location.search); } catch (e) { /* no address to keep */ }
+}
 /** The data- attributes of the element that was clicked, which hold what its action needs (the HTML that sets them is in screens.ts). */
 type ActData = Record<string, string>;
 function act(a: string, d: ActData) {
@@ -54,10 +58,14 @@ function act(a: string, d: ActData) {
       break;
     }
     case 'tab': ui.tab = d.k as TabId; break;
+    case 'codex': if (ui.modal || ui.screen === 'battle' || ui.screen === 'codex') return; ui.codexFrom = ui.screen; ui.screen = 'codex'; codexAddress(true); break;
+    case 'codexTab': ui.codex = d.k as CodexTab; codexAddress(true); break;
+    // back to where it was opened from, which is the title if that is gone (the camp has no campaign to show)
+    case 'codexBack': ui.screen = ui.codexFrom === 'camp' && !G ? 'title' : ui.codexFrom; codexAddress(false); break;
     case 'sel': ui.open = +d.id; break;
     case 'order': { const s = man(+d.id); if (s) s.order = d.o as CampOrder; break; }
     case 'promo': promote(G!, +d.id, d.k as Promo); G!.odds = {}; break;
-    case 'up': if (has(G!, 'market')) upgrade(G!, +d.id, d.k as GearSlot); break;
+    case 'up': if (has(G!, 'market') && upgrade(G!, +d.id, d.k as GearSlot)) { ui.fresh = { id: +d.id, k: d.k as GearSlot }; kittedAt = performance.now(); sfx('clang'); } break;
     case 'dismiss': dismiss(G!, +d.id); ui.open = null; break;
     case 'hire': if (has(G!, 'recruits')) hire(G!, +d.i); break;
     case 'buy': if (has(G!, 'market')) buy(G!, d.k as Supply); break;
@@ -109,15 +117,35 @@ function act(a: string, d: ActData) {
     default: return;
   }
   render();
+  ui.fresh = null;
+  if (a.slice(0, 5) === 'codex') window.scrollTo(0, 0);
 }
 document.addEventListener('click', e => {
   // A click on the map picks the place nearest it as the course.
   if ((e.target as HTMLElement).id === 'map' && G && ui.screen === 'camp' && !ui.modal) { const id = placeAt(e.target as HTMLCanvasElement, e.offsetX, e.offsetY); if (id) act('course-pick', { v: id }); return; }
-  const el = (e.target as HTMLElement).closest<HTMLButtonElement | HTMLSelectElement>('[data-act]'); if (el && !el.disabled) act(el.dataset.act!, el.dataset as ActData);
+  const el = (e.target as HTMLElement).closest<HTMLButtonElement | HTMLSelectElement>('[data-act]'); if (el && !el.disabled && el.getAttribute('aria-disabled') !== 'true') act(el.dataset.act!, el.dataset as ActData);
 });
+// Trying on: while the pointer or focus is on the button that buys a man's next arms or armour, his card shows him wearing them. Not while
+// a purchase is being shown off: the pointer is still over the button, which the page has drawn afresh, and the next piece would hide what was bought.
+function tryOn(e: Event) {
+  if (performance.now() - kittedAt < 1300) return;
+  const b = (e.target as Element).closest<HTMLElement>('[data-act="up"]'), s = b && man(+b.dataset.id!), art = b && b.closest('.card')?.querySelector<HTMLElement>('.art'), img = art && art.querySelector('img');
+  if (!b || !s || !art || !img) return;
+  const k = b.dataset.k as GearSlot; if (s[k] >= 3 || art.classList.contains('trying')) return;
+  art.dataset.was = img.src; img.src = soldierArt(s, { [k]: s[k] + 1 }); art.classList.add('trying');
+}
+function tryOff(e: Event) {
+  const b = (e.target as Element).closest<HTMLElement>('[data-act="up"]'), to = (e as MouseEvent | FocusEvent).relatedTarget as Node | null;
+  if (!b || (to && b.contains(to))) return;
+  const art = b.closest('.card')?.querySelector<HTMLElement>('.art.trying'), img = art && art.querySelector('img');
+  if (art && img) { img.src = art.dataset.was || img.src; art.classList.remove('trying'); }
+}
+document.addEventListener('mouseover', tryOn); document.addEventListener('focusin', tryOn);
+document.addEventListener('mouseout', tryOff); document.addEventListener('focusout', tryOff);
 document.addEventListener('change', e => { const el = e.target as HTMLSelectElement; if (el.dataset && el.dataset.act === 'course-pick') act('course-pick', { v: el.value }); });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && ui.modal && ui.modal.type === 'help') { act('close', {}); return; }
+  if (e.key === 'Escape' && ui.screen === 'codex' && !ui.modal) { act('codexBack', {}); return; }
   if (ui.screen !== 'battle' || ui.modal || !ui.b) return;
   const k = ({ '1': 'hold', '2': 'advance', '3': 'charge' } as Partial<Record<string, Stance>>)[e.key];
   if (k && !(ui.c!.duel && k === 'hold')) setStance(k);
@@ -162,6 +190,9 @@ interface Window {
 /* ---------- boot ---------- */
 function start(data: HotState) {
   if (data && data.G && data.G.v === 2) { G = data.G; ui.screen = G.over ? 'end' : 'camp'; }
+  // a link to #encyclopedia, or to one of its tabs, opens it, with the way back to wherever the game was
+  const link = new RegExp('^#encyclopedia(?:-(' + CODEX_TABS.map(t => t[0]).join('|') + '))?$').exec(location.hash);
+  if (link) { ui.codexFrom = ui.screen; ui.screen = 'codex'; if (link[1]) ui.codex = link[1] as CodexTab; }
   render();
   requestAnimationFrame(frame);
   if (document.fonts && document.fonts.load) document.fonts.load("12px 'Alegreya SC'").catch(() => {});

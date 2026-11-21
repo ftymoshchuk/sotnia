@@ -1,7 +1,7 @@
 "use strict";
 /* ===== SOTNIA interface: actions, input, the frame loop and boot. Loaded last. ===== */
 /* ---------- actions ---------- */
-let oddsTimer = 0, acc = 0, hudT = 0, last = 0, demoWait = 0;
+let oddsTimer = 0, acc = 0, hudT = 0, last = 0, demoWait = 0, kittedAt = -9999;
 function queueOdds() {
     ui.odds = null;
     clearTimeout(oddsTimer);
@@ -15,12 +15,12 @@ function queueOdds() {
     }, 30);
 }
 function newDemo() {
-    const mix = () => ['pike', 'shot', 'sabre', 'pike', 'shot'].map(c => enemyUnit(c, 1, pick(['swede', 'imperial', 'raider', 'bandit'])));
-    const skin = pick(['swede', 'imperial', 'raider', 'bandit']);
-    const ours = ['pike', 'shot', 'sabre', 'pike', 'shot'].map((c, i) => { const u = enemyUnit(c, 1, 'own'); u.id = i; u.name = ''; u.morale = 60; return u; });
+    const mix = () => ['pike', 'shot', 'sabre', 'pike', 'shot'].map(c => enemyUnit(c, 1, pick(['swede', 'imperial', 'muscovite', 'tatar', 'croat', 'bandit'])));
+    const skin = pick(['swede', 'imperial', 'muscovite', 'tatar', 'croat', 'bandit']);
+    const ours = ['pike', 'shot', 'sabre', 'pike', 'shot'].map((c, i) => { const u = enemyUnit(c, 1, 'own'); u.id = i; u.name = ''; u.morale = 60; u.wpn = ri(0, 3); u.arm = ri(0, 3); u.origin = pick(ORIGINS.filter(o => o.cls.includes(c))).label; return u; });
     const weather = pick(['clear', 'clear', 'rain', 'fog']);
-    ui.demo = makeBattle(ours, mix().map(u => { u.skin = skin; u.morale = 60; return u; }), { stance: 'advance', ai: 'advance', weather, powder: 99, vis: true });
-    ui.view = newView($('#field'), (Math.random() * 1e6) | 0, weather, false);
+    ui.demo = makeBattle(ours, mix().map(u => { u.skin = skin; u.morale = 60; u.wpn = ri(0, 2); u.arm = ri(0, 2); return u; }), { stance: 'advance', ai: 'advance', weather, powder: 99, vis: true });
+    ui.view = newView($('#field'), (Math.random() * 1e6) | 0, weather, false, { land: pick(Object.keys(LANDS)) });
     demoWait = 0;
     drawField(ui.view, ui.demo, 0);
 }
@@ -59,6 +59,13 @@ function setStance(s) {
             }
     paintHud();
 }
+/** Keeps the address in step with the encyclopedia (#encyclopedia-units), so that a page of it can be linked to; where the page may not touch its address, nothing happens. */
+function codexAddress(open) {
+    try {
+        history.replaceState(null, '', open ? '#encyclopedia-' + ui.codex : location.pathname + location.search);
+    }
+    catch (e) { /* no address to keep */ }
+}
 function act(a, d) {
     wake();
     switch (a) {
@@ -93,6 +100,22 @@ function act(a, d) {
         case 'tab':
             ui.tab = d.k;
             break;
+        case 'codex':
+            if (ui.modal || ui.screen === 'battle' || ui.screen === 'codex')
+                return;
+            ui.codexFrom = ui.screen;
+            ui.screen = 'codex';
+            codexAddress(true);
+            break;
+        case 'codexTab':
+            ui.codex = d.k;
+            codexAddress(true);
+            break;
+        // back to where it was opened from, which is the title if that is gone (the camp has no campaign to show)
+        case 'codexBack':
+            ui.screen = ui.codexFrom === 'camp' && !G ? 'title' : ui.codexFrom;
+            codexAddress(false);
+            break;
         case 'sel':
             ui.open = +d.id;
             break;
@@ -107,8 +130,11 @@ function act(a, d) {
             G.odds = {};
             break;
         case 'up':
-            if (has(G, 'market'))
-                upgrade(G, +d.id, d.k);
+            if (has(G, 'market') && upgrade(G, +d.id, d.k)) {
+                ui.fresh = { id: +d.id, k: d.k };
+                kittedAt = performance.now();
+                sfx('clang');
+            }
             break;
         case 'dismiss':
             dismiss(G, +d.id);
@@ -300,6 +326,9 @@ function act(a, d) {
         default: return;
     }
     render();
+    ui.fresh = null;
+    if (a.slice(0, 5) === 'codex')
+        window.scrollTo(0, 0);
 }
 document.addEventListener('click', e => {
     // A click on the map picks the place nearest it as the course.
@@ -310,14 +339,47 @@ document.addEventListener('click', e => {
         return;
     }
     const el = e.target.closest('[data-act]');
-    if (el && !el.disabled)
+    if (el && !el.disabled && el.getAttribute('aria-disabled') !== 'true')
         act(el.dataset.act, el.dataset);
 });
+// Trying on: while the pointer or focus is on the button that buys a man's next arms or armour, his card shows him wearing them. Not while
+// a purchase is being shown off: the pointer is still over the button, which the page has drawn afresh, and the next piece would hide what was bought.
+function tryOn(e) {
+    if (performance.now() - kittedAt < 1300)
+        return;
+    const b = e.target.closest('[data-act="up"]'), s = b && man(+b.dataset.id), art = b && b.closest('.card')?.querySelector('.art'), img = art && art.querySelector('img');
+    if (!b || !s || !art || !img)
+        return;
+    const k = b.dataset.k;
+    if (s[k] >= 3 || art.classList.contains('trying'))
+        return;
+    art.dataset.was = img.src;
+    img.src = soldierArt(s, { [k]: s[k] + 1 });
+    art.classList.add('trying');
+}
+function tryOff(e) {
+    const b = e.target.closest('[data-act="up"]'), to = e.relatedTarget;
+    if (!b || (to && b.contains(to)))
+        return;
+    const art = b.closest('.card')?.querySelector('.art.trying'), img = art && art.querySelector('img');
+    if (art && img) {
+        img.src = art.dataset.was || img.src;
+        art.classList.remove('trying');
+    }
+}
+document.addEventListener('mouseover', tryOn);
+document.addEventListener('focusin', tryOn);
+document.addEventListener('mouseout', tryOff);
+document.addEventListener('focusout', tryOff);
 document.addEventListener('change', e => { const el = e.target; if (el.dataset && el.dataset.act === 'course-pick')
     act('course-pick', { v: el.value }); });
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && ui.modal && ui.modal.type === 'help') {
         act('close', {});
+        return;
+    }
+    if (e.key === 'Escape' && ui.screen === 'codex' && !ui.modal) {
+        act('codexBack', {});
         return;
     }
     if (ui.screen !== 'battle' || ui.modal || !ui.b)
@@ -414,6 +476,14 @@ function start(data) {
     if (data && data.G && data.G.v === 2) {
         G = data.G;
         ui.screen = G.over ? 'end' : 'camp';
+    }
+    // a link to #encyclopedia, or to one of its tabs, opens it, with the way back to wherever the game was
+    const link = new RegExp('^#encyclopedia(?:-(' + CODEX_TABS.map(t => t[0]).join('|') + '))?$').exec(location.hash);
+    if (link) {
+        ui.codexFrom = ui.screen;
+        ui.screen = 'codex';
+        if (link[1])
+            ui.codex = link[1];
     }
     render();
     requestAnimationFrame(frame);

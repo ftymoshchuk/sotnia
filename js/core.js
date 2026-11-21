@@ -20,6 +20,10 @@ const WPN = {
 };
 const ARM = ['Linen shirt', 'Buff coat', 'Breastplate', 'Cuirass and tassets'];
 const GEAR_COST = [22, 40, 65];
+/** What each level of weapon adds to a blow (WPN_BLOW) and to a musket ball (WPN_BALL), and what each level of armour takes off a blow (ARM_PLATE; a ball loses half as much). */
+const WPN_BLOW = 2, WPN_BALL = 3, ARM_PLATE = 1.5;
+/** The least and the most a musket ball does, before the weapon, the range and the armour change it. */
+const BALL_DMG = [19, 30];
 // Foes come in tiers 0 to 3, by how well drilled and armed they are. COST is what a unit of each tier adds to a contract's strength.
 const TIER = ['rabble', 'trained', 'veteran', 'elite'];
 const COST = [0.5, 1, 1.6, 2.4];
@@ -148,8 +152,10 @@ function enemyUnit(cls, tier, skin) {
 }
 /* ---------- economy ---------- */
 const priceMul = (st) => (st.staff.qm ? 0.85 : 1);
-const breadPrice = (st) => Math.round(4 * priceMul(st));
-const powderPrice = (st) => Math.round(14 * priceMul(st));
+/** What ten loaves and ten charges of powder cost, before the quartermaster's discount. */
+const BREAD_COST = 4, POWDER_COST = 14;
+const breadPrice = (st) => Math.round(BREAD_COST * priceMul(st));
+const powderPrice = (st) => Math.round(POWDER_COST * priceMul(st));
 const gearPrice = (st, tier) => Math.round(GEAR_COST[tier] * priceMul(st));
 function wagesDue(st) {
     let w = 0;
@@ -264,7 +270,13 @@ const TEMPLATES = [
         skin: 'imperial', foe: 'Imperial foot', mix: ['pike', 'sabre', 'pike', 'sabre', 'shot'], tier: 2, ai: 'advance', bonus: { bread: 14 }, min: 9, max: 23 }
 ];
 const WEATHER = { clear: 'Clear', rain: 'Rain: matchlocks misfire', fog: 'Fog: short musket range' };
-function rollWeather() { const r = Math.random(); return r < 0.6 ? 'clear' : r < 0.82 ? 'rain' : 'fog'; }
+/** How a day's weather is dealt: the share of days that are each kind. */
+const WEATHER_ODDS = { clear: 0.6, rain: 0.22, fog: 0.18 };
+function rollWeather() { const r = Math.random(); return r < WEATHER_ODDS.clear ? 'clear' : r < WEATHER_ODDS.clear + WEATHER_ODDS.rain ? 'rain' : 'fog'; }
+/** What the weather does to a musket: the chance a shot misfires, how far it carries, and what fog takes off the chance of hitting. */
+const MISFIRE = { clear: 0.06, rain: 0.3, fog: 0.06 };
+const MUSKET_RANGE = { clear: 150, rain: 150, fog: 88 };
+const FOG_AIM = 0.06;
 const GRADE = { easy: { dn: -1, dq: -0.5, pay: 1 }, fair: { dn: 0, dq: 0, pay: 1 }, hard: { dn: 1, dq: 0.35, pay: 1.15 } };
 function powerOf(units) { let p = 0; for (const u of units)
     p += COST[u.tier]; return p * (1 + 0.12 * (units.length - 1)); }
@@ -281,7 +293,7 @@ function makeContract(st, tpl, grade) {
     units.sort((a, b2) => b2.tier - a.tier);
     return {
         id: st.nextId++, tpl: tpl.id, title: tpl.title, who: tpl.who, text: tpl.text, skin: tpl.skin, foe: tpl.foe,
-        units, ai: tpl.ai, grade, weather: rollWeather(), ttl: ri(2, 4), bonus: tpl.bonus || null,
+        units, ai: tpl.ai, grade, weather: rollWeather(), land: here(st).land, ttl: ri(2, 4), bonus: tpl.bonus || null,
         pay: Math.round((11 + 11 * powerOf(units)) * G.pay * (1 + st.renown / 250)),
         renown: grade === 'easy' ? 3 : grade === 'hard' ? 8 : 5,
         cap: clamp(n + (grade === 'easy' ? 1 : 0), 2, ROSTER_MAX)
@@ -295,7 +307,7 @@ function makeDuel(st) {
     return {
         id: st.nextId++, tpl: 'duel', duel: true, title: 'An affair of honour', who,
         text: 'Your banner has been called a rabble of horse-thieves at table. One man from each side, cold steel, until one yields.',
-        skin: 'champion', foe: 'a hired blade', units: [u], ai: 'advance', grade: 'duel', weather: 'clear', ttl: 2, bonus: null,
+        skin: 'champion', foe: 'a hired blade', units: [u], ai: 'advance', grade: 'duel', weather: 'clear', land: here(st).land, ttl: 2, bonus: null,
         pay: 22 + tl * 2, renown: 7, cap: 1
     };
 }
@@ -306,7 +318,7 @@ function finalContract(st) {
         id: st.nextId++, tpl: 'final', final: true, title: 'The Black Regiment at the ford', who: 'The Crown Hetman',
         text: "Colonel Krafft's black-coats have sold their swords to the other side and hold the only crossing. The Hetman's whole muster watches from the hill. Break them and your banner is made.",
         skin: 'black', foe: 'the Black Regiment', units: mix.map(m => enemyUnit(m[0], m[1], 'black')), ai: 'hold',
-        grade: 'final', weather: rollWeather(), ttl: 99, bonus: null, pay: 300, renown: 30, cap: ROSTER_MAX
+        grade: 'final', weather: rollWeather(), land: here(st).land, ttl: 99, bonus: null, pay: 300, renown: 30, cap: ROSTER_MAX
     };
 }
 function genContracts(st) {
@@ -337,9 +349,9 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 function toUnit(o, side, sid) {
     const c = CLS[o.cls];
     return {
-        sid, side, name: o.name || '', cls: o.cls, skin: side === 0 ? 'own' : (o.skin || 'bandit'), tier: o.tier || 0,
+        sid, side, name: o.name || '', cls: o.cls, skin: side === 0 ? 'own' : (o.skin || 'bandit'), tier: o.tier || 0, origin: side === 0 && o.origin || '',
         x: 0, y: 0, hx: 0, hy: 0, hp: o.hp != null ? o.hp : o.vig, max: o.vig, mel: o.mel, aim: o.aim, grd: o.grd,
-        wpn: o.wpn, armv: c.arm + o.arm * 1.5, spd: c.spd * (o.trait === 'Fleet' ? 1.15 : 1), mor: o.morale,
+        wpn: o.wpn, arm: o.arm, armv: c.arm + o.arm * ARM_PLATE, spd: c.spd * (o.trait === 'Fleet' ? 1.15 : 1), mor: o.morale,
         trait: o.trait, face: side ? -1 : 1, cd: rnd(0, 0.5), loaded: true, rl: 0, aimT: 0, aimNeed: rnd(0.5, 1),
         tgt: null, ret: 0, anim: rnd(0, 1), moving: false, swing: 0, flash: 0, hurt: 0, kills: 0,
         dead: false, fled: false, routing: false, mode: 'idle', run: 0
@@ -370,7 +382,7 @@ function makeBattle(ours, theirs, o) {
     const b = {
         W: BW, D: BD, t: 0, units: [], stance: [o.stance || 'advance', o.ai === 'hold' ? 'hold' : o.ai || 'advance'],
         ai: o.ai || 'advance', underFire: false, weather: o.weather || 'clear', powder: o.powder || 0,
-        duel: !!o.duel, noShot: !!o.duel, range: o.weather === 'fog' ? 88 : 150, fx: [], log: [], vis: !!o.vis,
+        duel: !!o.duel, noShot: !!o.duel, range: MUSKET_RANGE[o.weather || 'clear'], fx: [], log: [], vis: !!o.vis,
         over: false, winner: null, retreated: false, mt: 0.5, shots: 0, dry: false, lastShot: 0
     };
     ours.forEach(s => b.units.push(toUnit(s, 0, s.id)));
@@ -487,7 +499,7 @@ function strike(b, u, t, d) {
     p *= 0.82 + 0.18 * (clamp(u.mor, 0, 100) / 100);
     p = clamp(p, 0.15, 0.95);
     if (chance(p)) {
-        let dmg = ri(c.dmg[0], c.dmg[1]) + u.wpn * 2 + (u.trait === 'Brawler' ? 2 : 0);
+        let dmg = ri(c.dmg[0], c.dmg[1]) + u.wpn * WPN_BLOW + (u.trait === 'Brawler' ? 2 : 0);
         if (impact) {
             dmg *= 1.5;
             t.mor -= 6;
@@ -511,7 +523,7 @@ function fire(b, u, t, d) {
             blog(b, 'The powder is spent. Muskets are clubs now.', 1);
         }
     }
-    const mis = chance(b.weather === 'rain' ? 0.3 : 0.06);
+    const mis = chance(MISFIRE[b.weather]);
     fxp(b, { k: 'shot', x: u.x + u.face * 10, y: u.y, f: u.face, mis });
     if (mis) {
         u.rl *= 0.6;
@@ -519,12 +531,12 @@ function fire(b, u, t, d) {
             blog(b, uname(b, u) + "'s match hisses out. Misfire.", 1);
         return;
     }
-    let p = 0.42 + 0.03 * u.aim - 0.0028 * d + (u.trait === 'Keen-eyed' ? 0.1 : 0) - (b.weather === 'fog' ? 0.06 : 0);
+    let p = 0.42 + 0.03 * u.aim - 0.0028 * d + (u.trait === 'Keen-eyed' ? 0.1 : 0) - (b.weather === 'fog' ? FOG_AIM : 0);
     if (t.cls === 'sabre' && t.moving)
         p *= 0.8;
     p = clamp(p, 0.08, 0.92);
     if (chance(p)) {
-        let dmg = ri(19, 30) + u.wpn * 3;
+        let dmg = ri(BALL_DMG[0], BALL_DMG[1]) + u.wpn * WPN_BALL;
         if (d < 40)
             dmg *= 1.25;
         hurt(b, t, Math.max(4, Math.round(dmg - t.armv / 2)), u, 'ball');
@@ -811,7 +823,7 @@ function resolveBattle(st, c, b) {
             continue;
         s.kills += u.kills;
         st.stats.kills += u.kills;
-        const line = { id: s.id, name: s.name, cls: s.cls, kills: u.kills, fate: 'unhurt', xp: 0, scar: null };
+        const line = { id: s.id, name: s.name, cls: s.cls, origin: s.origin, wpn: s.wpn, arm: s.arm, kills: u.kills, fate: 'unhurt', xp: 0, scar: null };
         if (u.dead) {
             let p = c.duel ? 0.2 : 0.42;
             if (st.staff.surgeon)

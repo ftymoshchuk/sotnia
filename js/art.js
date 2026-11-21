@@ -10,302 +10,15 @@ const INK = PAL.ink;
 const SKINS = {
     own: { coat: PAL.red, trim: PAL.ochre }, bandit: { coat: PAL.drab, trim: PAL.paperHi }, deserter: { coat: PAL.grey, trim: PAL.ink },
     raider: { coat: PAL.green, trim: PAL.ochre }, imperial: { coat: PAL.ochre, trim: PAL.ink }, swede: { coat: PAL.blue, trim: PAL.ochre },
-    champion: { coat: PAL.plum, trim: PAL.ochre }, black: { coat: PAL.black, trim: PAL.red }, muscovite: { coat: PAL.russet, trim: PAL.ochre }
+    champion: { coat: PAL.plum, trim: PAL.ochre }, black: { coat: PAL.black, trim: PAL.red }, muscovite: { coat: PAL.russet, trim: PAL.ochre },
+    tatar: { coat: '#2b7d78', trim: PAL.paperHi }, croat: { coat: '#7b5a3c', trim: '#c0392b' }
 };
-/* ---------- sprites ---------- */
-function drawSoldier(g, x, y, o) {
-    const f = o.face || 1, sk = SKINS[o.skin] || SKINS.own;
-    const R = (dx, dy, w, h, c) => { g.fillStyle = c; g.fillRect(f > 0 ? x + dx : x - dx - w + 1, y + dy, w, h); };
-    const hat = o.cls === 'pike' ? PAL.helm : o.cls === 'shot' ? INK : PAL.fur;
-    if (o.dead) {
-        R(-7, 0, 13, 1, PAL.red);
-        R(-9, -2, 4, 2, INK);
-        R(-5, -3, 8, 3, sk.coat);
-        R(3, -4, 3, 3, PAL.skin);
-        R(7, -2, 3, 2, hat);
-        return;
-    }
-    // hurt, flash, swing and anim may be left out (see SoldierLook): the ! below only quiets "possibly undefined", and undefined > 0 is false
-    const coat = o.hurt > 0.1 ? PAL.white : sk.coat;
-    g.fillStyle = 'rgba(28,26,23,.22)';
-    g.fillRect(x - 4, y, 9, 1);
-    const step = o.moving ? Math.floor(o.anim) % 2 : -1;
-    if (step === 0) {
-        R(-3, -4, 2, 4, INK);
-        R(2, -4, 2, 4, INK);
-        R(-2, -5, 5, 1, INK);
-    }
-    else if (step === 1)
-        R(-1, -5, 3, 5, INK);
-    else {
-        R(-2, -5, 2, 5, INK);
-        R(1, -5, 2, 5, INK);
-    }
-    const b = step === 1 ? -1 : 0;
-    R(-2, -11 + b, 5, 6, coat);
-    R(-3, -7 + b, 7, 2, coat);
-    R(-2, -8 + b, 5, 1, sk.trim);
-    R(-3, -11 + b, 1, 4, INK);
-    R(-1, -14 + b, 3, 3, PAL.skin);
-    R(1, -13 + b, 1, 1, INK);
-    if (o.cls === 'pike') {
-        R(-3, -15 + b, 7, 1, PAL.steel);
-        R(-1, -17 + b, 3, 2, PAL.helm);
-        R(0, -18 + b, 1, 1, PAL.helm);
-    }
-    else if (o.cls === 'shot') {
-        R(-3, -15 + b, 7, 1, INK);
-        R(-1, -17 + b, 3, 2, INK);
-        R(-3, -18 + b, 2, 2, sk.trim);
-    }
-    else {
-        R(-2, -16 + b, 5, 2, PAL.fur);
-        R(-1, -17 + b, 3, 1, sk.coat);
-        R(-3, -16 + b, 1, 3, sk.coat);
-    }
-    const m = o.flash > 0 ? 'aim' : o.mode, sw = o.swing > 0;
-    if (m === 'rout') {
-        R(-4, -15 + b, 1, 5, coat);
-        R(3, -15 + b, 1, 5, coat);
-        return;
-    }
-    if (o.cls === 'pike') {
-        if (m === 'fight' || o.level) {
-            const t = sw ? 3 : 0;
-            R(1, -10 + b, 3, 2, coat);
-            R(2 + t, -9 + b, 18, 1, PAL.wood);
-            R(20 + t, -9 + b, 2, 1, PAL.steel);
-        }
-        else {
-            R(2, -10 + b, 1, 4, coat);
-            R(3, -27 + b, 1, 24, PAL.wood);
-            R(3, -29 + b, 1, 2, PAL.steel);
-        }
-    }
-    else if (o.cls === 'shot') {
-        if (m === 'aim') {
-            R(1, -11 + b, 3, 2, coat);
-            R(-1, -12 + b, 2, 2, PAL.wood);
-            R(1, -12 + b, 9, 1, INK);
-            if (o.flash > 0) {
-                R(10, -14 + b, 3, 4, PAL.flash);
-                R(13, -13 + b, 3, 2, PAL.white);
-            }
-        }
-        else if (m === 'reload') {
-            R(2, -10 + b, 2, 2, coat);
-            R(4, -17 + b, 1, 12, INK);
-            R(3, -19 + b + (Math.floor((o.t || 0) * 5) % 2) * 2, 1, 4, PAL.wood);
-        }
-        else if (m === 'fight') {
-            const t = sw ? 3 : 0;
-            R(1, -11 + b, 3, 2, coat);
-            R(1 + t, -11 + b, 8, 1, PAL.wood);
-        }
-        else {
-            R(2, -10 + b, 1, 4, coat);
-            R(-3, -7 + b, 2, 2, PAL.wood);
-            R(-2, -7 + b, 10, 1, INK);
-        }
-    }
-    else {
-        R(1, -10 + b, 3, 2, coat);
-        if (sw) {
-            R(3, -10 + b, 5, 1, PAL.steel);
-            R(7, -9 + b, 2, 1, PAL.steel);
-            R(8, -8 + b, 1, 1, PAL.steel);
-        }
-        else if (m === 'fight') {
-            for (let i = 0; i < 4; i++)
-                R(3 + i, -11 - i + b, 1, 1, PAL.steel);
-        }
-        else {
-            R(3, -12 + b, 1, 3, PAL.steel);
-            R(4, -14 + b, 1, 2, PAL.steel);
-            R(5, -15 + b, 1, 1, PAL.steel);
-        }
-        R(3, -9 + b, 1, 1, sk.trim);
-    }
-}
-const iconCache = {};
-function icon(cls, skin) {
-    const k = cls + skin;
-    if (iconCache[k])
-        return iconCache[k];
-    const c = document.createElement('canvas');
-    c.width = 16;
-    c.height = 31;
-    drawSoldier(c.getContext('2d'), 6, 30, { cls, skin, face: 1, mode: 'idle', anim: 0 });
-    return (iconCache[k] = c.toDataURL());
-}
-/* ---------- backdrop: a woodcut landscape ---------- */
+/* ---------- the random numbers of the backdrops (the backdrops themselves are in terrain.ts) ---------- */
 function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-function pxLine(g, x0, y0, x1, y1, c) {
-    g.fillStyle = c;
-    x0 = Math.round(x0);
-    y0 = Math.round(y0);
-    x1 = Math.round(x1);
-    y1 = Math.round(y1);
-    const dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
-    let e = dx - dy;
-    for (let i = 0; i < 400; i++) {
-        g.fillRect(x0, y0, 1, 1);
-        if (x0 === x1 && y0 === y1)
-            break;
-        const e2 = 2 * e;
-        if (e2 > -dy) {
-            e -= dy;
-            x0 += sx;
-        }
-        if (e2 < dx) {
-            e += dx;
-            y0 += sy;
-        }
-    }
-}
-const MARKS = {
-    windmill(g, x, y) {
-        g.fillStyle = PAL.paper;
-        g.fillRect(x - 4, y - 15, 9, 15);
-        g.fillStyle = INK;
-        g.fillRect(x - 4, y - 15, 1, 15);
-        g.fillRect(x + 4, y - 15, 1, 15);
-        g.fillRect(x, y - 5, 1, 5);
-        g.fillRect(x - 1, y - 5, 3, 1);
-        pxLine(g, x - 5, y - 15, x, y - 21, INK);
-        pxLine(g, x, y - 21, x + 5, y - 15, INK);
-        const my = y - 17;
-        pxLine(g, x - 11, my - 9, x + 11, my + 9, INK);
-        pxLine(g, x - 11, my + 9, x + 11, my - 9, INK);
-        pxLine(g, x - 11, my - 9, x - 8, my - 12, INK);
-        pxLine(g, x + 11, my + 9, x + 8, my + 12, INK);
-        pxLine(g, x - 11, my + 9, x - 14, my + 6, INK);
-        pxLine(g, x + 11, my - 9, x + 14, my - 6, INK);
-    },
-    church(g, x, y) {
-        g.fillStyle = PAL.paper;
-        g.fillRect(x - 9, y - 7, 13, 7);
-        g.fillRect(x + 4, y - 17, 5, 17);
-        g.fillStyle = INK;
-        g.fillRect(x - 9, y - 7, 1, 7);
-        g.fillRect(x - 9, y - 8, 13, 1);
-        g.fillRect(x + 4, y - 17, 1, 17);
-        g.fillRect(x + 8, y - 17, 1, 17);
-        g.fillRect(x + 4, y - 20, 5, 3);
-        g.fillRect(x + 5, y - 22, 3, 2);
-        g.fillRect(x + 6, y - 28, 1, 6);
-        g.fillRect(x + 5, y - 26, 3, 1);
-        g.fillRect(x - 5, y - 4, 1, 3);
-        g.fillRect(x - 1, y - 4, 1, 3);
-        g.fillRect(x + 6, y - 13, 1, 3);
-        for (let i = 0; i < 6; i++)
-            g.fillRect(x - 8 + i * 2, y - 10 + (i % 2), 2, 1);
-    },
-    village(g, x, y) {
-        for (let k = 0; k < 3; k++) {
-            const hx = x + k * 11 - 14, by = y + (k === 1 ? 1 : 0);
-            g.fillStyle = PAL.paper;
-            g.fillRect(hx, by - 5, 8, 5);
-            g.fillStyle = INK;
-            g.fillRect(hx, by - 5, 1, 5);
-            g.fillRect(hx + 7, by - 5, 1, 5);
-            g.fillRect(hx + 3, by - 3, 1, 3);
-            g.fillRect(hx - 1, by - 6, 10, 1);
-            g.fillRect(hx, by - 7, 8, 1);
-            g.fillRect(hx + 1, by - 8, 6, 1);
-            g.fillRect(hx + 2, by - 9, 4, 1);
-        }
-        g.fillStyle = INK;
-        g.fillRect(x - 8, y - 12, 1, 2);
-        g.fillRect(x - 7, y - 14, 1, 2);
-        g.fillRect(x - 8, y - 16, 1, 2);
-        g.fillRect(x - 6, y - 18, 1, 2);
-    },
-    poplars(g, x, y) {
-        g.fillStyle = INK;
-        [[-10, 15], [-4, 19], [3, 13], [9, 17]].forEach(([dx, h]) => { g.fillRect(x + dx, y - h + 2, 3, h - 5); g.fillRect(x + dx + 1, y - h, 1, h); });
-    }
-};
-function makeBackdrop(seed, weather) {
-    const c = document.createElement('canvas');
-    c.width = LW;
-    c.height = LH;
-    const g = c.getContext('2d'), r = mulberry(seed);
-    g.fillStyle = PAL.paper;
-    g.fillRect(0, 0, LW, LH);
-    if (weather === 'clear') {
-        const sx = 50 + (r() * 200 | 0), sy = 15;
-        for (let a = 0; a < 16; a++) {
-            const an = a * Math.PI / 8, r0 = 9, r1 = a % 2 ? 12 : 15;
-            pxLine(g, sx + Math.cos(an) * r0, sy + Math.sin(an) * r0, sx + Math.cos(an) * r1, sy + Math.sin(an) * r1, INK);
-        }
-        for (let a = 0; a < 40; a++) {
-            const an = a * Math.PI / 20;
-            g.fillStyle = INK;
-            g.fillRect(Math.round(sx + Math.cos(an) * 6), Math.round(sy + Math.sin(an) * 6), 1, 1);
-        }
-    }
-    const nc = weather === 'clear' ? 3 : 7;
-    for (let i = 0; i < nc; i++) {
-        const cx = r() * (LW - 60) | 0, cy = 5 + (r() * 24 | 0), w = 26 + (r() * 30 | 0);
-        g.fillStyle = INK;
-        g.fillRect(cx, cy + 4, w, 1);
-        g.fillRect(cx + (w * 0.15 | 0), cy + 2, w * 0.6 | 0, 1);
-        g.fillRect(cx + (w * 0.32 | 0), cy, w * 0.3 | 0, 1);
-        if (weather !== 'clear')
-            g.fillRect(cx + 4, cy + 6, w * 0.7 | 0, 1);
-    }
-    const a1 = r() * 6, a2 = r() * 6;
-    const hy = (x) => Math.round(HZ - 12 - 6 * Math.sin(x * 0.019 + a1) - 3 * Math.sin(x * 0.047 + a2));
-    for (let x = 0; x < LW; x++) {
-        const y = hy(x);
-        g.fillStyle = PAL.hill;
-        g.fillRect(x, y, 1, HZ - y);
-        g.fillStyle = INK;
-        g.fillRect(x, y, 1, 1);
-        if (x % 3 === 0 && hy(x + 3) > y)
-            g.fillRect(x, y + 2, 1, 2 + (r() * 5 | 0));
-    }
-    const names = Object.keys(MARKS).sort(() => r() - 0.5);
-    const x1 = 34 + (r() * 60 | 0), x2 = 190 + (r() * 76 | 0);
-    MARKS[names[0]](g, x1, hy(x1) + 1);
-    MARKS[names[1]](g, x2, hy(x2) + 1);
-    const wx = 110 + (r() * 60 | 0);
-    g.fillStyle = INK;
-    g.fillRect(wx, HZ - 9, 1, 9);
-    g.fillRect(wx - 2, HZ - 7, 5, 1);
-    g.fillStyle = PAL.ground;
-    g.fillRect(0, HZ, LW, LH - HZ);
-    g.fillStyle = INK;
-    g.fillRect(0, HZ, LW, 1);
-    for (let i = 0; i < 34; i++) {
-        const y = HZ + 2 + (r() * r() * (LH - HZ - 4) | 0), x = r() * LW | 0, w = 4 + (r() * 18 | 0);
-        g.fillStyle = 'rgba(28,26,23,.32)';
-        g.fillRect(x, y, w, 1);
-    }
-    for (let i = 0; i < 46; i++) {
-        const x = r() * LW | 0, y = HZ + 5 + (r() * (LH - HZ - 7) | 0);
-        g.fillStyle = 'rgba(28,26,23,.6)';
-        g.fillRect(x, y, 1, 2);
-        g.fillRect(x - 1, y - 1, 1, 2);
-        g.fillRect(x + 1, y - 1, 1, 1);
-    }
-    for (let i = 0; i < 12; i++) {
-        const x = r() * LW | 0, y = HZ + 6 + (r() * (LH - HZ - 9) | 0);
-        g.fillStyle = PAL.paperHi;
-        g.fillRect(x, y, 3, 2);
-        g.fillStyle = INK;
-        g.fillRect(x, y + 2, 3, 1);
-        g.fillRect(x + 3, y + 1, 1, 1);
-    }
-    return c;
-}
 /* ---------- the field ---------- */
-function newView(cv, seed, weather, names) {
-    const buf = document.createElement('canvas');
-    buf.width = LW;
-    buf.height = LH;
-    const v = { cv, ctx: cv.getContext('2d'), buf, g: buf.getContext('2d'), back: makeBackdrop(seed, weather), parts: [], names, weather }; // css and dpr: fitView sets them next
+function newView(cv, seed, weather, names, setting) {
+    const buf = sceneCanvas(LW, LH); // SS times finer than the scene, for the figures (see SS)
+    const v = { cv, ctx: cv.getContext('2d'), buf, g: buf.getContext('2d'), back: makeBackdrop(seed, weather, setting), parts: [], names, weather }; // css and dpr: fitView sets them next
     fitView(v);
     return v;
 }
@@ -380,7 +93,7 @@ function stepParts(v, dt) {
 function drawField(v, b, t) {
     const g = v.g;
     g.globalAlpha = 1;
-    g.drawImage(v.back, 0, 0);
+    g.drawImage(v.back, 0, 0, LW, LH);
     if (v.weather === 'fog') {
         g.fillStyle = 'rgba(244,240,228,.5)';
         for (let i = 0; i < 3; i++)
@@ -389,19 +102,19 @@ function drawField(v, b, t) {
     const us = b.units.filter(u => !u.fled).sort((a, c) => a.y - c.y);
     for (const u of us)
         if (u.dead)
-            drawSoldier(g, Math.round(u.x), FY + Math.round(u.y), { dead: true, cls: u.cls, skin: u.skin, face: u.face });
+            drawSoldier(g, Math.round(u.x * SS) / SS, FY + Math.round(u.y * SS) / SS, { dead: true, cls: u.cls, skin: u.skin, face: u.face, wpn: u.wpn, arm: u.arm, man: manNo(u.sid), nation: nationOf(u.origin) });
     for (const u of us) {
         if (u.dead)
             continue;
-        const x = Math.round(u.x), y = FY + Math.round(u.y);
-        drawSoldier(g, x, y, { cls: u.cls, skin: u.skin, face: u.face, mode: u.mode, moving: u.moving, anim: u.anim * 2, swing: u.swing, flash: u.flash, hurt: u.hurt, t, level: u.cls === 'pike' && u.tgt && dist(u, u.tgt) < 44 });
+        const x = Math.round(u.x * SS) / SS, y = FY + Math.round(u.y * SS) / SS;
+        drawSoldier(g, x, y, { cls: u.cls, skin: u.skin, face: u.face, mode: u.mode, moving: u.moving, anim: u.anim * 2, swing: u.swing, flash: u.flash, hurt: u.hurt, t, level: u.cls === 'pike' && u.tgt && dist(u, u.tgt) < 44, wpn: u.wpn, arm: u.arm, man: manNo(u.sid), nation: nationOf(u.origin) });
         if (!u.routing) {
             g.fillStyle = INK;
-            g.fillRect(x - 5, y - 23, 11, 3);
+            g.fillRect(x - 5, y - 27, 11, 3);
             g.fillStyle = PAL.paperHi;
-            g.fillRect(x - 4, y - 22, 9, 1);
+            g.fillRect(x - 4, y - 26, 9, 1);
             g.fillStyle = (SKINS[u.skin] || SKINS.own).coat;
-            g.fillRect(x - 4, y - 22, Math.max(1, Math.round(9 * u.hp / u.max)), 1);
+            g.fillRect(x - 4, y - 26, Math.max(1, Math.round(9 * u.hp / u.max)), 1);
         }
     }
     for (const p of v.parts) {
@@ -433,9 +146,8 @@ function drawField(v, b, t) {
         for (let i = 0; i < 2; i++)
             g.fillRect(-30 + Math.sin(t * 0.17 + i * 2.3) * 26, 84 + i * 21, LW + 60, 4);
     }
+    present(v.ctx, v.buf, v.cv.width, v.cv.height);
     const c = v.ctx;
-    c.imageSmoothingEnabled = false;
-    c.drawImage(v.buf, 0, 0, v.cv.width, v.cv.height);
     if (v.names && v.css >= 1.5) {
         const sc = v.cv.width / LW;
         c.font = Math.round(clamp(v.css * 4.5, 10, 15) * v.dpr) + "px 'Alegreya SC', Georgia, serif";
@@ -447,7 +159,7 @@ function drawField(v, b, t) {
         for (const u of b.units) {
             if (u.side !== 0 || !alive(u) || u.routing)
                 continue;
-            const n = u.name.split(' ')[0], X = u.x * sc, Y = (FY + u.y - 26) * sc;
+            const n = u.name.split(' ')[0], X = u.x * sc, Y = (FY + u.y - 30) * sc;
             c.strokeText(n, X, Y);
             c.fillText(n, X, Y);
         }
@@ -629,131 +341,7 @@ function drawMap(cv, st, plan) {
     }
 }
 /* ---------- the company in camp: sitting, lying, foraging, and the people of the baggage train ---------- */
-const HATS = {
-    pike: (R, d, sk) => { R(-3, -15 + d, 7, 1, PAL.steel); R(-1, -17 + d, 3, 2, PAL.helm); R(0, -18 + d, 1, 1, PAL.helm); },
-    shot: (R, d, sk) => { R(-3, -15 + d, 7, 1, INK); R(-1, -17 + d, 3, 2, INK); R(-3, -18 + d, 2, 2, sk.trim); },
-    sabre: (R, d, sk) => { R(-2, -16 + d, 5, 2, PAL.fur); R(-1, -17 + d, 3, 1, sk.coat); R(-3, -16 + d, 1, 3, sk.coat); R(1, -11 + d, 2, 1, INK); }
-};
-// pose: 'sit' (on a log, facing the fire), 'lie' (abed, or fallen), 'forage' (walking out with a basket); anything else stands, as on the field.
-function drawCamper(g, x, y, o) {
-    if (o.pose !== 'sit' && o.pose !== 'lie' && o.pose !== 'forage') {
-        drawSoldier(g, x, y, o);
-        if (o.bandage) {
-            const f = o.face || 1;
-            g.fillStyle = PAL.white;
-            g.fillRect(f > 0 ? x - 1 : x - 1, y - 14, 3, 1);
-        }
-        return;
-    }
-    const f = o.face || 1, sk = SKINS[o.skin] || SKINS.own;
-    const R = (dx, dy, w, h, c) => { g.fillStyle = c; g.fillRect(f > 0 ? x + dx : x - dx - w + 1, y + dy, w, h); };
-    if (o.pose === 'lie') {
-        R(-8, -2, 18, 2, PAL.drab);
-        R(-3, -4, 11, 2, sk.coat);
-        R(-1, -5, 9, 1, PAL.drab);
-        R(-7, -5, 3, 3, PAL.skin);
-        R(8, -5, 2, 3, INK);
-        R(-5, -3, 1, 1, INK);
-        if (o.bandage !== false) {
-            R(-7, -6, 3, 1, PAL.white);
-            R(-8, -5, 1, 2, PAL.white);
-        }
-        return;
-    }
-    if (o.pose === 'sit') {
-        R(-3, -10, 1, 4, INK);
-        R(1, -4, 5, 2, INK);
-        R(5, -3, 2, 3, INK);
-        R(-2, -10, 5, 5, sk.coat);
-        R(-3, -6, 5, 2, sk.coat);
-        R(-2, -7, 5, 1, sk.trim);
-        R(-1, -13, 3, 3, PAL.skin);
-        R(1, -12, 1, 1, INK);
-        HATS[o.cls](R, 1, sk);
-        if (o.prop === 'bandura') {
-            R(2, -9, 2, 2, sk.coat);
-            R(1, -7, 5, 3, PAL.wood);
-            R(5, -12, 1, 5, PAL.wood);
-            R(2, -6, 3, 1, INK);
-            R(4, o.strum ? -7 : -8, 1, 1, PAL.skin);
-        }
-        else if (o.prop === 'pipe') {
-            R(2, -9, 2, 2, sk.coat);
-            R(3, -10, 1, 1, sk.coat);
-            R(3, -11, 1, 1, PAL.skin);
-            R(2, -11, 3, 1, INK);
-            R(5, -12, 1, 2, PAL.wood);
-        }
-        else {
-            R(2, -9, 2, 2, sk.coat);
-            R(4, -7, 2, 1, sk.coat);
-            R(6, -7, 1, 1, PAL.skin);
-        }
-        return;
-    }
-    const step = Math.floor(o.anim || 0) % 2;
-    if (step === 0) {
-        R(-3, -4, 2, 4, INK);
-        R(2, -4, 2, 4, INK);
-        R(-2, -5, 5, 1, INK);
-    }
-    else
-        R(-1, -5, 3, 5, INK);
-    const b = step === 1 ? -1 : 0;
-    R(-2, -11 + b, 5, 6, sk.coat);
-    R(-3, -7 + b, 7, 2, sk.coat);
-    R(-2, -8 + b, 5, 1, sk.trim);
-    R(-3, -11 + b, 1, 4, INK);
-    R(-1, -14 + b, 3, 3, PAL.skin);
-    R(1, -13 + b, 1, 1, INK);
-    HATS[o.cls](R, b, sk);
-    R(2, -10 + b, 1, 4, sk.coat);
-    R(2, -7 + b, 5, 3, PAL.wood);
-    R(2, -7 + b, 5, 1, INK);
-    R(3, -8 + b, 3, 1, PAL.green);
-}
 const STAFF_LOOK = { surgeon: { coat: PAL.black, trim: INK }, drill: { coat: PAL.red, trim: PAL.ochre }, qm: { coat: PAL.blue, trim: PAL.ochre }, chaplain: { coat: INK, trim: INK } };
-function drawCivilian(g, x, y, k, face) {
-    const f = face || 1, L = STAFF_LOOK[k];
-    const R = (dx, dy, w, h, c) => { g.fillStyle = c; g.fillRect(f > 0 ? x + dx : x - dx - w + 1, y + dy, w, h); };
-    g.fillStyle = 'rgba(28,26,23,.22)';
-    g.fillRect(x - 4, y, 9, 1);
-    R(-2, -5, 2, 5, INK);
-    R(1, -5, 2, 5, INK);
-    R(-2, -11, 5, 6, L.coat);
-    R(-3, -7, 7, 2, L.coat);
-    R(-2, -8, 5, 1, L.trim);
-    R(-3, -11, 1, 4, INK);
-    R(-1, -14, 3, 3, PAL.skin);
-    R(1, -13, 1, 1, INK);
-    R(-4, -15, 9, 1, INK);
-    R(-2, -17, 5, 2, INK);
-    if (k === 'surgeon') {
-        R(-1, -11, 3, 1, PAL.white);
-        R(-1, -10, 3, 5, PAL.white);
-        R(2, -10, 1, 4, L.coat);
-        R(3, -8, 4, 1, PAL.steel);
-        R(4, -7, 3, 1, PAL.steel);
-    }
-    else if (k === 'drill') {
-        R(2, -10, 1, 4, L.coat);
-        R(3, -16, 1, 16, PAL.wood);
-        R(3, -17, 1, 1, PAL.ochre);
-        R(-1, -16, 3, 1, PAL.white);
-    }
-    else if (k === 'qm') {
-        R(2, -10, 2, 3, L.coat);
-        R(2, -9, 4, 4, PAL.white);
-        R(2, -9, 4, 1, INK);
-        R(-1, -18, 3, 1, PAL.ochre);
-    }
-    else {
-        R(-1, -11, 3, 1, PAL.white);
-        R(2, -10, 1, 4, L.coat);
-        R(3, -12, 1, 5, PAL.ochre);
-        R(2, -11, 3, 1, PAL.ochre);
-    }
-}
 // An ox, standing or lying, in the colour it should have by day or by firelight.
 function drawOx(g, x, y, f, lying, hide) {
     const R = (dx, dy, w, h, c) => { g.fillStyle = c; g.fillRect(f > 0 ? x + dx : x - dx - w + 1, y + dy, w, h); };
@@ -836,91 +424,66 @@ const artCache = {};
 function artURL(key, W, H, fn) {
     if (artCache[key])
         return artCache[key];
-    const c = document.createElement('canvas');
-    c.width = W;
-    c.height = H;
-    const g = c.getContext('2d');
+    const c = sceneCanvas(W, H), g = c.getContext('2d');
     fn(g, W, H);
     return (artCache[key] = c.toDataURL());
 }
-function landscape(g, W, H, seed) {
-    const r = mulberry(seed * 977 + 13), hz = H - 7, a = r() * 6, b = r() * 6;
-    g.fillStyle = PAL.paperHi;
-    g.fillRect(0, 0, W, H);
-    for (let i = 0; i < 2; i++) {
-        const cx = r() * (W - 16) | 0, cy = 3 + (r() * 7 | 0), w = 8 + (r() * 10 | 0);
-        g.fillStyle = PAL.hill;
-        g.fillRect(cx, cy + 2, w, 1);
-        g.fillRect(cx + 2, cy, w - 5, 1);
-    }
-    for (let x = 0; x < W; x++) {
-        const y = Math.round(hz - 6 - 3 * Math.sin(x * 0.11 + a) - 2 * Math.sin(x * 0.29 + b));
-        g.fillStyle = PAL.hill;
-        g.fillRect(x, y, 1, hz - y);
-        g.fillStyle = INK;
-        g.fillRect(x, y, 1, 1);
-    }
-    if (r() < 0.6) {
-        const px = 4 + (r() * (W - 8) | 0), py = Math.round(hz - 8 - 3 * Math.sin(px * 0.11 + a) - 2 * Math.sin(px * 0.29 + b));
-        g.fillStyle = INK;
-        g.fillRect(px, py - 6, 1, 6);
-        g.fillRect(px - 1, py - 4, 3, 3);
-    }
-    g.fillStyle = PAL.ground;
-    g.fillRect(0, hz, W, H - hz);
-    g.fillStyle = INK;
-    g.fillRect(0, hz, W, 1);
-    for (let i = 0; i < 6; i++) {
-        g.fillStyle = 'rgba(28,26,23,.35)';
-        g.fillRect(r() * W | 0, hz + 2 + (r() * (H - hz - 3) | 0), 2 + (r() * 5 | 0), 1);
-    }
+/**
+ * The backdrop of a card: a window onto the field backdrop of a land (see backdropOf), its horizon seven pixels above the foot of the
+ * picture, or twenty when it is to show a site, which stands on the ground in front of the hills; the window is on the site then.
+ */
+function landscape(g, W, H, seed, land, site) {
+    const back = backdropOf(land, seed % 3, 'clear', site), sw = W * SS, sh = H * SS, lift = site ? 20 : 7;
+    const sx = site && back.siteX !== undefined ? clamp(Math.round(back.siteX - sw / 2), 0, back.width - sw) : (seed * 173 + W * 11) % (back.width - sw);
+    g.drawImage(back, sx, HZ * SS - (H - lift) * SS, sw, sh, 0, 0, W, H);
 }
-// A man of the company on his card: standing with his arms, or abed.
-function soldierArt(s) {
-    const seed = s.id % 5, pose = s.wound ? 'lie' : 'stand';
-    return artURL('m' + s.cls + pose + seed, 48, 36, (g, W, H) => { landscape(g, W, H, seed); drawCamper(g, 24, H - 3, { cls: s.cls, skin: 'own', face: 1, mode: 'idle', anim: 0, pose }); });
+// A man of the company on his card: standing in his arms and armour, or abed. gear tries other levels than he has, for a card to show what buying them would make of him.
+function soldierArt(s, gear, land = landNow()) {
+    const seed = s.id % 5, pose = s.wound ? 'lie' : 'stand', wpn = gear && gear.wpn != null ? gear.wpn : s.wpn, arm = gear && gear.arm != null ? gear.arm : s.arm;
+    return artURL('m' + s.id + s.cls + pose + wpn + arm + land, 48, 36, (g, W, H) => { landscape(g, W, H, seed, land); drawCamper(g, 24, H - 3, { cls: s.cls, skin: 'own', face: 1, mode: 'idle', anim: 0, pose, wpn, arm, man: s.id, nation: nationOf(s.origin) }); });
 }
 // After a fight: how each man came out of it.
-function fateArt(cls, fate, id) {
-    const seed = id % 5;
-    return artURL('f' + cls + fate + seed, 48, 36, (g, W, H) => {
-        landscape(g, W, H, seed);
+function fateArt(l, land = landNow()) {
+    const seed = l.id % 5, cls = l.cls, fate = l.fate, kit = { wpn: l.wpn, arm: l.arm, man: l.id, nation: nationOf(l.origin) };
+    return artURL('f' + l.id + cls + fate + l.wpn + l.arm + land, 48, 36, (g, W, H) => {
+        landscape(g, W, H, seed, land);
         if (fate === 'killed' || fate === 'struck down')
-            drawCamper(g, 24, H - 3, { cls, skin: 'own', pose: 'lie', bandage: fate !== 'killed' });
+            drawCamper(g, 24, H - 3, { cls, skin: 'own', pose: 'lie', bandage: fate !== 'killed', ...kit });
         else if (fate === 'fled')
-            drawCamper(g, 24, H - 3, { cls, skin: 'own', face: -1, mode: 'rout', moving: true, anim: 1 });
+            drawCamper(g, 24, H - 3, { cls, skin: 'own', face: -1, mode: 'rout', moving: true, anim: 1, ...kit });
         else
-            drawCamper(g, 24, H - 3, { cls, skin: 'own', face: 1, mode: 'idle', anim: 0, bandage: fate === 'wounded' });
+            drawCamper(g, 24, H - 3, { cls, skin: 'own', face: 1, mode: 'idle', anim: 0, bandage: fate === 'wounded', ...kit });
     });
 }
 // The other side of a contract or an ambush, facing the reader's company.
 function foesArt(c) {
-    const us = c.units.slice(0, 6);
-    return artURL('e' + c.id + us.map(u => u.cls).join(''), 72, 36, (g, W, H) => {
-        landscape(g, W, H, c.id % 5);
+    const us = c.units.slice(0, 6), land = c.land || landNow(), site = SITE_OF[c.tpl];
+    return artURL('e' + c.id + us.map(u => u.cls).join('') + land + (site || ''), 72, 36, (g, W, H) => {
+        landscape(g, W, H, c.id % 5, land, site);
         const step = us.length > 4 ? 10 : 12, x0 = Math.round(W / 2 - (us.length - 1) * step / 2);
-        us.forEach((u, i) => drawSoldier(g, x0 + i * step, H - 3 - (i % 2) * 2, { cls: u.cls, skin: c.skin || u.skin, face: -1, mode: 'idle', anim: 0 }));
+        us.forEach((u, i) => drawSoldier(g, x0 + i * step, H - 3 - (i % 2) * 2, { cls: u.cls, skin: c.skin || u.skin, face: -1, mode: 'idle', anim: 0, wpn: u.wpn, arm: u.arm, man: i + 2 }));
     });
 }
-function staffArt(k) { return artURL('s' + k, 48, 36, (g, W, H) => { landscape(g, W, H, k.length); drawCivilian(g, 24, H - 3, k, 1); }); }
-function stanceArt(s) {
-    return artURL('t' + s, 60, 36, (g, W, H) => {
-        landscape(g, W, H, s.length + 1);
+function staffArt(k, land = landNow()) { return artURL('s' + k + land, 48, 36, (g, W, H) => { landscape(g, W, H, k.length, land); drawCivilian(g, 24, H - 3, k, 1); }); }
+function stanceArt(s, land = landNow()) {
+    return artURL('t' + s + land, 60, 36, (g, W, H) => {
+        landscape(g, W, H, s.length + 1, land);
         const y = H - 3, o = (cls, x, m) => drawSoldier(g, x, y - (x % 3 === 0 ? 1 : 0), Object.assign({ cls, skin: 'own', face: 1, mode: 'idle', anim: 0 }, m));
+        // a company is of many nations: these are of the ones it is likely to have
         if (s === 'hold') {
-            o('pike', 12, {});
-            o('shot', 29, { mode: 'aim', flash: 1 });
-            o('pike', 46, {});
+            o('pike', 12, { nation: 'scot' });
+            o('shot', 29, { mode: 'aim', flash: 1, nation: 'cossack' });
+            o('pike', 46, { nation: 'german' });
         }
         else if (s === 'advance') {
-            o('pike', 10, { moving: true, anim: 0 });
-            o('sabre', 27, { moving: true, anim: 1 });
-            o('shot', 44, { moving: true, anim: 0 });
+            o('pike', 10, { moving: true, anim: 0, nation: 'pole' });
+            o('sabre', 27, { moving: true, anim: 1, nation: 'magyar' });
+            o('shot', 44, { moving: true, anim: 0, nation: 'swede' });
         }
         else {
-            o('pike', 8, { moving: true, anim: 1, level: true });
-            o('sabre', 36, { mode: 'fight', moving: true, anim: 0 });
-            o('sabre', 51, { mode: 'fight', moving: true, anim: 1, swing: 1 });
+            o('pike', 8, { moving: true, anim: 1, level: true, nation: 'german' });
+            o('sabre', 36, { mode: 'fight', moving: true, anim: 0, nation: 'cossack' });
+            o('sabre', 51, { mode: 'fight', moving: true, anim: 1, swing: 1, nation: 'tatar' });
         }
     });
 }
@@ -952,19 +515,60 @@ function supplyArt(k) {
 // The quest's cargo (and, but for the raft, the man who guards it) for its card. frac is not used.
 function questArt(q, frac) {
     return artURL('q' + q.id, 72, 36, (g, W, H) => {
-        landscape(g, W, H, q.id.length);
+        landscape(g, W, H, q.id.length, PLACES[q.from].land);
         if (q.transport === 'raft') {
             drawCargo(g, 'raft', 16, H - 6, 1, false);
             return;
         }
         if (q.transport === 'herd') {
             drawCargo(g, 'herd', 6, H - 6, 1, false);
-            drawSoldier(g, 66, H - 3, { cls: 'sabre', skin: 'own', face: -1, mode: 'idle', anim: 0 });
+            drawSoldier(g, 66, H - 3, { cls: 'sabre', skin: 'own', face: -1, mode: 'idle', anim: 0, nation: 'cossack' });
             return;
         }
         drawCargo(g, q.transport, 22, H - 8, 0.8, false);
-        drawSoldier(g, 8, H - 3, { cls: q.transport === 'chest' ? 'shot' : 'pike', skin: 'own', face: 1, mode: 'idle', anim: 0 });
+        drawSoldier(g, 8, H - 3, { cls: q.transport === 'chest' ? 'shot' : 'pike', skin: 'own', face: 1, mode: 'idle', anim: 0, nation: q.transport === 'chest' ? 'pole' : 'german' });
     });
+}
+/* ---------- the pictures of the encyclopedia: lands and places, and men of a nation, a class or a people standing together ---------- */
+/** A land as it looks on the field, whole, on a day of this weather. */
+function landArt(land, weather = 'clear') {
+    const key = 'land' + land + weather;
+    return artCache[key] || (artCache[key] = backdropOf(land, 0, weather).toDataURL());
+}
+/** A place a fight is fought at, in a land where it is: the window of a card on it, with nobody there. */
+function siteArt(site, land) {
+    return artURL('site' + site + land, 72, 36, (g, W, H) => landscape(g, W, H, 0, land, site));
+}
+/** Men standing together on a card's landscape: each is where he stands along the picture (scene pixels, from the left) and what he looks like. */
+function squadArt(key, W, seed, land, men) {
+    return artURL(key, W, 36, (g, w, h) => { landscape(g, w, h, seed, land); for (const [x, look] of men)
+        drawSoldier(g, x, h - 3, look); });
+}
+/** The classes a nation fields, each once, in the order its Origin lists them. */
+const classesOf = (o) => o.cls.filter((c, i) => o.cls.indexOf(c) === i);
+// A nation of the company: one man of each class it fields, side by side, in the better kit a man comes to.
+function nationArt(o, land) {
+    const cs = classesOf(o), at = cs.length === 1 ? [36] : cs.length === 2 ? [20, 50] : [14, 36, 58];
+    return squadArt('cn' + o.id, 72, o.id.length, land, cs.map((cls, i) => [at[i], { cls, skin: 'own', nation: o.id, face: 1, mode: 'idle', anim: 0, wpn: i ? 2 : 1, arm: i ? 2 : 1, man: 3 + i * 2 }]));
+}
+// One unit of a nation: the worst kit a man of it starts with and the best he may come to, side by side.
+function unitArt(o, cls, land) {
+    const look = (lv, man) => ({ cls, skin: 'own', nation: o.id, face: 1, mode: 'idle', anim: 0, wpn: lv, arm: lv, man });
+    return squadArt('cu' + o.id + cls, 72, o.id.length + 1, land, [[22, look(0, 3)], [52, look(3, 8)]]);
+}
+// A class: four men of the nations that field it, from the worst kit to the best.
+function classArt(cls) {
+    const from = ORIGINS.filter(o => o.cls.includes(cls)).slice(0, 4);
+    return squadArt('cc' + cls, 100, cls.length, 'poland', from.map((o, i) => [14 + i * 24, { cls, skin: 'own', nation: o.id, face: 1, mode: 'idle', anim: 0, wpn: i, arm: i, man: 3 + i * 2 }]));
+}
+// The armours: one sabreur in each of the four, worst to best.
+function armourArt() {
+    return squadArt('car', 100, 5, 'poland', [0, 1, 2, 3].map((lv) => [14 + lv * 24, { cls: 'sabre', skin: 'own', nation: 'pole', face: 1, mode: 'idle', anim: 0, wpn: 1, arm: lv, man: 3 + lv * 2 }]));
+}
+// A people met on the road: a man of each class it fields, facing the company, in the gear its degree of drill carries (see TIER).
+function peopleArt(skin, classes, tier, land) {
+    const at = classes.length === 1 ? [40] : classes.length === 2 ? [26, 54] : [20, 42, 64], gear = Math.max(0, tier - 1);
+    return squadArt('cp' + skin + classes.join('') + tier, 72, skin.length, land, classes.map((cls, i) => [at[i], { cls, skin, face: -1, mode: 'idle', anim: 0, wpn: gear, arm: gear, man: 2 + i * 3 }]));
 }
 // A corner of the camp at night, for the cards of camp events.
 function eventArt() {
@@ -982,8 +586,8 @@ function eventArt() {
         g.fillRect(0, 0, W, H);
         F(40, 21, 4, 1, '#d8642a');
         F(52, 21, 4, 1, '#d8642a');
-        drawCamper(g, 36, 27, { cls: 'sabre', skin: 'own', pose: 'sit', face: 1, prop: 'bandura' });
-        drawCamper(g, 61, 27, { cls: 'pike', skin: 'own', pose: 'sit', face: -1 });
+        drawCamper(g, 36, 27, { cls: 'sabre', skin: 'own', pose: 'sit', face: 1, prop: 'bandura', nation: 'cossack' });
+        drawCamper(g, 61, 27, { cls: 'pike', skin: 'own', pose: 'sit', face: -1, nation: 'scot' });
         F(46, 26, 6, 2, '#4b3420');
         F(46, 22, 6, 4, '#c2412b');
         F(47, 20, 4, 4, PAL.flash);
@@ -995,8 +599,8 @@ function eventArt() {
 const CW = 320, CH = 151;
 const CAMP = {
     rest: [[130, 100, 1], [141, 90, 1], [179, 90, -1], [190, 100, -1], [136, 114, 1], [184, 114, -1], [150, 124, 1], [172, 124, -1]],
-    drill: [[207, 130, 1], [221, 116, 1], [195, 141, 1], [225, 143, 1], [240, 138, -1]],
-    forage: [[20, 130, -1], [40, 138, -1], [10, 118, -1], [59, 142, -1], [30, 146, -1]],
+    drill: [[204, 126, 1], [228, 112, 1], [274, 132, 1], [196, 142, 1], [226, 140, 1], [258, 147, -1], [288, 144, -1], [242, 129, -1]],
+    forage: [[20, 130, -1], [40, 138, -1], [10, 118, -1], [59, 142, -1], [30, 146, -1], [50, 124, -1], [70, 134, -1], [16, 146, -1]],
     abed: [[103, 88, 1], [87, 95, 1], [119, 95, -1], [103, 101, 1], [88, 106, 1], [118, 107, -1], [96, 112, 1], [112, 116, -1]],
     staff: { surgeon: [124, 86, -1], drill: [252, 121, -1], qm: [76, 98, -1], chaplain: [242, 90, -1] }
 };
@@ -1018,16 +622,14 @@ function campPlan(st) {
     return out;
 }
 function campBack(st) {
-    const c = document.createElement('canvas');
-    c.width = CW;
-    c.height = CH;
+    const c = sceneCanvas(CW, CH);
     const g = c.getContext('2d'), F = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
     const poly = (pts, col) => { g.beginPath(); g.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2)
         g.lineTo(pts[i], pts[i + 1]); g.closePath(); g.fillStyle = col; g.fill(); };
     const r = mulberry(st.date * 31 + 7), stars = [];
     F(0, 0, CW, CH, '#0f1520');
     F(0, 34, CW, 40, '#141c2b');
-    F(0, 58, CW, 16, '#1a2335');
+    F(0, 58, CW, 24, '#1e2a42');
     for (let i = 0; i < 46; i++) {
         const x = r() * CW | 0, y = r() * 58 | 0;
         if (Math.hypot(x - 52, y - 17) < 11)
@@ -1044,16 +646,12 @@ function campBack(st) {
     g.beginPath();
     g.arc(55.5, 15, 6.3, 0, Math.PI * 2);
     g.fill();
-    poly([0, 74, 18, 70, 40, 72, 62, 66, 88, 70, 110, 67, 140, 71, 170, 65, 200, 69, 228, 66, 256, 70, 284, 67, 320, 71, 320, 151, 0, 151], '#192132');
+    poly([0, 74, 320, 74, 320, 151, 0, 151], '#192132');
+    g.drawImage(skylineOf(here(st).land, st.date % 3 + 1, CW), 0, 81 - HZ, CW, HZ);
     poly([0, 83, 40, 80, 90, 83, 140, 79, 200, 82, 250, 79, 320, 81, 320, 151, 0, 151], '#221c15');
     F(0, 134, CW, 17, '#1a1510');
     for (let i = 0; i < 26; i++)
         F(r() * CW | 0, 86 + (r() * 62 | 0), 2 + (r() * 2 | 0), 1, '#2c241a');
-    [[262, 18, 86, 16], [290, 6, 90, 19], [314, 24, 92, 14], [244, 44, 84, 10]].forEach(([x, top, base, w]) => {
-        const h = base - top;
-        poly([x, top, x - w * 0.5, top + h * 0.35, x - w * 0.25, top + h * 0.35, x - w * 0.75, top + h * 0.68, x - w * 0.45, top + h * 0.68, x - w, base, x + w, base, x + w * 0.45, top + h * 0.68, x + w * 0.75, top + h * 0.68, x + w * 0.25, top + h * 0.35, x + w * 0.5, top + h * 0.35], '#0c120d');
-        F(x - 1, base, 2, 4, '#0c120d');
-    });
     const tent = (l, rr, top, base, peak) => { poly([peak, top, l, base, rr, base], '#6c624f'); poly([peak, top, rr, base, peak + (rr - peak) * 0.5, base], '#564e40'); poly([peak, top + (base - top) * 0.34, peak - (rr - l) * 0.135, base, peak + (rr - l) * 0.135, base], '#120f0b'); F(peak - 0.5, top - 4, 1, 4, PAL.wood); };
     tent(75, 130, 49, 84, 102.5);
     tent(190, 235, 48, 80, 212.5);
@@ -1091,12 +689,7 @@ function campBack(st) {
     return c;
 }
 function newCamp(cv, pos) {
-    const buf = document.createElement('canvas');
-    buf.width = CW;
-    buf.height = CH;
-    const sel = document.createElement('canvas');
-    sel.width = 44;
-    sel.height = 44;
+    const buf = sceneCanvas(CW, CH), sel = sceneCanvas(44, 44); // SS times finer than the scene, for the figures (see SS)
     const v = { cv, ctx: cv.getContext('2d'), buf, g: buf.getContext('2d'), sel, back: null, key: '', pos: pos || {}, parts: [], t: 0, btns: null };
     fitCamp(v);
     return v;
@@ -1156,13 +749,13 @@ function drawCamp(v, st, sel, dt, still) {
     if (!v || !st)
         return;
     v.t += dt;
-    const t = v.t, g = v.g, key = st.quest + st.date + ':' + (st.cargo0 ? Math.round(5 * st.cargo / st.cargo0) : 0);
+    const t = v.t, g = v.g, key = st.quest + st.at + st.date + ':' + (st.cargo0 ? Math.round(5 * st.cargo / st.cargo0) : 0);
     if (v.key !== key) {
         v.back = campBack(st);
         v.key = key;
     }
     g.globalAlpha = 1;
-    g.drawImage(v.back, 0, 0);
+    g.drawImage(v.back, 0, 0, CW, CH);
     if (!still)
         for (const s of v.back.stars)
             if (s.k < 2) {
@@ -1194,23 +787,24 @@ function drawCamp(v, st, sel, dt, still) {
     }
     const draw = (gg, p, x, y) => {
         const c = v.pos[p.id], s = p.s;
+        const me = { cls: s.cls, skin: 'own', wpn: s.wpn, arm: s.arm, man: s.id, nation: nationOf(s.origin) };
         if (c.moving)
-            return drawCamper(gg, x, y, { cls: s.cls, skin: 'own', face: c.face, mode: 'idle', moving: true, anim: c.anim });
+            return drawCamper(gg, x, y, { ...me, face: c.face, mode: 'idle', moving: true, anim: c.anim });
         if (p.k === 'abed')
-            return drawCamper(gg, x, y, { cls: s.cls, skin: 'own', face: p.f, pose: 'lie' });
+            return drawCamper(gg, x, y, { ...me, face: p.f, pose: 'lie' });
         if (p.k === 'rest')
-            return drawCamper(gg, x, y, { cls: s.cls, skin: 'own', face: p.f, pose: 'sit', prop: p.prop, strum: Math.floor(t * 5) % 2 });
+            return drawCamper(gg, x, y, { ...me, face: p.f, pose: 'sit', prop: p.prop, strum: Math.floor(t * 5) % 2 });
         if (p.k === 'forage')
-            return drawCamper(gg, x, y, { cls: s.cls, skin: 'own', face: p.f, pose: 'forage', anim: t * 1.6 + p.id });
+            return drawCamper(gg, x, y, { ...me, face: p.f, pose: 'forage', anim: t * 1.6 + p.id });
         const ph = (t + p.id * 0.7) % 3;
         if (s.cls === 'sabre')
-            return drawCamper(gg, x, y, { cls: 'sabre', skin: 'own', face: p.f, mode: 'fight', swing: ph % 1 < 0.35 ? 1 : 0 });
+            return drawCamper(gg, x, y, { ...me, face: p.f, mode: 'fight', swing: ph % 1 < 0.35 ? 1 : 0 });
         if (s.cls === 'shot')
-            return drawCamper(gg, x, y, { cls: 'shot', skin: 'own', face: p.f, mode: ph > 1.2 ? 'aim' : 'idle', flash: ph > 2.6 && ph < 2.75 ? 1 : 0 });
-        return drawCamper(gg, x, y, { cls: 'pike', skin: 'own', face: p.f, mode: 'idle', level: ph % 1.5 > 0.75 });
+            return drawCamper(gg, x, y, { ...me, face: p.f, mode: ph > 1.2 ? 'aim' : 'idle', flash: ph > 2.6 && ph < 2.75 ? 1 : 0 });
+        return drawCamper(gg, x, y, { ...me, face: p.f, mode: 'idle', level: ph % 1.5 > 0.75 });
     };
     for (const p of plan.slice().sort((a, b) => v.pos[a.id].y - v.pos[b.id].y)) {
-        const c = v.pos[p.id], x = Math.round(c.x), y = Math.round(c.y);
+        const c = v.pos[p.id], x = Math.round(c.x * SS) / SS, y = Math.round(c.y * SS) / SS;
         if (p.id === sel) {
             const sg = v.sel.getContext('2d');
             sg.clearRect(0, 0, 44, 44);
@@ -1219,8 +813,8 @@ function drawCamp(v, st, sel, dt, still) {
             sg.fillStyle = '#e8c46a';
             sg.fillRect(0, 0, 44, 44);
             sg.globalCompositeOperation = 'source-over';
-            for (const o of [[1, 0], [-1, 0], [0, 1], [0, -1]])
-                g.drawImage(v.sel, x - 22 + o[0], y - 40 + o[1]);
+            for (const o of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]])
+                g.drawImage(v.sel, x - 22 + o[0] / SS, y - 40 + o[1] / SS, 44, 44);
         }
         draw(g, p, x, y);
     }
@@ -1286,9 +880,7 @@ function drawCamp(v, st, sel, dt, still) {
         }
         g.globalAlpha = 1;
     }
-    const c = v.ctx;
-    c.imageSmoothingEnabled = false;
-    c.drawImage(v.buf, 0, 0, v.cv.width, v.cv.height);
+    present(v.ctx, v.buf, v.cv.width, v.cv.height);
     // keep the clickable figures over the drawn ones as they walk
     if (v.btns)
         for (const b of v.btns) {

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sotnia: figures</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,700;1,400&family=Alegreya+SC:wght@400;700&family=Grenze+Gotisch:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  /* The figure sheet: every man, weapon and piece of armour the game can draw, from the same scripts the game loads. Open it from the
+     repository (file:// works) after `npm run build`. It is a tool for the artist, not part of the game. */
+  :root { --table: #1a120c; --walnut: #24180f; --line: #5c4526; --parchment: #e8dcc0; --cream: #f3ead4; --mute: #c4b796; --gilt: #e8c46a; --ink: #1c1a17; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 36px 40px 60px; background: var(--table); color: var(--parchment); font: 16px/1.4 Alegreya, Georgia, serif; }
+  header { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 32px; margin-bottom: 28px; }
+  h1 { margin: 0; font: 900 54px/.95 'Grenze Gotisch', serif; color: var(--cream); }
+  header p { margin: 0; max-width: 62ch; color: var(--mute); }
+  h2 { display: flex; align-items: center; gap: 12px; margin: 38px 0 14px; font: 500 15px/1.1 'Alegreya SC', serif; letter-spacing: .16em; color: var(--gilt); }
+  h2::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+  .note { margin: -6px 0 14px; color: var(--mute); font-size: 14.5px; max-width: 80ch; }
+  .grid { display: flex; flex-wrap: wrap; gap: 14px; }
+  figure { margin: 0; padding: 8px 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--walnut); }
+  figure canvas { display: block; image-rendering: pixelated; border-radius: 4px; }
+  figcaption { margin-top: 7px; font: 700 14px/1.15 'Alegreya SC', serif; color: var(--cream); }
+  figcaption small { display: block; margin-top: 2px; font: italic 13px/1.2 Alegreya, serif; color: var(--mute); }
+  .row { display: flex; flex-wrap: wrap; align-items: stretch; gap: 14px; }
+  .label { flex: none; width: 100%; font: 500 13px/1 'Alegreya SC', serif; letter-spacing: .14em; color: var(--gilt); margin: 8px 0 -4px; }
+  .price { color: var(--gilt); font-style: normal; font-weight: 700; }
+  .flag { display: inline-block; width: 18px; height: 12px; margin-left: 8px; border: 1px solid var(--parchment); vertical-align: -1px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Figures</h1>
+  <p>Every man, weapon and piece of armour the game can draw, from the scripts it loads. Figures are drawn at twice the pixels of the scene around them. Each level of weapon and armour, 0 to 3, changes the picture.</p>
+</header>
+<main id="sheet"></main>
+
+<!-- The same scripts, in the same order, as index.html. -->
+<script src="../js/core.js"></script>
+<script src="../js/journey.js"></script>
+<script src="../js/geo.js"></script>
+<script src="../js/art.js"></script>
+<script src="../js/figures.js"></script>
+<script>
+"use strict";
+const ZOOM = +(new URLSearchParams(location.search).get('zoom') || 4); // screen pixels to a scene pixel: two to a figure pixel, or ?zoom=6 for three
+const PAPER = '#d9d1bc', NIGHT = '#1d2433', CLASSES = ['pike', 'shot', 'sabre'];
+const sheet = document.getElementById('sheet');
+
+/** One picture in a frame: a scene w by h scene pixels on the colour bg, with a ground line, and a caption. */
+function cell(parent, caption, sub, w, h, bg, draw) {
+  const s = sceneCanvas(w, h), g = s.getContext('2d');
+  g.fillStyle = bg; g.fillRect(0, 0, w, h);
+  g.fillStyle = bg === PAPER ? 'rgba(28,26,23,.4)' : 'rgba(255,255,255,.1)'; g.fillRect(0, h - 3, w, 1);
+  draw(g, w, h);
+  const cv = document.createElement('canvas'); cv.width = w * ZOOM; cv.height = h * ZOOM;
+  const c = cv.getContext('2d'); c.imageSmoothingEnabled = false; c.drawImage(s, 0, 0, cv.width, cv.height);
+  const f = document.createElement('figure'); f.appendChild(cv);
+  const cap = document.createElement('figcaption'); cap.innerHTML = caption + (sub ? '<small>' + sub + '</small>' : ''); f.appendChild(cap);
+  parent.appendChild(f);
+}
+/** One picture of gear (an image from gearArt, 44 by 32 figure pixels) in a frame, three screen pixels to a figure pixel. */
+function cellImg(parent, caption, sub, src) {
+  const f = document.createElement('figure'), im = new Image();
+  im.src = src; im.width = 44 * ZOOM / 2; im.height = 32 * ZOOM / 2; im.style.cssText = 'display:block;image-rendering:pixelated;border-radius:4px;background:' + PAPER;
+  f.appendChild(im);
+  const cap = document.createElement('figcaption'); cap.innerHTML = caption + (sub ? '<small>' + sub + '</small>' : ''); f.appendChild(cap);
+  parent.appendChild(f);
+}
+function section(title, note) {
+  const h = document.createElement('h2'); h.textContent = title; sheet.appendChild(h);
+  if (note) { const p = document.createElement('p'); p.className = 'note'; p.innerHTML = note; sheet.appendChild(p); }
+  const d = document.createElement('div'); d.className = 'grid'; sheet.appendChild(d);
+  return d;
+}
+const man = (o, x) => (g, w, h) => drawSoldier(g, Math.round(w / 2) + (x || 0), h - 3, Object.assign({ skin: 'own', face: 1, mode: 'idle', anim: 0 }, o));
+
+// 1. The ladder: the same man, the weapon and the armour bought together
+{
+  const d = section('The ladder of kit', 'Arms and armour bought together, level 0 to 3. Left to right is what a man carries as the company grows richer.');
+  for (const cls of CLASSES) {
+    const row = document.createElement('div'); row.className = 'row'; row.innerHTML = '<div class="label">' + CLS[cls].name + '</div>'; d.appendChild(row);
+    for (let lv = 0; lv < 4; lv++) cell(row, WPN[cls][lv], ARM[lv], cls === 'shot' ? 44 : 34, 38, PAPER, man({ cls, wpn: lv, arm: lv, man: lv * 3 + 1 }, cls === 'shot' ? -5 : 0));
+  }
+}
+// 1b. The nations of the company, and the foes who are a people of their own
+const flag = label => { const f = flagOf(label); if (!f) return ''; const n = f.length; return '<span class="flag" style="background:linear-gradient(' + f.map((c, i) => c + ' ' + (100 * i / n) + '% ' + (100 * (i + 1) / n) + '%').join(',') + ')"></span>'; };
+{
+  const d = section('Nations', 'Every man of the company is dressed as his nation, in its colours, and wears the company\u2019s red sash over them. Each is shown in the classes it fields, in the worst kit and in a better.');
+  for (const o of ORIGINS) {
+    const row = document.createElement('div'); row.className = 'row'; row.innerHTML = '<div class="label">' + o.label + flag(o.label) + '</div>'; d.appendChild(row);
+    for (const cls of [...new Set(o.cls)]) for (const lv of [0, 2]) cell(row, CLS[cls].name, ARM[lv], cls === 'shot' ? 44 : 34, 38, PAPER, man({ cls, nation: o.id, wpn: lv, arm: lv, man: 3 + lv }, cls === 'shot' ? -5 : 0));
+  }
+}
+{
+  const d = section('Foes of a people of their own', 'Their coat and trim come from their skin, and their legs, caps and marks from their people; they wear no company sash.');
+  const row = document.createElement('div'); row.className = 'row'; d.appendChild(row);
+  for (const skin of ['swede', 'imperial', 'muscovite', 'tatar', 'croat']) for (const cls of CLASSES) cell(row, skin.charAt(0).toUpperCase() + skin.slice(1), CLS[cls].name, cls === 'shot' ? 44 : 34, 38, PAPER, man({ cls, skin, wpn: 0, arm: 0, face: -1, man: 2 }, cls === 'shot' ? 5 : 0));
+}
+// 2. The pieces, as the cards show them
+{
+  const d = section('Arms', 'The four weapons of each class, as the card shows them in the ladder. The price is what it costs to rise to it from the level before.');
+  for (const cls of CLASSES) {
+    const row = document.createElement('div'); row.className = 'row'; row.innerHTML = '<div class="label">' + CLS[cls].name + '</div>'; d.appendChild(row);
+    for (let lv = 0; lv < 4; lv++) cellImg(row, WPN[cls][lv], lv ? '<span class="price">' + GEAR_COST[lv - 1] + '</span> thalers' : 'to start with', gearArt('wpn', cls, lv));
+  }
+}
+{
+  const d = section('Armour', 'The same four for every class. The company’s colour is the coat of the linen shirt, and from the buff coat up it is carried by the sleeves and the sash.');
+  const row = document.createElement('div'); row.className = 'row'; d.appendChild(row);
+  for (let lv = 0; lv < 4; lv++) cellImg(row, ARM[lv], lv ? '<span class="price">' + GEAR_COST[lv - 1] + '</span> thalers' : 'to start with', gearArt('arm', 'pike', lv));
+}
+// 3. The poses of a fight, at the top level and at the bottom
+for (const lv of [0, 3]) {
+  const d = section(lv ? 'Poses, in the best kit' : 'Poses, in the worst', 'Standing, walking (two frames), fighting, a blow struck, aiming, the flash of the shot, reloading, routed, and fallen.');
+  for (const cls of CLASSES) {
+    const row = document.createElement('div'); row.className = 'row'; row.innerHTML = '<div class="label">' + CLS[cls].name + '</div>'; d.appendChild(row);
+    const list = cls === 'pike' ? [['stands', {}], ['walks', { moving: true, anim: 0 }], ['walks', { moving: true, anim: 1 }], ['levels the pike', { mode: 'fight' }], ['thrusts', { mode: 'fight', swing: 1 }], ['routs', { mode: 'rout' }], ['falls', { dead: true }]]
+      : cls === 'shot' ? [['stands', {}], ['walks', { moving: true, anim: 0 }], ['aims', { mode: 'aim' }], ['fires', { mode: 'aim', flash: 1 }], ['reloads', { mode: 'reload', t: 0 }], ['clubs', { mode: 'fight' }], ['routs', { mode: 'rout' }], ['falls', { dead: true }]]
+      : [['stands', {}], ['walks', { moving: true, anim: 0 }], ['guards', { mode: 'fight' }], ['cuts', { mode: 'fight', swing: 1 }], ['routs', { mode: 'rout' }], ['falls', { dead: true }]];
+    for (const [name, o] of list) cell(row, name, '', cls === 'pike' ? 44 : 50, 38, PAPER, man(Object.assign({ cls, wpn: lv, arm: lv, man: 11 }, o), cls === 'pike' && o.mode === 'fight' ? -8 : cls === 'shot' && (o.mode === 'aim' || o.mode === 'fight') ? -6 : 0));
+  }
+}
+// 4. The camp
+{
+  const d = section('In camp', 'Sitting on a log (with a bandura, a pipe, or nothing), abed, foraging, bandaged, and the four hired hands of the baggage train.');
+  const row = document.createElement('div'); row.className = 'row'; d.appendChild(row);
+  const camper = o => (g, w, h) => drawCamper(g, Math.round(w / 2), h - 3, Object.assign({ skin: 'own', face: 1 }, o));
+  for (const [name, o] of [['sits', { cls: 'sabre', pose: 'sit', arm: 1, man: 2 }], ['plays', { cls: 'sabre', pose: 'sit', prop: 'bandura', arm: 2, man: 6 }], ['smokes', { cls: 'pike', pose: 'sit', prop: 'pipe', arm: 3, man: 9 }], ['abed', { cls: 'shot', pose: 'lie', arm: 2 }], ['forages', { cls: 'pike', pose: 'forage', anim: 0 }], ['bandaged', { cls: 'shot', bandage: true, arm: 1, wpn: 1 }]])
+    cell(row, name, '', 32, 38, NIGHT, camper(o));
+  for (const k of ['surgeon', 'drill', 'qm', 'chaplain']) cell(row, STAFF[k].name, '', 32, 38, NIGHT, (g, w, h) => drawCivilian(g, Math.round(w / 2), h - 3, k, 1));
+}
+// 5. The liveries
+{
+  const d = section('Liveries', 'The colours that say whose man he is: the company in madder, and the foes the company meets.');
+  const row = document.createElement('div'); row.className = 'row'; d.appendChild(row);
+  for (const skin of Object.keys(SKINS)) cell(row, skin, '', 34, 38, PAPER, man({ cls: 'shot', skin, wpn: 1, arm: 1, face: -1, man: skin.length }));
+}
+</script>
+</body>
+</html>

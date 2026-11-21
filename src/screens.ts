@@ -26,13 +26,13 @@ const STAFF_FX: Record<StaffId, IconText[]> = {
   chaplain: [['flame', 'Spirits rise a little every day']]
 };
 /** The colour of the bar along the foot of a card, which the stylesheet names (.type.woad and so on); ink is the default. */
-type CardLook = 'ink' | 'madder' | 'woad' | 'steel' | 'weld' | 'moss' | 'wood' | 'grey' | 'pale';
+type CardLook = 'ink' | 'madder' | 'woad' | 'steel' | 'weld' | 'moss' | 'wood' | 'grey' | 'pale' | 'nation';
 const LOOK: Record<TroopClass, CardLook> = { pike: 'woad', shot: 'steel', sabre: 'madder' };
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 const roman = (n: number) => ROMAN[n] || String(n);
 
-/** The screens: the title, camp, the muster before a fight, the fight, its report, and the end of the road. */
-type ScreenId = 'title' | 'camp' | 'muster' | 'battle' | 'report' | 'end';
+/** The screens: the title, camp, the muster before a fight, the fight, its report, the end of the road, and the encyclopedia, which can be opened from most of them. */
+type ScreenId = 'title' | 'camp' | 'muster' | 'battle' | 'report' | 'end' | 'codex';
 /** The tabs along the foot of the camp screen. */
 type TabId = 'map' | 'roll' | 'market' | 'work' | 'staff' | 'log';
 /**
@@ -64,11 +64,13 @@ interface UiState {
   camp: CampView | null; campPos: CampPositions; // the picture of the camp, and where its men stand in it
   demo: Battle | null; // the skirmish on the title screen
   overT: number; verdict: boolean; // seconds since the fight was decided, and whether its verdict is up
+  fresh: { id: number; k: GearSlot } | null; // the gear just bought, and by whom, for the card to show off once
+  codex: CodexTab; codexFrom: ScreenId; // the open tab of the encyclopedia, and the screen it was opened from, which the way back returns to
 }
 // The campaign in play: null until one is raised or continued, so on the title screen. The screens after it are built only with a
 // campaign in hand, which is why they write G!; save(), barHTML() and the frame loop are what look.
 let G: Campaign | null = null;
-const ui: UiState = { screen: 'title', tab: 'market', course: null, open: null, c: null, pick: [], stance: null, odds: null, b: null, speed: 1, rep: null, modal: null, news: null, sound: true, music: true, view: null, camp: null, campPos: {}, demo: null, overT: 0, verdict: false };
+const ui: UiState = { screen: 'title', tab: 'market', course: null, open: null, c: null, pick: [], stance: null, odds: null, b: null, speed: 1, rep: null, modal: null, news: null, sound: true, music: true, view: null, camp: null, campPos: {}, demo: null, overT: 0, verdict: false, fresh: null, codex: 'nations', codexFrom: 'title' };
 
 /* ---------- saving ---------- */
 const SAVE = 'sotnia-save-2';
@@ -94,7 +96,7 @@ function fxChip(f: FxChip) {
 }
 const fxLine = (f: IconText) => '<span class="line">' + ic(f[0]) + '<span>' + esc(f[1]) + '</span></span>';
 /** The bar along the foot of a card: its words, a coin at its left for a price or a wage, a level at its right, and any markup after. */
-interface CardType { look?: CardLook; text: string; coin?: number; coinLabel?: string; lvl?: string; end?: string }
+interface CardType { look?: CardLook; style?: string; text: string; coin?: number; coinLabel?: string; lvl?: string; end?: string } // style: custom properties for the 'nation' look, --n for its colour and --nt for its text
 /** What cardHTML builds a card from. The strings that are markup (title, badges, body, end) are escaped already. */
 interface CardSpec {
   tag?: 'article' | 'button'; // the element: an article unless the whole card is a button
@@ -112,23 +114,31 @@ function cardHTML(o: CardSpec) {
   h += o.body || '';
   if (o.type) {
     const t = o.type;
-    h += '<span class="type ' + (t.look || 'ink') + (t.coin != null ? ' coined' : '') + (t.lvl ? ' levelled' : '') + (t.end ? ' ended' : '') + '">' + (t.coin != null ? '<span class="coin" title="' + esc(t.coinLabel || '') + '">' + t.coin + sr(' ' + (t.coinLabel || '')) + '</span>' : '') +
+    h += '<span class="type ' + (t.look || 'ink') + (t.coin != null ? ' coined' : '') + (t.lvl ? ' levelled' : '') + (t.end ? ' ended' : '') + '"' + (t.style ? ' style="' + t.style + '"' : '') + '>' + (t.coin != null ? '<span class="coin" title="' + esc(t.coinLabel || '') + '">' + t.coin + sr(' ' + (t.coinLabel || '')) + '</span>' : '') +
       '<span class="tt">' + t.text + '</span>' + (t.lvl ? '<span class="lvl" title="Level">' + t.lvl + sr(' level') + '</span>' : '') + (t.end || '') + '</span>';
   }
   return h + '</span></' + tag + '>';
+}
+/** The colours of a man's country as a little flag, in stripes, to stand before the name of his nation. */
+function flagHTML(origin: string) {
+  const f = flagOf(origin);
+  if (!f) return '';
+  const n = f.length, stops = f.map((c, i) => c + ' ' + (100 * i / n).toFixed(1) + '% ' + (100 * (i + 1) / n).toFixed(1) + '%').join(',');
+  return '<i class="flag" aria-hidden="true" style="background:linear-gradient(' + stops + ')"></i>';
 }
 function sectHTML(title: string, aside?: string) { return '<h2 class="sect"><span>' + title + '</span>' + (aside ? '<small>' + aside + '</small>' : '') + '</h2>'; }
 
 /* ---------- the bar along the top: where, when, and what the company has ---------- */
 function toolsHTML() {
   return '<div class="tools">' +
+    (ui.screen === 'battle' || ui.screen === 'codex' ? '' : '<button class="tool" data-act="codex" aria-label="Encyclopedia" title="Encyclopedia">' + ic('book') + '</button>') +
     '<button class="tool" data-act="help" aria-label="Standing orders" title="Standing orders">' + ic('scroll') + '</button>' +
     '<button class="tool' + (ui.music ? '' : ' off') + '" data-act="music" aria-pressed="' + ui.music + '" aria-label="Music" title="Music">' + ic('note') + '</button>' +
     '<button class="tool' + (ui.sound ? '' : ' off') + '" data-act="sound" aria-pressed="' + ui.sound + '" aria-label="Sound" title="Sound">' + ic('speaker') + '</button></div>';
 }
 function barHTML() {
   let h = '<header class="bar"><h1 class="logo">Sotnia</h1>';
-  if (!G || ui.screen === 'title' || ui.screen === 'end') return h + '<p class="strap">A free company · Anno 1633</p><span class="grow"></span>' + toolsHTML() + '</header>';
+  if (!G || ui.screen === 'title' || ui.screen === 'end' || ui.screen === 'codex') return h + '<p class="strap">A free company · Anno 1633</p><span class="grow"></span>' + toolsHTML() + '</header>';
   const q = questOf(G), left = daysLeft(G), done = Math.round(100 * progress(G)), camp = ui.screen === 'camp';
   const due = left >= 0 ? plural(left, 'day', 'days') + ' until ' + q.until : plural(-left, 'day', 'days') + ' late: the price is falling';
   const trip = '<span>' + esc(cap1(PLACES[q.from].name)) + '</span><span class="track"><i style="width:' + done + '%"></i><b style="left:' + done + '%"></b></span><span>' + esc(PLACES[q.to].name) + '</span>';
@@ -145,12 +155,19 @@ function barHTML() {
 }
 
 /* ---------- the cards ---------- */
+/**
+ * One slot of a man's kit as a ladder of its four pieces, worst to best: the ones he has passed lit but faded, the one he has framed
+ * in gilt, the next in grey with its price, and the rest as silhouettes. The button buys the next piece, and a card shows the man in
+ * it while the button is under the pointer or has focus (see tryOn in main.ts), even when he cannot yet pay.
+ */
 function gearHTML(s: Soldier, k: GearSlot) {
-  const names = k === 'wpn' ? WPN[s.cls] : ARM, t = s[k], what = k === 'wpn' ? 'arms' : 'armour';
-  let h = '<span class="gear">' + ic(k === 'wpn' ? s.cls : 'cuirass') + '<span class="gname">' + esc(names[t]) + '</span>' + pips(t + 1, 4, names[t] + ', ' + (t + 1) + ' of 4');
-  if (t >= 3) return h + '<span class="best" title="The best there is">' + ic('star', 'The best there is') + '</span></span>';
+  const names = k === 'wpn' ? WPN[s.cls] : ARM, t = s[k], what = k === 'wpn' ? 'arms' : 'armour', fresh = !!ui.fresh && ui.fresh.id === s.id && ui.fresh.k === k;
+  const rungs = '<span class="rungs" role="img" aria-label="' + esc(names[t] + ', ' + (t + 1) + ' of 4') + '">' + names.map((n, i) =>
+    '<span class="rung ' + (i < t ? 'was' : i === t ? 'now' + (fresh ? ' fresh' : '') : i === t + 1 ? 'next' : 'far') + '" title="' + esc(n + (i === t ? ', his now' : i === t + 1 ? ', ' + gearPrice(G!, t) + ' thalers' : '')) + '"><img src="' + gearArt(k, s.cls, i, nationOf(s.origin)) + '" alt=""></span>').join('') + '</span>';
+  const head = '<span class="gname">' + ic(k === 'wpn' ? s.cls : 'cuirass') + '<span>' + esc(names[t]) + '</span></span>';
+  if (t >= 3) return '<span class="gear" data-slot="' + k + '">' + head + rungs + '<span class="best" title="The best there is">' + ic('star', 'The best there is') + '</span></span>';
   const p = gearPrice(G!, t), shop = has(G!, 'market');
-  return h + '<button class="mini" data-act="up" data-id="' + s.id + '" data-k="' + k + '"' + (!shop || G!.thalers < p ? ' disabled' : '') +
+  return '<span class="gear" data-slot="' + k + '">' + head + rungs + '<button class="mini" data-act="up" data-id="' + s.id + '" data-k="' + k + '"' + (!shop || G!.thalers < p ? ' aria-disabled="true"' : '') +
     ' aria-label="' + esc('Better ' + what + ' for ' + s.name + ': ' + names[t + 1] + ', ' + p + ' thalers') + '" title="' + esc(shop ? names[t + 1] + ', ' + p + ' thalers' : 'Bought only where there is a market') + '">' + ic('up') + p + '</button></span>';
 }
 function soldierCard(s: Soldier, where: 'roll' | 'camp') {
@@ -175,8 +192,8 @@ function soldierCard(s: Soldier, where: 'roll' | 'camp') {
   body += '<span class="gears">' + gearHTML(s, 'wpn') + gearHTML(s, 'arm') + '</span>';
   if (where === 'roll') body += '<button class="link" data-act="dismiss" data-id="' + s.id + '">Strike from the roll</button>';
   return cardHTML({
-    cls: 'soldier' + (s.promos ? ' gilt' : '') + (where === 'camp' ? ' side-card' : ''), attrs: ' aria-label="' + esc(s.name) + '"', title: esc(s.name) + '<small>' + esc(s.origin) + '</small>',
-    art: soldierArt(s), artCls: s.wound ? 'hurt' : '', badges, body,
+    cls: 'soldier' + (s.promos ? ' gilt' : '') + (where === 'camp' ? ' side-card' : ''), attrs: ' aria-label="' + esc(s.name) + '"', title: esc(s.name) + '<small>' + flagHTML(s.origin) + esc(s.origin) + '</small>',
+    art: soldierArt(s), artCls: (s.wound ? 'hurt' : '') + (ui.fresh && ui.fresh.id === s.id ? ' fresh' : ''), badges, body,
     type: { look: LOOK[s.cls], text: c.name, coin: wageOf(s), coinLabel: 'Wage, thalers a month', lvl: roman(s.level) }
   });
 }
@@ -185,7 +202,7 @@ function recruitCard(r: Recruit, i: number, full: boolean) {
   const badges = T ? '<span class="badge' + (T.good ? '' : ' bad') + '" title="' + esc(T.desc) + '">' + ic(T.good ? 'star' : 'warn') + esc(s.trait) + '</span>' : '';
   return cardHTML({
     tag: 'button', cls: 'buy', attrs: ' data-act="hire" data-i="' + i + '"' + (off ? ' disabled' : '') + ' aria-label="' + esc('Hire ' + s.name + ', ' + s.origin + ' ' + c.name.toLowerCase() + ', level ' + s.level + (s.trait ? ', ' + s.trait.toLowerCase() : '') + ', for ' + r.price + ' thalers') + '"',
-    title: esc(s.name) + '<small>' + esc(s.origin) + '</small>', art: soldierArt(s), badges,
+    title: esc(s.name) + '<small>' + flagHTML(s.origin) + esc(s.origin) + '</small>', art: soldierArt(s), badges,
     body: '<span class="strip">' + stat('heart', s.vig, 'Vigour') + stat(s.cls, s.cls === 'shot' ? s.aim : s.mel, c.skill) + stat('shield', s.grd, 'Guard') + '</span>' +
       '<span class="line">' + ic('coin') + '<span>Wage ' + wageOf(s) + ' a month</span></span>',
     type: { look: LOOK[s.cls], text: c.name + ' · ' + roman(s.level), coin: r.price, coinLabel: 'Price to hire, thalers' }
@@ -443,7 +460,7 @@ function reportHTML() {
         s && s.promos ? ['star', 'Promotion earned'] : l.fate === 'fled' ? ['run', 'Ran from the field'] : l.fate === 'wounded' ? ['drop', 'Cut, but standing'] : ['check', 'Not a scratch'];
       return cardHTML({
         cls: 'fate' + (dead ? ' dead' : '') + (s && s.promos ? ' gilt' : ''), attrs: ' aria-label="' + esc(l.name + ': ' + F.word) + '"', title: esc(l.name),
-        art: fateArt(l.cls, l.fate, l.id), artCls: dead ? 'dead' : l.fate === 'struck down' ? 'hurt' : '',
+        art: fateArt(l, ui.c ? settingOf(G!, ui.c).land : undefined), artCls: dead ? 'dead' : l.fate === 'struck down' ? 'hurt' : '',
         badges: '<span class="stamp ' + F.tone + '">' + ic(F.icon) + F.word + '</span>',
         body: '<span class="strip">' + stat('swords', l.kills, l.kills === 1 ? 'kill' : 'kills') + stat('star', l.xp ? '+' + l.xp : '—', 'experience') + '</span>' + fxLine(note),
         type: { look: dead ? 'grey' : LOOK[l.cls], text: CLS[l.cls].name }
@@ -489,14 +506,15 @@ function endHTML() {
 }
 
 /* ---------- the title: the commissions of 1633 ---------- */
-function questCard(q: Quest) {
+// button: whether the card has the button that raises the banner; the encyclopedia shows the commissions without it.
+function questCard(q: Quest, button = true) {
   const days = daysToGo({ quest: q.id, at: q.from }), worth = q.kind === 'commission' ? q.fee : q.cargo.n * q.price;
   return cardHTML({
     cls: 'quest', attrs: ' aria-label="' + esc(q.title) + '"', title: esc(q.title), art: questArt(q), artCls: 'wide',
     badges: '<span class="badge">' + (q.kind === 'commission' ? 'Commission' : 'Venture') + '</span><span class="badge gold right" title="Playing time">' + ic('hourglass') + esc(q.play) + '</span>',
     body: '<span class="route">' + esc(cap1(PLACES[q.from].name)) + ic('road') + esc(PLACES[q.to].name) + '</span><span class="who">' + esc(q.who) + '</span><span class="flavour">' + esc(q.text) + '</span>' +
       '<span class="strip">' + stat('calendar', dateText(q.start, true) + '–' + dateText(q.deadline, true), 'from and by') + stat('boot', '~' + days + 'd', 'on the road, ' + (q.deadline - q.start) + ' to spare them') + stat(q.kind === 'commission' ? 'coin' : 'barrel', q.cargo.n, q.cargo.unit) + stat('wagon', esc(TRANSPORT[q.transport].name), 'how it travels') + '</span>',
-    type: { look: 'ink', text: '', coin: worth, coinLabel: q.kind === 'commission' ? 'Fee, thalers' : 'Worth at the destination, thalers', end: '<button class="btn go sm" data-act="new" data-q="' + q.id + '">' + ic('flag') + 'Raise the banner</button>' }
+    type: { look: 'ink', text: button ? '' : cap1(q.cargo.many), coin: worth, coinLabel: q.kind === 'commission' ? 'Fee, thalers' : 'Worth at the destination, thalers', end: button ? '<button class="btn go sm" data-act="new" data-q="' + q.id + '">' + ic('flag') + 'Raise the banner</button>' : undefined }
   });
 }
 /** A heading and its text, led by an icon: one step of the title's account of the game, one paragraph of the standing orders. */
@@ -508,8 +526,9 @@ function titleHTML() {
     '<div class="intro"><p class="lede">The German war is in its fifteenth year, and every prince between the Rhine and the Dnieper is hiring. You have a banner, a handful of men, and a long road.</p>' +
     '<ol class="how">' + ([['flag', 'Take a commission', 'Carry a cargo across the lands of 1633 by the day it names.'], ['road', 'Choose the road', 'March steady or forced; rest, drill and buy bread.'], ['men', 'Keep the roll', 'Hire pike, shot and sabre; pay them; fight what falls on the train.']] satisfies IconTitleText[])
       .map(x => '<li><span class="disc">' + ic(x[0]) + '</span><span><b>' + x[1] + '</b>' + x[2] + '</span></li>').join('') + '</ol>' +
-    (sv ? '<button class="btn go big" data-act="continue">' + ic('tent') + 'Continue: ' + esc(cap1(PLACES[sv.at].name)) + ', ' + dateText(sv.date, true) + '</button>' : '') + '</div></div>' +
-    '<section>' + sectHTML('Commissions for the year 1633', 'choose one to raise the banner') + '<div class="cards wide quests">' + QUESTS.map(questCard).join('') + '</div></section>';
+    '<div class="actions">' + (sv ? '<button class="btn go big" data-act="continue">' + ic('tent') + 'Continue: ' + esc(cap1(PLACES[sv.at].name)) + ', ' + dateText(sv.date, true) + '</button>' : '') +
+    '<button class="btn big" data-act="codex">' + ic('book') + 'Encyclopedia</button></div></div></div>' +
+    '<section>' + sectHTML('Commissions for the year 1633', 'choose one to raise the banner') + '<div class="cards wide quests">' + QUESTS.map(q => questCard(q)).join('') + '</div></section>';
 }
 
 /* ---------- dialogs ---------- */
@@ -563,11 +582,12 @@ function render() {
   else if (ui.screen === 'muster') h += musterHTML();
   else if (ui.screen === 'battle') h += battleHTML();
   else if (ui.screen === 'report') h += reportHTML();
+  else if (ui.screen === 'codex') h += codexHTML();
   else h += endHTML();
   h += '<p class="foot">A prototype. A commission takes from a few weeks to a few months of the year 1633 on the road, and from a quarter of an hour to an hour to play. Your place is kept in this browser. Music and sound are made in the browser as you play.</p>';
   $('#view')!.innerHTML = h;
   ui.view = null; ui.camp = null;
-  if (ui.screen === 'battle') { ui.view = newView($<HTMLCanvasElement>('#field')!, ui.c!.id * 7919 + G!.day * 31, ui.c!.weather, true); paintHud(); }
+  if (ui.screen === 'battle') { ui.view = newView($<HTMLCanvasElement>('#field')!, ui.c!.id * 7919 + G!.day * 31, ui.c!.weather, true, settingOf(G!, ui.c!)); paintHud(); }
   else if (ui.screen === 'title') { newDemo(); }
   else if (ui.screen === 'camp') {
     const cv = $<HTMLCanvasElement>('#camp');

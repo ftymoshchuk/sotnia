@@ -30,6 +30,10 @@ const WPN: Record<TroopClass, readonly string[]> = {
 };
 const ARM: readonly string[] = ['Linen shirt', 'Buff coat', 'Breastplate', 'Cuirass and tassets'];
 const GEAR_COST: readonly number[] = [22, 40, 65];
+/** What each level of weapon adds to a blow (WPN_BLOW) and to a musket ball (WPN_BALL), and what each level of armour takes off a blow (ARM_PLATE; a ball loses half as much). */
+const WPN_BLOW = 2, WPN_BALL = 3, ARM_PLATE = 1.5;
+/** The least and the most a musket ball does, before the weapon, the range and the armour change it. */
+const BALL_DMG: readonly [number, number] = [19, 30];
 // Foes come in tiers 0 to 3, by how well drilled and armed they are. COST is what a unit of each tier adds to a contract's strength.
 const TIER: readonly string[] = ['rabble', 'trained', 'veteran', 'elite'];
 const COST: readonly number[] = [0.5, 1, 1.6, 2.4];
@@ -156,11 +160,12 @@ function promote(st: Campaign, id: number, k: Promo) {
 }
 const TVIG: readonly number[] = [0.72, 0.9, 1.05, 1.2], TSK: readonly number[] = [-3, 0, 2, 4], TMOR: readonly number[] = [34, 48, 62, 78];
 /** The colours a fighter wears, which say who he is: 'own' for the company, the rest for the foes it meets. */
-type Skin = 'own' | 'bandit' | 'deserter' | 'raider' | 'imperial' | 'swede' | 'champion' | 'black' | 'muscovite';
+type Skin = 'own' | 'bandit' | 'deserter' | 'raider' | 'imperial' | 'swede' | 'champion' | 'black' | 'muscovite' | 'tatar' | 'croat';
 /** What a fighter brings to a battle. A Soldier has all of it, and so does a Foe. hp is a man's hit points now (a foe starts at full vigour). */
 interface Fighter {
   cls: TroopClass; vig: number; mel: number; aim: number; grd: number; wpn: number; arm: number; morale: number; trait: Trait | null;
   name?: string; hp?: number; tier?: number; skin?: Skin;
+  origin?: string; // a man of the company has the label of his Origin (see Soldier), which the picture dresses him by
 }
 /** An enemy as a contract lists him, with the numbers his tier gives him; the battle makes a BattleUnit of him. */
 interface Foe extends Fighter { tier: number; skin: Skin; name: string }
@@ -175,8 +180,10 @@ function enemyUnit(cls: TroopClass, tier: number, skin: Skin): Foe {
 
 /* ---------- economy ---------- */
 const priceMul = (st: Campaign) => (st.staff.qm ? 0.85 : 1);
-const breadPrice = (st: Campaign) => Math.round(4 * priceMul(st));
-const powderPrice = (st: Campaign) => Math.round(14 * priceMul(st));
+/** What ten loaves and ten charges of powder cost, before the quartermaster's discount. */
+const BREAD_COST = 4, POWDER_COST = 14;
+const breadPrice = (st: Campaign) => Math.round(BREAD_COST * priceMul(st));
+const powderPrice = (st: Campaign) => Math.round(POWDER_COST * priceMul(st));
 const gearPrice = (st: Campaign, tier: number) => Math.round(GEAR_COST[tier] * priceMul(st));
 function wagesDue(st: Campaign) {
   let w = 0;
@@ -291,7 +298,13 @@ const TEMPLATES: Template[] = [
 /** The day's weather, which is the battle's: rain makes matchlocks misfire, fog shortens musket range (see WEATHER). */
 type Weather = 'clear' | 'rain' | 'fog';
 const WEATHER: Record<Weather, string> = { clear: 'Clear', rain: 'Rain: matchlocks misfire', fog: 'Fog: short musket range' };
-function rollWeather(): Weather { const r = Math.random(); return r < 0.6 ? 'clear' : r < 0.82 ? 'rain' : 'fog'; }
+/** How a day's weather is dealt: the share of days that are each kind. */
+const WEATHER_ODDS: Record<Weather, number> = { clear: 0.6, rain: 0.22, fog: 0.18 };
+function rollWeather(): Weather { const r = Math.random(); return r < WEATHER_ODDS.clear ? 'clear' : r < WEATHER_ODDS.clear + WEATHER_ODDS.rain ? 'rain' : 'fog'; }
+/** What the weather does to a musket: the chance a shot misfires, how far it carries, and what fog takes off the chance of hitting. */
+const MISFIRE: Record<Weather, number> = { clear: 0.06, rain: 0.3, fog: 0.06 };
+const MUSKET_RANGE: Record<Weather, number> = { clear: 150, rain: 150, fog: 88 };
+const FOG_AIM = 0.06;
 /** A contract is offered in three grades. dq shifts the quality of the foe and pay scales the pay (dn is not read anywhere). */
 type Grade = 'easy' | 'fair' | 'hard';
 interface GradeInfo { dn: number; dq: number; pay: number }
@@ -303,6 +316,7 @@ interface Contract {
   tpl: TemplateId | AmbushId | 'duel' | 'final'; // what it was made from
   title: string; who: string; text: string; skin: Skin; foe: string; units: Foe[]; ai: Stance;
   grade: Grade | 'duel' | 'final' | 'ambush'; weather: Weather;
+  land?: LandId; // where it is fought (a contract saved before it was kept has none: the company's place stands for it)
   ttl: number; // days left on the board
   bonus: Bonus | null; pay: number; renown: number;
   cap: number; // the most men that may be sent
@@ -321,7 +335,7 @@ function makeContract(st: Campaign, tpl: Encounter, grade: Grade): Contract {
   units.sort((a, b2) => b2.tier - a.tier);
   return {
     id: st.nextId++, tpl: tpl.id, title: tpl.title, who: tpl.who, text: tpl.text, skin: tpl.skin, foe: tpl.foe,
-    units, ai: tpl.ai, grade, weather: rollWeather(), ttl: ri(2, 4), bonus: tpl.bonus || null,
+    units, ai: tpl.ai, grade, weather: rollWeather(), land: here(st).land, ttl: ri(2, 4), bonus: tpl.bonus || null,
     pay: Math.round((11 + 11 * powerOf(units)) * G.pay * (1 + st.renown / 250)),
     renown: grade === 'easy' ? 3 : grade === 'hard' ? 8 : 5,
     cap: clamp(n + (grade === 'easy' ? 1 : 0), 2, ROSTER_MAX)
@@ -335,7 +349,7 @@ function makeDuel(st: Campaign): Contract {
   return {
     id: st.nextId++, tpl: 'duel', duel: true, title: 'An affair of honour', who,
     text: 'Your banner has been called a rabble of horse-thieves at table. One man from each side, cold steel, until one yields.',
-    skin: 'champion', foe: 'a hired blade', units: [u], ai: 'advance', grade: 'duel', weather: 'clear', ttl: 2, bonus: null,
+    skin: 'champion', foe: 'a hired blade', units: [u], ai: 'advance', grade: 'duel', weather: 'clear', land: here(st).land, ttl: 2, bonus: null,
     pay: 22 + tl * 2, renown: 7, cap: 1
   };
 }
@@ -346,7 +360,7 @@ function finalContract(st: Campaign): Contract {
     id: st.nextId++, tpl: 'final', final: true, title: 'The Black Regiment at the ford', who: 'The Crown Hetman',
     text: "Colonel Krafft's black-coats have sold their swords to the other side and hold the only crossing. The Hetman's whole muster watches from the hill. Break them and your banner is made.",
     skin: 'black', foe: 'the Black Regiment', units: mix.map(m => enemyUnit(m[0], m[1], 'black')), ai: 'hold',
-    grade: 'final', weather: rollWeather(), ttl: 99, bonus: null, pay: 300, renown: 30, cap: ROSTER_MAX
+    grade: 'final', weather: rollWeather(), land: here(st).land, ttl: 99, bonus: null, pay: 300, renown: 30, cap: ROSTER_MAX
   };
 }
 function genContracts(st: Campaign) {
@@ -383,8 +397,10 @@ type UnitMode = 'idle' | 'walk' | 'fight' | 'reload' | 'aim' | 'rout';
 interface BattleUnit {
   sid: number | string; // the soldier's id, or 'e0', 'e1'... for a foe
   side: Side; name: string; cls: TroopClass; skin: Skin; tier: number;
+  origin: string; // of a man of the company, the label of his Origin (such as 'Polish'); a foe has none, and is dressed by his skin
   x: number; y: number; hx: number; hy: number;
   hp: number; max: number; mel: number; aim: number; grd: number; wpn: number;
+  arm: number; // the level of his armour, 0 to 3, which the picture shows (as wpn is the level of his weapon)
   armv: number; // armour: the class's, plus what the gear adds
   spd: number; mor: number; trait: Trait | null;
   face: 1 | -1; // 1 faces right
@@ -398,9 +414,9 @@ interface BattleUnit {
 function toUnit(o: Fighter, side: Side, sid: number | string): BattleUnit {
   const c = CLS[o.cls];
   return {
-    sid, side, name: o.name || '', cls: o.cls, skin: side === 0 ? 'own' : (o.skin || 'bandit'), tier: o.tier || 0,
+    sid, side, name: o.name || '', cls: o.cls, skin: side === 0 ? 'own' : (o.skin || 'bandit'), tier: o.tier || 0, origin: side === 0 && o.origin || '',
     x: 0, y: 0, hx: 0, hy: 0, hp: o.hp != null ? o.hp : o.vig, max: o.vig, mel: o.mel, aim: o.aim, grd: o.grd,
-    wpn: o.wpn, armv: c.arm + o.arm * 1.5, spd: c.spd * (o.trait === 'Fleet' ? 1.15 : 1), mor: o.morale,
+    wpn: o.wpn, arm: o.arm, armv: c.arm + o.arm * ARM_PLATE, spd: c.spd * (o.trait === 'Fleet' ? 1.15 : 1), mor: o.morale,
     trait: o.trait, face: side ? -1 : 1, cd: rnd(0, 0.5), loaded: true, rl: 0, aimT: 0, aimNeed: rnd(0.5, 1),
     tgt: null, ret: 0, anim: rnd(0, 1), moving: false, swing: 0, flash: 0, hurt: 0, kills: 0,
     dead: false, fled: false, routing: false, mode: 'idle', run: 0
@@ -454,7 +470,7 @@ function makeBattle(ours: (Fighter & { id: number })[], theirs: Fighter[], o: Ba
   const b: Battle = {
     W: BW, D: BD, t: 0, units: [], stance: [o.stance || 'advance', o.ai === 'hold' ? 'hold' : o.ai || 'advance'],
     ai: o.ai || 'advance', underFire: false, weather: o.weather || 'clear', powder: o.powder || 0,
-    duel: !!o.duel, noShot: !!o.duel, range: o.weather === 'fog' ? 88 : 150, fx: [], log: [], vis: !!o.vis,
+    duel: !!o.duel, noShot: !!o.duel, range: MUSKET_RANGE[o.weather || 'clear'], fx: [], log: [], vis: !!o.vis,
     over: false, winner: null, retreated: false, mt: 0.5, shots: 0, dry: false, lastShot: 0
   };
   ours.forEach(s => b.units.push(toUnit(s, 0, s.id)));
@@ -538,7 +554,7 @@ function strike(b: Battle, u: BattleUnit, t: BattleUnit, d: number) {
   p *= 0.82 + 0.18 * (clamp(u.mor, 0, 100) / 100);
   p = clamp(p, 0.15, 0.95);
   if (chance(p)) {
-    let dmg = ri(c.dmg[0], c.dmg[1]) + u.wpn * 2 + (u.trait === 'Brawler' ? 2 : 0);
+    let dmg = ri(c.dmg[0], c.dmg[1]) + u.wpn * WPN_BLOW + (u.trait === 'Brawler' ? 2 : 0);
     if (impact) { dmg *= 1.5; t.mor -= 6; }
     hurt(b, t, Math.max(1, Math.round(dmg - t.armv)), u, 'steel');
   } else fxp(b, { k: 'parry', x: (u.x + t.x) / 2, y: (u.y + t.y) / 2 });
@@ -549,14 +565,14 @@ function fire(b: Battle, u: BattleUnit, t: BattleUnit, d: number) {
     b.powder--;
     if (b.powder <= 0 && !b.dry) { b.dry = true; blog(b, 'The powder is spent. Muskets are clubs now.', 1); }
   }
-  const mis = chance(b.weather === 'rain' ? 0.3 : 0.06);
+  const mis = chance(MISFIRE[b.weather]);
   fxp(b, { k: 'shot', x: u.x + u.face * 10, y: u.y, f: u.face, mis });
   if (mis) { u.rl *= 0.6; if (u.side === 0) blog(b, uname(b, u) + "'s match hisses out. Misfire.", 1); return; }
-  let p = 0.42 + 0.03 * u.aim - 0.0028 * d + (u.trait === 'Keen-eyed' ? 0.1 : 0) - (b.weather === 'fog' ? 0.06 : 0);
+  let p = 0.42 + 0.03 * u.aim - 0.0028 * d + (u.trait === 'Keen-eyed' ? 0.1 : 0) - (b.weather === 'fog' ? FOG_AIM : 0);
   if (t.cls === 'sabre' && t.moving) p *= 0.8;
   p = clamp(p, 0.08, 0.92);
   if (chance(p)) {
-    let dmg = ri(19, 30) + u.wpn * 3;
+    let dmg = ri(BALL_DMG[0], BALL_DMG[1]) + u.wpn * WPN_BALL;
     if (d < 40) dmg *= 1.25;
     hurt(b, t, Math.max(4, Math.round(dmg - t.armv / 2)), u, 'ball');
   } else fxp(b, { k: 'miss', x: t.x + rnd(-7, 7), y: t.y + rnd(-3, 3) });
@@ -725,7 +741,7 @@ function oddsWord(p: number) {
 /** How a man fared in a fight. */
 type Fate = 'unhurt' | 'wounded' | 'struck down' | 'killed' | 'fled' | 'yielded';
 /** One man's line in the report: his kills, his fate, the experience he earned and any scar he took. */
-interface ReportLine { id: number; name: string; cls: TroopClass; kills: number; fate: Fate; xp: number; scar: string | null }
+interface ReportLine { id: number; name: string; cls: TroopClass; origin: string; wpn: number; arm: number; kills: number; fate: Fate; xp: number; scar: string | null }
 /** A man who died in the company's service, kept for the last page. */
 interface Fallen { name: string; cls: TroopClass; origin: string; day: number; date: number; where: string; level: number; kills: number }
 /** Supplies taken from the field. */
@@ -750,7 +766,7 @@ function resolveBattle(st: Campaign, c: Contract, b: Battle): BattleReport {
     const s = st.roster.find(r => r.id === u.sid);
     if (!s) continue;
     s.kills += u.kills; st.stats.kills += u.kills;
-    const line: ReportLine = { id: s.id, name: s.name, cls: s.cls, kills: u.kills, fate: 'unhurt', xp: 0, scar: null };
+    const line: ReportLine = { id: s.id, name: s.name, cls: s.cls, origin: s.origin, wpn: s.wpn, arm: s.arm, kills: u.kills, fate: 'unhurt', xp: 0, scar: null };
     if (u.dead) {
       let p = c.duel ? 0.2 : 0.42;
       if (st.staff.surgeon) p -= 0.18;
