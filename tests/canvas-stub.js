@@ -12,15 +12,19 @@ const hash = s => { let a = 0xdeadbeef, b = 0x41c6ce57; for (let i = 0; i < s.le
   a = Math.imul(a ^ (a >>> 16), 2246822507) ^ Math.imul(b ^ (b >>> 13), 3266489909); b = Math.imul(b ^ (b >>> 16), 2246822507) ^ Math.imul(a ^ (a >>> 13), 3266489909); return (b >>> 0).toString(16) + (a >>> 0).toString(16); };
 function rec() {
   const calls = [];
-  const g = { fillStyle: '#000', globalAlpha: 1, fillRect(x, y, w, h) { calls.push([x, y, w, h, this.fillStyle]); }, drawImage(img, ...a) { calls.push(['image', img && img.toDataURL ? img.toDataURL() : '', ...a]); }, createRadialGradient: () => ({ addColorStop() {} }), createLinearGradient: () => ({ addColorStop() {} }) };
+  const g = { fillStyle: '#000', globalAlpha: 1, fillRect(x, y, w, h) { calls.push([x, y, w, h, this.fillStyle]); }, drawImage(img, ...a) { calls.push(['image', img && img.toDataURL ? img.toDataURL() : '', ...a]); }, createRadialGradient: () => ({ addColorStop() {} }), createLinearGradient: () => ({ addColorStop() {} }), measureText: s => ({ width: 6 * String(s).length }) };
   return { g: new Proxy(g, { get: (t, k) => (k in t ? t[k] : () => {}), set: (t, k, v) => { t[k] = v; return true; } }), calls };
 }
 const document = { createElement: () => { const { g, calls } = rec(); return { width: 0, height: 0, getContext: () => g, toDataURL: () => 'data:' + hash(JSON.stringify(calls)) + '-' + calls.length }; } };
 `;
-/** Loads these scripts of the game (names under js/, in the order the page loads them) into a fresh context, and returns a function that runs code in it. */
-function load(files) {
+/**
+ * Loads these scripts of the game (names under js/, in the order the page loads them) into a fresh context, and returns a function that runs code in it.
+ * setup, if given, is called with the context once the recording canvas is in it and before any script runs, to put more of a page there (see dom-stub.js).
+ */
+function load(files, setup) {
   const ctx = vm.createContext({});
   vm.runInContext(RECORDER, ctx);
+  if (setup) setup(ctx);
   for (const f of files) vm.runInContext(fs.readFileSync(path.join(ROOT, 'js', f + '.js'), 'utf8'), ctx, { filename: 'js/' + f + '.js' });
   return code => vm.runInContext(code, ctx);
 }

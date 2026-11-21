@@ -97,6 +97,13 @@ function fxChip(f: FxChip) {
   return '<span class="fx ' + tone + '">' + ic(f[0]) + '<b>' + esc(f[1]) + '</b><span>' + esc(f[2]) + '</span></span>';
 }
 const fxLine = (f: IconText) => '<span class="line">' + ic(f[0]) + '<span>' + esc(f[1]) + '</span></span>';
+/**
+ * A note that shows beside a thing while the pointer rests on it, it has the keyboard or (on a screen with no pointer) it is tapped, as showTip in main.ts has it:
+ * a title, what the thing is and what it comes to in a line or two, and a line of warning for each way it is going wrong. It is for the eye only; tipText says the same to a reader.
+ */
+interface Tip { title: string; lines: string[]; warns?: string[] }
+const tipAttr = (t: Tip) => ' data-tip="' + esc(JSON.stringify(t)) + '"';
+const tipText = (t: Tip) => [t.title, ...t.lines, ...(t.warns || [])].map(s => s.replace(/[.!?]$/, '')).join('. ') + '.';
 /** The bar along the foot of a card: its words, a coin at its left for a price or a wage, a level at its right, and any markup after. */
 interface CardType { look?: CardLook; style?: string; text: string; coin?: number; coinLabel?: string; lvl?: string; end?: string } // style: custom properties for the 'nation' look, --n for its colour and --nt for its text
 /** What cardHTML builds a card from. The strings that are markup (title, badges, body, end) are escaped already. */
@@ -132,28 +139,60 @@ function sectHTML(title: string, aside?: string) { return '<h2 class="sect"><spa
 
 /* ---------- the bar along the top: where, when, and what the company has ---------- */
 function toolsHTML() {
+  const tool = (act: string, icon: IconName, tip: Tip, on?: boolean) =>
+    '<button class="tool' + (on === false ? ' off' : '') + '" data-act="' + act + '"' + (on === undefined ? '' : ' aria-pressed="' + on + '"') + ' aria-label="' + esc(tip.title) + '"' + tipAttr(tip) + '>' + ic(icon) + '</button>';
   return '<div class="tools">' +
-    (ui.screen === 'battle' || ui.screen === 'codex' ? '' : '<button class="tool" data-act="codex" aria-label="Encyclopedia" title="Encyclopedia">' + ic('book') + '</button>') +
-    '<button class="tool" data-act="help" aria-label="Standing orders" title="Standing orders">' + ic('scroll') + '</button>' +
-    '<button class="tool' + (ui.music ? '' : ' off') + '" data-act="music" aria-pressed="' + ui.music + '" aria-label="Music" title="Music">' + ic('note') + '</button>' +
-    '<button class="tool' + (ui.sound ? '' : ' off') + '" data-act="sound" aria-pressed="' + ui.sound + '" aria-label="Sound" title="Sound">' + ic('speaker') + '</button></div>';
+    (ui.screen === 'battle' || ui.screen === 'codex' ? '' : tool('codex', 'book', { title: 'Encyclopedia', lines: ['The nations, units, foes, lands, command and goods of the game.'] })) +
+    tool('help', 'scroll', { title: 'Standing orders', lines: ['How the camp, the road and the fight are played.'] }) +
+    tool('music', 'note', { title: 'Music', lines: ['Lute, viol and recorder, made as you play. Click to switch it on or off.'] }, ui.music) +
+    tool('sound', 'speaker', { title: 'Sound', lines: ['The shots, the blows and the drum of a fight. Click to switch it on or off.'] }, ui.sound) + '</div>';
+}
+/** What is going wrong in the camp, in a few words each: no men to drive the train, a chest that will not cover the pay, bread that will not last the night. The notes on the ledger and the alerts over the scene both tell it. */
+interface Trouble { kind: 'men' | 'pay' | 'bread'; icon: IconName; text: string }
+function troubles(g: Campaign): Trouble[] {
+  const out: Trouble[] = [], nobody = !g.roster.length;
+  if (nobody) out.push({ kind: 'men', icon: 'men', text: 'Nobody to drive the train: hire at the market' });
+  else if (g.thalers < wagesDue(g)) out.push({ kind: 'pay', icon: 'coin', text: 'The pay chest is short: ' + wagesDue(g) + ' due, ' + g.thalers + ' in hand' });
+  if (!nobody && g.bread < breadDue(g)) out.push({ kind: 'bread', icon: 'loaf', text: 'Not enough bread for tomorrow' });
+  return out;
+}
+/** The note on each figure of the ledger, and on the road's progress: what it is, what it comes to, and where it is going wrong. */
+interface LedgerTips { cargo: Tip; thalers: Tip; bread: Tip; powder: Tip; renown: Tip; due: Tip; trip: Tip }
+function ledgerTips(g: Campaign): LedgerTips {
+  const q = questOf(g), to = PLACES[q.to].name, chest = q.kind === 'commission', need = breadDue(g), pay = wagesDue(g), left = daysLeft(g), togo = daysToGo(g), next = nextSlotRenown(g);
+  const said = (k: Trouble['kind']) => troubles(g).filter(t => t.kind === k).map(t => t.text);
+  return {
+    cargo: chest ?
+      { title: 'The Crown’s chest', lines: [g.cargo + ' of the ' + g.cargo0 + ' thalers it was handed over with are still in it.', 'Handed over at ' + to + ' today it would earn ' + cargoValue(g) + ' thalers: the fee, less what is missing.'] } :
+      { title: cap1(q.cargo.many), lines: [g.cargo + ' of the ' + g.cargo0 + ' that set out are still with the train.', 'Sold at ' + to + ' today, ' + (g.cargo === 1 ? 'it' : 'they') + ' would fetch ' + cargoValue(g) + ' thalers.'] },
+    thalers: { title: 'Thalers', lines: [g.thalers + ' in the purse.', pay ? pay + ' of pay fall due on ' + dateText(g.payDue, true) + ', in ' + plural(Math.max(0, g.payDue - g.date), 'day', 'days') + '.' : 'Nobody is on the roll, so no pay falls due.',
+      'Pay is counted out every thirty days, and men who go unpaid lose heart.'], warns: said('pay') },
+    bread: { title: 'Bread', lines: [need ? plural(g.bread, 'loaf', 'loaves') + '. The company eats ' + need + ' a day' + (g.bread >= need ? ': enough for ' + plural(Math.floor(g.bread / need), 'day', 'days') + '.' : '.') : plural(g.bread, 'loaf', 'loaves') + ', and nobody on the roll to eat them.', 'Ten loaves cost ' + breadPrice(g) + ' thalers at a market.'], warns: said('bread') },
+    powder: { title: 'Powder', lines: [plural(g.powder, 'charge', 'charges') + ' of powder. A musket spends one a shot.', 'Ten charges cost ' + powderPrice(g) + ' thalers at a market.'], warns: !g.powder && g.roster.some(s => s.cls === 'shot') ? ['No powder: the muskets would fight with the butt'] : [] },
+    renown: { title: 'Renown', lines: [g.renown + ': the name the company has made. A fight won or a cargo delivered adds to it, and a defeat in paid work takes some away.',
+      'It brings better men to the market, better pay for paid work, and places for officers' + (next != null ? '; the next place opens at ' + next + ' renown.' : '.')] },
+    due: { title: left >= 0 ? 'Days to the deadline' : 'Past the deadline', lines: [left >= 0 ? plural(left, 'day', 'days') + ' until ' + q.until + '.' : plural(-left, 'day', 'days') + ' late. Every day late takes 2% off the price, down to half.',
+      ...(togo < Infinity ? [cap1(to) + ' is ' + plural(togo, 'day', 'days') + ' away by the shortest road.'] : [])], warns: left >= 0 && togo < Infinity && left < togo ? ['Marching steadily without a halt, the company would arrive ' + plural(togo - left, 'day', 'days') + ' late'] : [] },
+    trip: { title: 'The road to ' + to, lines: ['About ' + Math.round(100 * progress(g)) + '% of the way from ' + cap1(PLACES[q.from].name) + ', as the crow flies.', 'Opens the map, where a course is set.'] }
+  };
 }
 function barHTML() {
   let h = '<header class="bar"><h1 class="logo">Sotnia</h1>';
   if (!G || ui.screen === 'title' || ui.screen === 'captain' || ui.screen === 'end' || ui.screen === 'codex') return h + '<p class="strap">A free company · Anno 1633</p><span class="grow"></span>' + toolsHTML() + '</header>';
-  const q = questOf(G), left = daysLeft(G), done = Math.round(100 * progress(G)), camp = ui.screen === 'camp';
+  const g = G, q = questOf(g), left = daysLeft(g), done = Math.round(100 * progress(g)), camp = ui.screen === 'camp', tips = ledgerTips(g), bad = troubles(g).map(t => t.kind);
   const dl = (k: keyof Ledger) => { const v = ui.deltas && ui.deltas[k]; return v ? '<i class="delta ' + (v > 0 ? 'up' : 'down') + '" aria-hidden="true">' + (v > 0 ? '+' : '−') + Math.abs(v) + '</i>' : ''; };
-  const due = left >= 0 ? plural(left, 'day', 'days') + ' until ' + q.until : plural(-left, 'day', 'days') + ' late: the price is falling';
-  const trip = '<span>' + esc(cap1(PLACES[q.from].name)) + '</span><span class="track"><i style="width:' + done + '%"></i><b style="left:' + done + '%"></b></span><span>' + esc(PLACES[q.to].name) + '</span>';
-  h += '<div class="where"><b>' + esc(cap1(here(G).name)) + '</b><span>' + dateText(G.date) + '</span></div>' +
-    (camp ? '<button class="trip" data-act="tab" data-k="map" aria-label="' + esc('The map: ' + done + '% of the way to ' + PLACES[q.to].name) + '">' + trip + '</button>' : '<span class="trip" aria-hidden="true">' + trip + '</span>') +
-    '<span class="stat due' + (left < 0 ? ' late' : left < daysToGo(G) ? ' tight' : '') + '" title="' + esc(due) + '">' + ic('hourglass') + '<b>' + Math.abs(left) + '</b><small>' + (left < 0 ? 'late' : 'days') + '</small>' + sr(' ' + esc(due)) + '</span>' +
-    '<span class="grow"></span><div class="stats" aria-label="The company ledger">' +
-    '<span class="stat" title="' + esc(cap1(q.cargo.unit)) + '">' + ic(q.kind === 'commission' ? 'coin' : 'barrel') + '<b>' + G.cargo + '</b>' + dl('cargo') + '<small>of ' + G.cargo0 + '</small>' + sr(' ' + esc(q.cargo.unit)) + '</span>' +
-    '<span class="stat" title="Thalers: ' + wagesDue(G) + ' of pay fall due on ' + dateText(G.payDue, true) + '">' + ic('coin') + '<b>' + G.thalers + '</b>' + dl('thalers') + '<small>pay ' + wagesDue(G) + '</small>' + sr(' thalers, ' + wagesDue(G) + ' of pay due on ' + dateText(G.payDue, true)) + '</span>' +
-    '<span class="stat" title="Bread: the company eats ' + breadDue(G) + ' a day">' + ic('loaf') + '<b>' + G.bread + '</b>' + dl('bread') + '<small>−' + breadDue(G) + ' a day</small>' + sr(' bread') + '</span>' +
-    '<span class="stat" title="Charges of powder">' + ic('horn') + '<b>' + G.powder + '</b>' + dl('powder') + sr(' charges of powder') + '</span>' +
-    '<span class="stat" title="Renown">' + ic('mace') + '<b>' + G.renown + '</b>' + dl('renown') + sr(' renown') + '</span></div>';
+  // A figure of the ledger is its icon and its number, and nothing else on the bar: the note on it says the rest, to the pointer and to a reader of the screen alike.
+  const fig = (cls: string, icon: IconName, value: number, tip: Tip, more = '') => '<button type="button" class="stat' + cls + '" aria-label="' + esc(tipText(tip)) + '"' + tipAttr(tip) + '>' + ic(icon) + '<b>' + value + '</b>' + more + '</button>';
+  const trip = '<span class="track"><i style="width:' + done + '%"></i><b style="left:' + done + '%"></b></span><span class="to">' + esc(cap1(PLACES[q.to].name)) + '</span>';
+  h += '<div class="where"><b>' + esc(cap1(here(g).name)) + '</b><span>' + dateText(g.date) + '</span></div>' +
+    (camp ? '<button class="trip" data-act="panel" data-k="map" aria-label="' + esc('The map: ' + done + '% of the way to ' + PLACES[q.to].name) + '"' + tipAttr(tips.trip) + '>' + trip + '</button>' : '<span class="trip" aria-hidden="true">' + trip + '</span>') +
+    fig(' due' + (left < 0 ? ' late' : left < daysToGo(g) ? ' tight' : ''), 'hourglass', Math.abs(left), tips.due, '<small>' + (left < 0 ? 'late' : 'days') + '</small>') +
+    '<span class="grow"></span><div class="stats" role="group" aria-label="The company ledger">' +
+    fig('', q.kind === 'commission' ? 'coin' : 'barrel', g.cargo, tips.cargo, dl('cargo') + '<small>/' + g.cargo0 + '</small>') +
+    fig(bad.includes('pay') ? ' short' : '', 'coin', g.thalers, tips.thalers, dl('thalers')) +
+    fig(bad.includes('bread') ? ' short' : '', 'loaf', g.bread, tips.bread, dl('bread')) +
+    fig(tips.powder.warns!.length ? ' short' : '', 'horn', g.powder, tips.powder, dl('powder')) +
+    fig('', 'mace', g.renown, tips.renown, dl('renown')) + '</div>';
   return h + toolsHTML() + '</header>';
 }
 
@@ -339,7 +378,7 @@ const PANELS: Record<TabId, PanelInfo> = {
 };
 const PANEL_ORDER: readonly TabId[] = ['map', 'roll', 'market', 'work', 'command', 'log'];
 const panelsHere = () => PANEL_ORDER.filter(k => !PANELS[k].need || has(G!, PANELS[k].need!));
-/** How many things a page holds, for the dock and the scene to say. */
+/** How many things a page holds, for the scene (and the row under it) to say. */
 const panelCount = (k: TabId): number | null => k === 'roll' ? G!.roster.length : k === 'market' ? (has(G!, 'recruits') ? G!.recruits.length : null) : k === 'work' ? G!.contracts.length : k === 'command' ? officersOf(G!).length : null;
 /** The things in the camp that open a page: where each stands in the scene (x, y, width, height, in scene pixels) and what it is for. */
 interface Hotspot { k: TabId; what: string; rect: readonly [x: number, y: number, w: number, h: number] }
@@ -370,16 +409,36 @@ function newsRibbon() {
   return '<aside class="dawn" aria-label="On the road"><ul>' + news.slice(-5).map(n => '<li>' + ic('lantern') + '<span>' + esc(n.t) + (n.k > 1 ? ' <small>(' + n.k + ' days)</small>' : '') + '</span></li>').join('') + '</ul>' +
     '<button class="x" data-act="newsClose" aria-label="Put the news away">' + ic('x') + '</button></aside>';
 }
+/** What the fire is for, as its note says: a day goes by, and each man does what he was ordered. */
+function restTip(): Tip {
+  const nobody = !G!.roster.length, need = breadDue(G!);
+  return { title: nobody ? 'Wait a day' : 'Rest a day', lines: [nobody ? 'Nobody is under the banner, but a day goes by all the same.' : 'Each man drills, rests or forages, as ordered.', need ? 'The company eats ' + need + ' loaves of bread.' : 'New faces may come.'] };
+}
+/** Trouble in the camp, in a few words each over the scene (the ledger's notes tell it too). Where the market has the answer, it is a button to the market. None at the end of the road, where there is nothing left to feed. */
+function campAlerts() {
+  const g = G!, shop = has(g, 'market'), list = atEnd(g) ? [] : troubles(g);
+  if (!list.length) return '';
+  return '<div class="alerts">' + list.map(t => {
+    const inner = ic(t.icon) + '<span>' + esc(t.text) + '</span>';
+    return shop ? '<button class="alert" data-act="panel" data-k="market">' + inner + '</button>' : '<span class="alert">' + inner + '</span>';
+  }).join('') + '</div>';
+}
+/** At the end of the road, what the cargo fetches, and the button that ends the journey with it. */
+function deliverBlock() {
+  const g = G!, q = questOf(g), late = lateDays(g);
+  return '<div class="deliver"><button class="btn go big" data-act="deliver">' + ic(q.kind === 'commission' ? 'coin' : 'scales') + (q.kind === 'commission' ? 'Hand over the chest' : 'Sell the ' + esc(q.cargo.many)) + ' · ' + cargoValue(g) + ' thalers</button>' +
+    (late ? '<span class="warn">' + ic('hourglass') + plural(late, 'day', 'days') + ' late: the price has fallen</span>' : '<span class="meta">' + ic('check') + 'In time</span>') + '</div>';
+}
 function campScene() {
-  const g = G!, plan = campPlan(g), q = questOf(g), here0 = panelsHere();
+  const g = G!, plan = campPlan(g), q = questOf(g), here0 = panelsHere(), rest = restTip();
   const label = 'The company in camp at ' + here(g).name + ': ' + (plan.length ? plan.map(p => p.s.name + (p.k === 'abed' ? ' abed' : p.k === 'rest' ? ' by the fire' : p.k === 'drill' ? ' at drill' : ' foraging')).join(', ') : 'nobody under the banner') + '. The ' + q.cargo.many + ' wait by the tents.';
-  let h = '<div class="scene"><canvas id="camp" role="img" aria-label="' + esc(label) + '"></canvas>' + newsRibbon();
+  let h = '<div class="scene' + (atEnd(g) ? ' sale' : '') + '"><canvas id="camp" role="img" aria-label="' + esc(label) + '"></canvas>' + newsRibbon();
   for (const s of HOTSPOTS) {
     if (!here0.includes(s.k)) continue;
     const P = PANELS[s.k], n = panelCount(s.k);
-    h += '<button class="spot" data-act="panel" data-k="' + s.k + '" style="' + sceneRect(...s.rect) + '" aria-label="' + esc(P.title + ': ' + s.what) + '"><span class="plate">' + ic(P.icon) + esc(P.short) + (n ? '<b>' + n + '</b>' : '') + '</span></button>';
+    h += '<button class="spot" data-act="panel" data-k="' + s.k + '" style="' + sceneRect(...s.rect) + '" aria-label="' + esc(P.title + ': ' + s.what) + '"' + tipAttr({ title: P.title, lines: [cap1(s.what) + '.'] }) + '><span class="plate">' + ic(P.icon) + esc(P.short) + (n ? '<b>' + n + '</b>' : '') + '</span></button>';
   }
-  h += '<button class="spot fire" data-act="halt" style="' + sceneRect(147, 82, 28, 28) + '" aria-label="Rest a day by the fire"><span class="plate">' + ic('moon') + 'Rest a day</span></button>';
+  h += '<button class="spot fire" data-act="halt" style="' + sceneRect(147, 82, 28, 28) + '" aria-label="' + esc(rest.title + ' by the fire') + '"' + tipAttr(rest) + '><span class="plate">' + ic('moon') + esc(rest.title) + '</span></button>';
   // the people of the command stand where the camp puts them; a click on one opens his page
   const person = (post: CommandView, slot: CampSlot, name: string, what: string) => '<button class="spot person" data-act="panel" data-k="command" data-post="' + post + '" style="' + sceneRect(slot[0] - 9, slot[1] - 31, 18, 32) + '" aria-label="' + esc(what + ', ' + name) + '"><span class="plate">' + esc(what) + '</span></button>';
   h += person('captain', CAMP.captain, g.captain.name, 'Captain');
@@ -391,7 +450,7 @@ function campScene() {
       '<button class="hit" data-act="sel" data-id="' + p.id + '" aria-pressed="' + on + '" aria-label="' + esc(p.s.name + ', ' + CLS[p.s.cls].name.toLowerCase() + (p.k === 'abed' ? ', abed' : ', ' + ORDER[p.k].toLowerCase())) + '">' +
       '<span class="plate">' + ic(p.k === 'abed' ? 'cross' : p.k === 'rest' ? 'moon' : p.k) + esc(p.s.name.split(' ')[0]) + (p.s.promos ? ic('star', 'Promotion earned') : '') + '</span></button>' + (on ? camperPop(p.s) : '') + '</div>';
   }
-  return h + '</div>';
+  return h + campAlerts() + (atEnd(g) ? deliverBlock() : '') + '</div>';
 }
 function courseBlock(off: string) {
   const q = questOf(G!), days = searchRoutes(G!).best;
@@ -400,7 +459,7 @@ function courseBlock(off: string) {
   if (!(places as (PlaceId | null)[]).includes(ui.course)) ui.course = places[0];
   const route = routeTo(G!, ui.course!)!, steady = route.reduce((n, r) => n + r.days, 0), forced = route.reduce((n, r) => n + r.forced, 0);
   const need = breadDue(G!), fed = need ? Math.floor(G!.bread / need) : 99, md = courseMarketDays(route, false);
-  let h = '<div class="course"><label for="course-to">' + ic('flag') + 'Course</label><select id="course-to" data-act="course-pick">' + places.map(id => '<option value="' + id + '"' + (id === ui.course ? ' selected' : '') + '>' +
+  let h = '<div class="course"><label class="sr" for="course-to">Course</label><select id="course-to" data-act="course-pick">' + places.map(id => '<option value="' + id + '"' + (id === ui.course ? ' selected' : '') + '>' +
     esc(cap1(PLACES[id].name)) + (id === q.to ? ', the destination' : '') + ' · ' + plural(days[id]!, 'day', 'days') + '</option>').join('') + '</select>' +
     '<div class="go-row"><button class="btn go" data-act="course"' + off + '>' + ic('boot') + 'March · ' + plural(steady, 'day', 'days') + '</button>' +
     (forced < steady ? '<button class="btn" data-act="course" data-f="1"' + off + ' title="Forced: sooner, but it costs cargo and wears the men">' + ic('forced') + plural(forced, 'day', 'days') + sr(' forced march') + '</button>' : '') + '</div>' +
@@ -408,40 +467,24 @@ function courseBlock(off: string) {
   if (need && fed < md) h += '<span class="warn">' + ic('warn') + 'Bread for ' + plural(fed, 'day', 'days') + '; first market ' + md + ' days on</span>';
   return h + '</div>';
 }
-/** The company's pages as a column of buttons beside the scene (along the foot of it, where there is no room), for the keyboard and for the phone as much as for the mouse. */
+/**
+ * The company's pages, and rest, as a row of buttons under the scene. It is for a screen too small to click the things in the camp on (a phone), and the
+ * stylesheet shows it only there: wherever the scene is big enough, its things are the way in, and this would only say the same again.
+ */
 function menuHTML() {
   return '<nav class="menu" aria-label="The company’s business">' + panelsHere().map(k => {
     const P = PANELS[k], n = panelCount(k);
-    return '<button data-act="panel" data-k="' + k + '" aria-haspopup="dialog" aria-expanded="' + (ui.panel === k) + '" title="' + esc(P.title) + '">' + ic(P.icon) + '<span>' + P.short + '</span>' + (n ? '<i class="count">' + n + '</i>' : '') + '</button>';
-  }).join('') + '</nav>';
-}
-function dockHTML() {
-  const q = questOf(G!), nobody = !G!.roster.length, off = nobody ? ' disabled' : '', need = breadDue(G!);
-  const t: Record<CampSpot, number> = { drill: 0, rest: 0, forage: 0, abed: 0 };
-  G!.roster.forEach(s => t[s.wound ? 'abed' : s.order]++);
-  let h = '<div class="dock"><div class="doing"><div class="tally"><span class="k">Tonight</span><span class="chips">' +
-    ([['drill', 'drill', 'at drill'], ['rest', 'moon', 'resting'], ['forage', 'forage', 'foraging'], ['abed', 'cross', 'abed']] satisfies [CampSpot, IconName, string][]).map(x => '<span class="tchip" title="' + x[2] + '">' + ic(x[1]) + '<b>' + t[x[0]] + '</b>' + sr(' ' + x[2]) + '</span>').join('') +
-    '</span><span class="meta">' + ic('coin') + wagesDue(G!) + ' pay on ' + dateText(G!.payDue, true) + '</span></div>';
-  if (atEnd(G!)) {
-    return h + '<div class="deliver"><button class="btn go big" data-act="deliver">' + ic(q.kind === 'commission' ? 'coin' : 'scales') + (q.kind === 'commission' ? 'Hand over the chest' : 'Sell the ' + esc(q.cargo.many)) + ' · ' + cargoValue(G!) + ' thalers</button>' +
-      (lateDays(G!) ? '<span class="warn">' + ic('hourglass') + plural(lateDays(G!), 'day', 'days') + ' late: the price has fallen</span>' : '<span class="meta">' + ic('check') + 'In time</span>') + '</div></div></div>';
-  }
-  h += '<button class="act" data-act="halt" title="Each man drills, rests or forages, as ordered">' + ic('moon') + '<span>' + (nobody ? 'Wait a day' : 'Rest a day') + '</span><small>' + (need ? '−' + need + ' ' + ic('loaf') : 'new faces may come') + '</small></button>';
-  h += courseBlock(off);
-  const warns: IconText[] = [];
-  if (nobody) warns.push(['men', 'Nobody to drive the train: hire at the market']);
-  else if (G!.thalers < wagesDue(G!)) warns.push(['coin', 'The pay chest is short: ' + wagesDue(G!) + ' due, ' + G!.thalers + ' in hand']);
-  if (!nobody && G!.bread < need) warns.push(['loaf', 'Not enough bread for tomorrow']);
-  if (warns.length) h += '<div class="warns">' + warns.map(w => '<span class="warn">' + ic(w[0]) + esc(w[1]) + '</span>').join('') + '</div>';
-  return h + '</div></div>';
+    return '<button data-act="panel" data-k="' + k + '" aria-haspopup="dialog" aria-expanded="' + (ui.panel === k) + '">' + ic(P.icon) + '<span>' + P.short + '</span>' + (n ? '<i class="count">' + n + '</i>' : '') + '</button>';
+  }).join('') + '<button data-act="halt">' + ic('moon') + '<span>' + restTip().title + '</span></button></nav>';
 }
 function mapPanel() {
   const q = questOf(G!), T = transportOf(G!), need = breadDue(G!), fed = need ? Math.floor(G!.bread / need) : 99, to = PLACES[q.to], togo = daysToGo(G!), left = daysLeft(G!);
   let h = '<div class="mapgrid"><div class="mapwrap"><div class="plate mapplate"><canvas id="map" role="img" aria-label="' + esc('Map: the company is at ' + here(G!).name + ', bound for ' + to.name) + '"></canvas></div>' +
     '<p class="caption">' + esc(q.title) + ': ' + esc(cap1(PLACES[q.from].name)) + ' to ' + esc(to.name) + '. Red is the road so far, black the roads from here. Pick a place to set the course.</p></div>';
   if (atEnd(G!)) return h + '</div>';
-  const nobody = !G!.roster.length, off = nobody ? ' disabled' : '';
-  h += '<div class="roads">' + sectHTML('One leg at a time', esc(T.name) + (need ? ' · bread for ' + plural(fed, 'day', 'days') : '')) + '<ul>';
+  const nobody = !G!.roster.length, off = nobody ? ' disabled' : '', course = courseBlock(off);
+  h += '<div class="roads">' + (course ? '<section>' + sectHTML('Set a course', 'leg after leg, until something needs you') + course + '</section>' : '') + '<section>' +
+    sectHTML('One leg at a time', esc(T.name) + (need ? ' · bread for ' + plural(fed, 'day', 'days') : '')) + '<ul>';
   h += roadsFrom(G!).map(r => {
     const P2 = PLACES[r.to], rest = daysToGo(G!, r.to), shop = (SERVICES[P2.kind] || {}).market || r.to === q.to, md = shop ? r.days : marketDays(G!, r);
     return '<li class="road"><div class="what"><b>' + esc(cap1(P2.name)) + '</b><span class="chips">' +
@@ -451,7 +494,7 @@ function mapPanel() {
       (need && fed < md ? '<span class="warn">' + ic('loaf') + 'Bread for ' + plural(fed, 'day', 'days') + (shop ? ' of the ' + r.days : '; market ' + md + ' days on') + '</span>' : '') + '</div>' +
       '<div class="go2"><button class="btn sm" data-act="march" data-r="' + r.i + '"' + off + '>' + ic('boot') + plural(r.days, 'day', 'days') + sr(' march to ' + esc(P2.name)) + '</button>' +
       (r.forced < r.days ? '<button class="btn sm ghost" data-act="march" data-r="' + r.i + '" data-f="1"' + off + ' title="Forced march">' + ic('forced') + plural(r.forced, 'day', 'days') + sr(' forced march to ' + esc(P2.name)) + '</button>' : '') + '</div></li>';
-  }).join('') + '</ul><p class="note">' + ic('flag') + esc(to.name) + ': ' + plural(togo, 'day', 'days') + ' by the shortest road · ' + (left >= 0 ? plural(left, 'day', 'days') + ' left' : 'the date has passed') + '. Forced marches cost ' + esc(q.cargo.many) + ' and wear the men.</p></div>';
+  }).join('') + '</ul><p class="note">' + ic('flag') + esc(to.name) + ': ' + plural(togo, 'day', 'days') + ' by the shortest road · ' + (left >= 0 ? plural(left, 'day', 'days') + ' left' : 'the date has passed') + '. Forced marches cost ' + esc(q.cargo.many) + ' and wear the men.</p></section></div>';
   return h + '</div>';
 }
 function marketPanel() {
@@ -473,8 +516,8 @@ function panelBody(k: TabId) {
   if (k === 'command') return commandPanel();
   return '<ol class="log">' + G!.log.map(l => '<li><span class="d">' + (l.n != null ? dateText(l.n, true) : 'Day ' + l.d) + '</span><span>' + esc(l.t) + '</span></li>').join('') + '</ol>';
 }
-/** The camp: the scene, with everything in it that can be clicked, and the dock beneath with the day's orders. A page of the business opens over it (see panelHTML). */
-function campHTML() { return '<main class="hub">' + menuHTML() + '<section class="stage">' + campScene() + '</section>' + dockHTML() + '</main>'; }
+/** The camp: the scene, with everything in it that can be clicked, and, on a phone, a row of buttons under it (see menuHTML). A page of the business opens over it (see panelHTML). */
+function campHTML() { return '<main class="hub"><section class="stage">' + campScene() + '</section>' + menuHTML() + '</main>'; }
 /** The page open over the camp: a drawer under the bar, so that the ledger stays in view, with the page in it. */
 function panelHTML() {
   const k = ui.panel; if (!k || !G || ui.screen !== 'camp') return '';
@@ -684,8 +727,8 @@ function modalHTML() {
       choiceHTML(' data-act="payoff" data-k="coin"', 'Pay them out of your own purse', short ? [] : [['coin', '−' + c.payoff.coin, 'thalers'], ['check', 'whole', 'the cargo stays whole']], 'More than the company has: ' + c.payoff.coin + ' thalers.', short) + '</div>';
   } else {
     inner = '<h2 class="banner" id="mt">Standing orders</h2><div class="rules">' + ([
-      ['tent', 'The camp', 'Everything in the camp can be clicked. The tents, the wagon, the noticeboard, the signpost and the banner open the company’s business in a page over the camp, and Esc puts it away; pick a man to give him his order for the day; the fire rests a day. The same pages are the buttons beside the scene.'],
-      ['road', 'The road', 'A commission names a cargo, a destination and a day. Each road takes as many days as the distance needs at the pace of the cargo. A forced march gets there sooner, but costs cargo and wears the men down. Arriving late is never the end of it, but the price falls every day. Set a course to march several legs at once: the company keeps going until something needs you.'],
+      ['tent', 'The camp', 'Everything in the camp can be clicked. The tents, the wagon, the noticeboard, the signpost and the banner open the company’s business in a page over the camp, and Esc puts it away; pick a man to give him his order for the day; the fire rests a day. On a phone the same pages are the buttons under the scene. Rest the pointer on a figure in the bar (or tap it) to see what it comes to.'],
+      ['road', 'The road', 'A commission names a cargo, a destination and a day. Each road takes as many days as the distance needs at the pace of the cargo. A forced march gets there sooner, but costs cargo and wears the men down. Arriving late is never the end of it, but the price falls every day. Open the road at the signpost, and set a course there to march several legs at once: the company keeps going until something needs you.'],
       ['men', 'The company', 'Every man eats a loaf a day, and wages fall due once a month. Unpaid or hungry men lose spirit, and men without spirit desert. Buy bread before empty country: there are no markets in the Wild Fields. A day in camp lets each man drill, rest or forage: you see where each one goes.'],
       ['warn', 'Trouble on the road', 'Raiders fall on the train. Fight them, or pay them off in cargo or coin. Beaten, or sounding the retreat, costs cargo. Towns post paid work; a fight there takes the day.'],
       ['swords', 'The three arms', 'Pikemen hold a line and keep sabres off. Musketeers kill from afar, burn powder, and die quickly in a brawl. Sabreurs are fast and hunt musketeers.'],
@@ -715,6 +758,7 @@ function renderPanel() {
 /** The height of the bar, which the page open over the camp starts under (see .pveil). */
 function fitBar() { const bar = $('.bar'); if (bar) document.documentElement.style.setProperty('--bar-h', bar.offsetHeight + 'px'); }
 function render() {
+  hideTip(); // a note belongs to a thing on the screen, which is about to be drawn afresh
   const a = document.activeElement as HTMLElement | null, key = a && a.dataset && a.dataset.act ? '[data-act="' + a.dataset.act + '"]' + ['id', 'k', 'o', 's', 'i', 'v', 'r', 'f', 'n', 'q', 'post'].map(k => (a.dataset[k] != null ? '[data-' + k + '="' + a.dataset[k] + '"]' : '')).join('') : null;
   if (ui.panel && (!G || (ui.screen === 'camp' && !panelsHere().includes(ui.panel)))) ui.panel = null; // a page stays open through the muster, and is put away where there is no such business
   let h = barHTML();
