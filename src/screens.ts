@@ -59,13 +59,14 @@ interface UiState {
   rep: BattleReport | null; // the count of the fight just fought
   modal: Modal | null;
   news: string[] | null; // what the last march or day in camp reported
-  sound: boolean; music: boolean;
+  sound: boolean; music: boolean; // the two switches in the bar, which are kept in localStorage
   view: FieldView | null; // the picture of the fight, or of the title's skirmish
   camp: CampView | null; campPos: CampPositions; // the picture of the camp, and where its men stand in it
   demo: Battle | null; // the skirmish on the title screen
   overT: number; verdict: boolean; // seconds since the fight was decided, and whether its verdict is up
 }
-// The campaign in play: null until one is raised or continued, so on the title screen.
+// The campaign in play: null until one is raised or continued, so on the title screen. The screens after it are built only with a
+// campaign in hand, which is why they write G!; save(), barHTML() and the frame loop are what look.
 let G: Campaign | null = null;
 const ui: UiState = { screen: 'title', tab: 'market', course: null, open: null, c: null, pick: [], stance: null, odds: null, b: null, speed: 1, rep: null, modal: null, news: null, sound: true, music: true, view: null, camp: null, campPos: {}, demo: null, overT: 0, verdict: false };
 

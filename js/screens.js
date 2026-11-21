@@ -22,7 +22,8 @@ const STAFF_FX = {
 const LOOK = { pike: 'woad', shot: 'steel', sabre: 'madder' };
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 const roman = (n) => ROMAN[n] || String(n);
-// The campaign in play: null until one is raised or continued, so on the title screen.
+// The campaign in play: null until one is raised or continued, so on the title screen. The screens after it are built only with a
+// campaign in hand, which is why they write G!; save(), barHTML() and the frame loop are what look.
 let G = null;
 const ui = { screen: 'title', tab: 'market', course: null, open: null, c: null, pick: [], stance: null, odds: null, b: null, speed: 1, rep: null, modal: null, news: null, sound: true, music: true, view: null, camp: null, campPos: {}, demo: null, overT: 0, verdict: false };
 /* ---------- saving ---------- */
