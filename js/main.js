@@ -164,6 +164,19 @@ function act(a, d) {
             ui.captains = null;
             ui.modal = null;
             break;
+        // the training's guide (src/training.ts): a step that is read goes on, a step can be skipped, the guide folded to its heading or sent away
+        case 'trainNext':
+        case 'trainSkip':
+            if (G)
+                trainingNext(G);
+            break;
+        case 'trainLeave':
+            if (G)
+                trainingLeave(G);
+            break;
+        case 'trainMin':
+            ui.coachMin = !ui.coachMin;
+            break;
         case 'continue': {
             const s = loadSave();
             if (!s)
@@ -628,6 +641,7 @@ document.addEventListener('keydown', e => {
 window.addEventListener('resize', () => {
     hideTip();
     fitBar();
+    fitCoach(true);
     if (ui.view)
         fitView(ui.view);
     if (ui.screen === 'camp' && G) {
@@ -730,6 +744,7 @@ function start(data) {
             ui.codex = link[1];
     }
     render();
+    watchCoach();
     requestAnimationFrame(frame);
     if (document.fonts && document.fonts.load)
         document.fonts.load("12px 'Alegreya SC'").catch(() => { });

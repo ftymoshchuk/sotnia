@@ -95,7 +95,7 @@ test('a meter says its fill as a percentage the stylesheet can round to a whole 
 /* ---------- the stylesheet ---------- */
 const tokens = (() => { const root = css.slice(css.indexOf(':root'), css.indexOf('}', css.indexOf(':root'))); return Object.fromEntries([...root.matchAll(/--([a-z0-9-]+):\s*([^;]+);/g)].map(m => [m[1], m[2].trim()])); })();
 // custom properties the page sets as it draws (see the styles built in src/screens.ts and src/encyclopedia.ts), and ones a rule sets for the things inside it
-const SET_ELSEWHERE = new Set(['n', 'nt', 'bar-h', 'v', 'rule']);
+const SET_ELSEWHERE = new Set(['n', 'nt', 'bar-h', 'coach-h', 'v', 'rule']);
 
 test('every colour and type token the stylesheet uses is one it defines', () => {
   const used = new Set([...css.matchAll(/var\(--([a-z0-9-]+)/g)].map(m => m[1]));

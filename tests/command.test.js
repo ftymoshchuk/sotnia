@@ -354,7 +354,7 @@ test('an order at a fair moment raises the company’s chance in a close fight, 
 
 /* ---------- the camp as the hub ---------- */
 const hub = () => {
-  const r = load(['core', 'journey', 'command', 'geo', 'art', 'figures', 'terrain', 'icons', 'screens', 'encyclopedia']);
+  const r = load(['core', 'journey', 'command', 'geo', 'art', 'figures', 'terrain', 'icons', 'screens', 'encyclopedia', 'training']);
   return r;
 };
 const at = (r, place) => r(`(() => { G = newGame('oxen', { type: 'hussar', name: 'Janos' }); G.at = ${JSON.stringify(place)}; G.thalers = 500; G.renown = 12; arrive(G); ui.screen = 'camp'; ui.panel = null; return 1; })()`);

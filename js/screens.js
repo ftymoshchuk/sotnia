@@ -19,7 +19,7 @@ const roman = (n) => ROMAN[n] || String(n);
 // The campaign in play: null until one is raised or continued, so on the title screen. The screens after it are built only with a
 // campaign in hand, which is why they write G!; save(), barHTML() and the frame loop are what look.
 let G = null;
-const ui = { screen: 'title', panel: null, scrollCard: null, course: null, open: null, c: null, pick: [], stance: null, odds: null, b: null, speed: 1, rep: null, modal: null, news: null, sound: true, music: true, view: null, camp: null, campPos: {}, demo: null, overT: 0, verdict: false, fresh: null, codex: 'nations', codexFrom: 'title', captains: null, post: 'captain', pass: null, deltas: null };
+const ui = { screen: 'title', panel: null, scrollCard: null, course: null, open: null, c: null, pick: [], stance: null, odds: null, b: null, speed: 1, rep: null, modal: null, news: null, sound: true, music: true, view: null, camp: null, campPos: {}, demo: null, overT: 0, verdict: false, fresh: null, codex: 'nations', codexFrom: 'title', captains: null, post: 'captain', pass: null, deltas: null, coachMin: false };
 /* ---------- saving ---------- */
 const SAVE = 'sotnia-save-3';
 function save() { try {
@@ -677,22 +677,26 @@ function questCard(q, button = true) {
     const days = daysToGo({ quest: q.id, at: q.from }), worth = q.kind === 'commission' ? q.fee : q.cargo.n * q.price;
     return cardHTML({
         cls: 'quest', attrs: ' aria-label="' + esc(q.title) + '"', title: esc(q.title), art: questArt(q), artCls: 'wide',
-        badges: '<span class="badge">' + (q.kind === 'commission' ? 'Commission' : 'Venture') + '</span><span class="badge gold right" title="Playing time">' + ic('hourglass') + esc(q.play) + '</span>',
+        badges: (q.training ? '<span class="badge moss">' + ic('book') + 'Training</span>' : '<span class="badge">' + (q.kind === 'commission' ? 'Commission' : 'Venture') + '</span>') + '<span class="badge gold right" title="Playing time">' + ic('hourglass') + esc(q.play) + '</span>',
         body: '<span class="route">' + esc(cap1(PLACES[q.from].name)) + ic('road') + esc(PLACES[q.to].name) + '</span><span class="who">' + esc(q.who) + '</span><span class="flavour">' + esc(q.text) + '</span>' +
             '<span class="strip">' + stat('calendar', dateText(q.start, true) + '–' + dateText(q.deadline, true), 'from and by') + stat('boot', '~' + days + 'd', 'on the road, ' + (q.deadline - q.start) + ' to spare them') + stat(q.kind === 'commission' ? 'coin' : 'barrel', q.cargo.n, q.cargo.unit) + stat('wagon', esc(TRANSPORT[q.transport].name), 'how it travels') + '</span>',
-        type: { look: 'ink', text: button ? '' : cap1(q.cargo.many), coin: worth, coinLabel: q.kind === 'commission' ? 'Fee, thalers' : 'Worth at the destination, thalers', end: button ? '<button class="btn go sm" data-act="captains" data-q="' + q.id + '">' + ic('flag') + 'Raise the banner</button>' : undefined }
+        type: { look: 'ink', text: button ? '' : cap1(q.cargo.many), coin: worth, coinLabel: q.kind === 'commission' ? 'Fee, thalers' : 'Worth at the destination, thalers',
+            end: button ? '<button class="btn go sm" data-act="captains" data-q="' + q.id + '">' + (q.training ? ic('book') + 'Begin the training' : ic('flag') + 'Raise the banner') + '</button>' : undefined }
     });
 }
 function titleHTML() {
-    const sv = loadSave();
+    const sv = loadSave(), lesson = QUESTS.find(q => q.training);
     return '<div class="hero"><div><div class="plate field"><canvas id="field" role="img" aria-label="A skirmish between two small companies"></canvas></div>' +
         '<p class="caption">A true likeness of how such affairs are settled: pike, shot and sabre.</p></div>' +
         '<div class="intro"><p class="lede">The German war is in its fifteenth year, and every prince between the Rhine and the Dnieper is hiring. You have a banner, a handful of men, and a long road.</p>' +
         '<ol class="how">' + [['flag', 'Take a commission', 'Carry a cargo across the lands of 1633 by the day it names.'], ['star', 'Choose a captain', 'Each has a gift, a flaw and an order to call once in a fight.'], ['road', 'Choose the road', 'March steady or forced; rest, drill and buy bread.'], ['men', 'Keep the roll', 'Hire pike, shot and sabre; engage officers in the towns; pay them; fight what falls on the train.']]
         .map(x => '<li><span class="disc">' + ic(x[0]) + '</span><span><b>' + x[1] + '</b>' + x[2] + '</span></li>').join('') + '</ol>' +
         '<div class="actions">' + (sv ? '<button class="btn go big" data-act="continue">' + ic('tent') + 'Continue: ' + esc(cap1(PLACES[sv.at].name)) + ', ' + dateText(sv.date, true) + '</button>' : '') +
+        (lesson ? '<button class="btn' + (sv ? '' : ' go') + ' big" data-act="captains" data-q="' + lesson.id + '">' + ic('book') + 'Begin the training</button>' : '') +
         '<button class="btn big" data-act="codex">' + ic('book') + 'Encyclopedia</button></div></div></div>' +
-        '<section>' + sectHTML('Commissions for the year 1633', 'choose one to raise the banner') + '<div class="cards wide quests">' + QUESTS.map(q => questCard(q)).join('') + '</div></section>';
+        // the training is offered apart from the commissions of the year, and first: a guide walks the captain through it (see src/training.ts)
+        (lesson ? '<section>' + sectHTML('Training', 'new to the company? begin here') + '<div class="lessonrow"><div class="cards wide quests">' + questCard(lesson) + '</div>' + trainingSyllabusHTML() + '</div></section>' : '') +
+        '<section>' + sectHTML('Commissions for the year 1633', 'choose one to raise the banner') + '<div class="cards wide quests">' + QUESTS.filter(q => !q.training).map(q => questCard(q)).join('') + '</div></section>';
 }
 /* ---------- dialogs ---------- */
 function choiceHTML(attrs, label, fx, hint, off) {
@@ -733,7 +737,8 @@ function modalHTML() {
             ['swords', 'The three arms', 'Pikemen hold a line and keep sabres off. Musketeers kill from afar, burn powder, and die quickly in a brawl. Sabreurs are fast and hunt musketeers.'],
             ['flag', 'The fight', 'One order to the whole company, changed at any moment: keys 1, 2 and 3, and space to pause. O calls the captain’s order, once. Men whose spirit breaks run. Sounding the retreat saves lives, but costs the fee, or in an ambush, cargo.'],
             ['cross', 'Afterwards', 'A man struck down either dies or lies abed for days. Promotions, better arms and a good surgeon keep them alive longer.'],
-            ['flag', 'Command', 'The captain you chose calls one order in every fight. In the towns you can engage officers for four posts, a surgeon, a drillmaster, a quartermaster and a chaplain, three to choose from for each; the places open with renown. Now and then someone asks to ride with the train.']
+            ['flag', 'Command', 'The captain you chose calls one order in every fight. In the towns you can engage officers for four posts, a surgeon, a drillmaster, a quartermaster and a chaplain, three to choose from for each; the places open with renown. Now and then someone asks to ride with the train.'],
+            ['book', 'Training', 'New to all this? The title offers a training commission: a short, quiet road, with a guide at the foot of the screen that says what to do next and rings the thing to do it with.']
         ].map(x => '<p>' + ic(x[0]) + '<span><b>' + x[1] + '.</b> ' + x[2] + '</span></p>').join('') +
             '<p class="arms" aria-label="Pike beats sabre, sabre beats shot, shot beats pike">' + ic('pike') + '<span>beats</span>' + ic('sabre') + '<span>beats</span>' + ic('shot') + '<span>beats</span>' + ic('pike') + '</p></div>' +
             '<div><button class="btn go" data-act="close">' + ic('check') + 'Understood</button></div>';
@@ -776,6 +781,7 @@ function render() {
     const a = document.activeElement, key = a && a.dataset && a.dataset.act ? '[data-act="' + a.dataset.act + '"]' + ['id', 'k', 'o', 's', 'i', 'v', 'r', 'f', 'n', 'q', 'post'].map(k => (a.dataset[k] != null ? '[data-' + k + '="' + a.dataset[k] + '"]' : '')).join('') : null;
     if (ui.panel && (!G || (ui.screen === 'camp' && !panelsHere().includes(ui.panel))))
         ui.panel = null; // a page stays open through the muster, and is put away where there is no such business
+    trainingAdvance(G); // the training's guide goes on if what it asked has been done, before the screen it speaks over is drawn
     let h = barHTML();
     if (ui.screen === 'title')
         h += titleHTML();
@@ -822,11 +828,13 @@ function render() {
     if (ui.screen === 'camp' || ui.screen === 'end')
         save();
     renderPanel();
+    renderCoach();
     renderModal();
     if (AC)
         setCue(cueForScreen());
+    // with a page open, the keyboard goes back to the page, or to the training's strip, which is outside it and stays in reach
     if (key && !ui.modal) {
-        const el = (ui.panel ? $('#panel') : document).querySelector(key);
+        const el = (ui.panel ? $('#panel') : document).querySelector(key) || $('#coach')?.querySelector(key);
         if (el && !el.disabled)
             el.focus({ preventScroll: true });
     }

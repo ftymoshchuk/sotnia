@@ -8,7 +8,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { load, plain } = require('./canvas-stub');
 
-const book = () => load(['core', 'journey', 'command', 'geo', 'art', 'figures', 'terrain', 'icons', 'screens', 'encyclopedia']);
+const book = () => load(['core', 'journey', 'command', 'geo', 'art', 'figures', 'terrain', 'icons', 'screens', 'encyclopedia', 'training']);
 const TABS = ['nations', 'units', 'foes', 'lands', 'command', 'goods'];
 const page = (r, tab) => { r(`ui.codex = ${JSON.stringify(tab)}`); return r('codexHTML()'); };
 // what a reader sees of a page: its words, one space apart

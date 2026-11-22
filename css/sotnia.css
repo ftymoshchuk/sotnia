@@ -39,7 +39,7 @@ img { max-width: 100%; }
 .btn:hover:not(:disabled), .card.buy:hover:not(:disabled), .card.stance:hover, .mini:hover:not(:disabled):not([aria-disabled="true"]), .tool:hover, .x:hover, .orders button:hover, .rail button:hover, .tabs button:hover, .seg button:hover:not(:disabled), .token:hover:not(:disabled), .choice:hover:not(:disabled), .trip:hover, .alert:hover { filter: brightness(1.22); }
 .btn:active:not(:disabled), .card.buy:active:not(:disabled), .mini:active:not(:disabled), .choice:active:not(:disabled) { transform: translateY(2px); }
 
-.sheet { min-height: 100%; margin: 0 auto; padding-bottom: 26px; display: flex; flex-direction: column; gap: 18px; }
+.sheet { min-height: 100%; margin: 0 auto; padding-bottom: calc(26px + var(--coach-h, 0px)); display: flex; flex-direction: column; gap: 18px; }
 .sheet > :not(.bar) { width: min(100% - 2 * var(--gutter), 1240px); margin-inline: auto; }
 
 /* ---------- the bar: one thin line under it, a wordmark, the place, the road, the ledger, the tools ---------- */
@@ -298,7 +298,7 @@ button.alert { cursor: pointer; }
 .deliver { display: grid; justify-items: center; gap: 8px; padding-top: 10px; line-height: 1.2; }
 .deliver .warn, .deliver .meta { padding: 3px 10px; background: var(--s1); box-shadow: 0 -2px 0 var(--s0), 0 2px 0 var(--s0), -2px 0 0 var(--s0), 2px 0 0 var(--s0); }
 @media (min-width: 880px) and (min-height: 600px) {
-  body.hubmode .sheet { height: 100dvh; min-height: 0; padding-bottom: 12px; gap: 12px; }
+  body.hubmode .sheet { height: 100dvh; min-height: 0; padding-bottom: calc(12px + var(--coach-h, 0px)); gap: 12px; }
   body.hubmode .sheet > .hub { width: min(100% - 2 * var(--gutter), 1800px); }
   .hub { display: grid; grid-template-rows: minmax(0, 1fr); }
   .stage { min-height: 0; container-type: size; display: grid; place-items: center; }
@@ -347,7 +347,7 @@ button.alert { cursor: pointer; }
 .dawn .x { width: 26px; height: 26px; flex: none; }
 .empty-card .line { padding: 10px 6px; }
 body.passing .spot, body.passing .camper .plate { visibility: hidden; }
-.passveil { position: fixed; inset: 0; z-index: 40; cursor: progress; display: grid; align-items: end; justify-items: center; padding-bottom: 7vh; }
+.passveil { position: fixed; inset: 0; z-index: 40; cursor: progress; display: grid; align-items: end; justify-items: center; padding-bottom: calc(7vh + var(--coach-h, 0px)); }
 .passtag { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: var(--s1); box-shadow: 0 -2px 0 var(--br1), 0 2px 0 var(--br1), -2px 0 0 var(--br1), 2px 0 0 var(--br1); color: var(--b4); font: 16px/1 var(--caps); letter-spacing: .1em; animation: tagIn .4s steps(4) both; }
 .passtag small { font: italic 13px/1 var(--body); letter-spacing: 0; color: var(--b2); }
 @keyframes tagIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
@@ -363,7 +363,7 @@ body.passing .spot, body.passing .camper .plate { visibility: hidden; }
 .roads { display: grid; gap: 22px; align-content: start; }
 .x { width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; box-shadow: 0 -2px 0 var(--br3), 0 2px 0 var(--br3), -2px 0 0 var(--br3), 2px 0 0 var(--br3); cursor: pointer; }
 /* a page of the company's business, open over the camp and under the bar */
-.pveil { position: fixed; left: 0; right: 0; bottom: 0; top: var(--bar-h, 0px); z-index: 18; display: grid; place-items: center; padding: 16px var(--gutter) 18px; background: repeating-conic-gradient(var(--s0) 0 25%, transparent 0 50%) 0 0 / 4px 4px, repeating-conic-gradient(var(--s0) 0 25%, transparent 0 50%) 2px 2px / 4px 4px; }
+.pveil { position: fixed; left: 0; right: 0; bottom: var(--coach-h, 0px); top: var(--bar-h, 0px); z-index: 18; display: grid; place-items: center; padding: 16px var(--gutter) 18px; background: repeating-conic-gradient(var(--s0) 0 25%, transparent 0 50%) 0 0 / 4px 4px, repeating-conic-gradient(var(--s0) 0 25%, transparent 0 50%) 2px 2px / 4px 4px; }
 .drawer { width: min(1180px, 100%); max-height: 100%; display: flex; flex-direction: column; background: var(--s1) url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAACfUlEQVR4nO2dTU8CMRCGq4FsVsUQE7lx9f//Lg+GiHFDOOjBmGDDYmfp7DvTeZ8zlMJDpx/Tbm/u++7r6fEuDYdj0mA4HFPfLVPfLVXKf3v/TJ7rf6tSKikmrACtf/Sq70SvDyvAChQARiTgZfucNusHrbqk7WYtbsISTuuv0WlvN2vxe0QCdvtB/AEs/zILyYtfdx/iD5CwHw6q5VusP/sAMBQAhgLAjArQmtqTvzTfArRmvLVoXoB1KAAMBYChADCjAqx3Xl7J17rYAsA0L8D6fGaR0k9elWBYpJTUk9pknOZDkHUoAAwFzEyetKEAMCEEWB4IhBCgzTU7OSgATAgBlte1QgjQ5prtNBQAppoAyyMNy7AFgKEAMNUEWB5pWIYtAAwFzMTYIIUCwFAAGNEBDat4yGmPDVJcCFj13cXpfp7T7rtltYmh9gSTIQgMBShS0nooAAwFgKEARUqWZ1wIkCY8PC2NuxDQMqEFWFjBDS3AAhQwgZpPdHElwFPnWoorAS1CAROo+VgdCgATWoCFPiW0AAu4EmBh4lQbVwJahALAhBVgJZyJk/JTEt7D4WhixGGRWXZFaD++fozfR89bJmwIsoJYAENJXc4K4I88H2FDkJU/WdMCrHfAKRUK8PBFvNJ0C/AABYCBCtC8rsQLZwXkMd/KiKFFGILAUAAYCphAMxuztG9N8gC8BUQfCcEFRMfFMVU0eUav5rnkYgE1z956I8/o/XduWYLpEBShfzAtwCrcnNsQFACmWICVDri1fkHcApgdqwtDEBjxnfKaISC/U/7caOOaEcjpnfIa5PUvgXfKg8vnnfIVcXmnfPQlabiA6FAAGAoA8w31SL9lSmqRHAAAAABJRU5ErkJggg==") 0 0 / 192px 192px; image-rendering: pixelated; box-shadow: 0 -2px 0 var(--br3), 0 2px 0 var(--br3), -2px 0 0 var(--br3), 2px 0 0 var(--br3); overflow: hidden; margin: 2px; }
 .dhead { display: flex; align-items: center; gap: 14px; height: 48px; flex: none; padding: 0 8px 0 18px; background: var(--s2); border-bottom: 2px solid var(--br1); }
 .dhead h2 { display: flex; align-items: center; gap: 10px; font: 400 24px/1 var(--caps); letter-spacing: .08em; color: var(--b4); }
@@ -535,7 +535,7 @@ kbd { font: 600 11px/1 var(--num); padding: 3px 4px; box-shadow: inset 0 0 0 2px
 .actions { display: flex; flex-wrap: wrap; gap: 12px; padding: 2px; }
 
 /* ---------- dialogs ---------- */
-.veil { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; z-index: 20; overflow: auto; background: repeating-conic-gradient(var(--s0) 0 25%, transparent 0 50%) 0 0 / 4px 4px, repeating-conic-gradient(var(--s0) 0 25%, transparent 0 50%) 2px 2px / 4px 4px; }
+.veil { position: fixed; inset: 0 0 var(--coach-h, 0px); display: grid; place-items: center; padding: 16px; z-index: 20; overflow: auto; background: repeating-conic-gradient(var(--s0) 0 25%, transparent 0 50%) 0 0 / 4px 4px, repeating-conic-gradient(var(--s0) 0 25%, transparent 0 50%) 2px 2px / 4px 4px; }
 .dialog { width: 100%; max-width: 620px; display: grid; gap: 12px; padding: 12px; margin: 4px; background: var(--s3); color: var(--b4); box-shadow: 0 -2px 0 var(--br3), 0 2px 0 var(--br3), -2px 0 0 var(--br3), 2px 0 0 var(--br3); }
 .dialog .banner { padding: 4px 0 8px; text-align: center; border-bottom: 2px solid var(--wd4); font: 400 44px/1 var(--display); color: var(--b5); text-wrap: balance; }
 .dialog.ambush .banner { border-bottom-color: var(--md4); font-size: 40px; }
@@ -567,12 +567,58 @@ kbd { font: 600 11px/1 var(--num); padding: 3px 4px; box-shadow: inset 0 0 0 2px
 #tip .w .i { flex: none; margin-top: 0; }
 @keyframes tipIn { from { opacity: 0; } }
 
+/* ---------- the training's guide: a strip at the foot of the page, and a ring on what it points at (see src/training.ts) ---------- */
+/* The pages and the dialogs stop above the strip (see --coach-h), so that it is always in reach and never covers what it is about. */
+#coach { position: fixed; left: 0; right: 0; bottom: 0; z-index: 17; }
+.coach { background: var(--s2); box-shadow: 0 -2px 0 0 var(--br1); color: var(--b4); }
+.coach .cin { max-width: 1280px; margin: 0 auto; padding: 10px var(--gutter) 12px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 24px; align-items: start; }
+.coach .chead { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; min-width: 0; }
+.coach .chap { display: inline-flex; align-items: center; gap: 6px; font: 400 13px/1 var(--caps); letter-spacing: .14em; color: var(--br4); white-space: nowrap; }
+.coach .ctitle { display: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 18px/1.1 var(--caps); letter-spacing: .05em; color: var(--b5); }
+.coach.min .ctitle { display: block; }
+.coach .prog { position: relative; flex: none; width: 94px; height: 8px; background: repeating-linear-gradient(90deg, var(--s4) 0 6px, transparent 6px 8px); }
+.coach .prog i { display: block; height: 100%; background: repeating-linear-gradient(90deg, var(--br4) 0 6px, transparent 6px 8px); }
+.coach .count { min-width: 0; height: auto; padding: 0; background: none; box-shadow: none; font-size: 15px; line-height: 1; color: var(--b4); text-align: left; }
+.coach .count small { font-size: 12px; font-weight: 400; color: var(--b2); }
+.coach .fold { flex: none; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; box-shadow: 0 -2px 0 var(--br3), 0 2px 0 var(--br3), -2px 0 0 var(--br3), 2px 0 0 var(--br3); cursor: pointer; }
+.coach .fold:hover { filter: brightness(1.22); }
+.coach:not(.min) .fold .i { transform: rotate(180deg); }
+.coach .cbody { min-width: 0; display: grid; gap: 4px; }
+.coach h2 { font: 400 22px/1.1 var(--caps); letter-spacing: .05em; color: var(--b5); }
+.coach p { font: 17px/1.4 var(--body); color: var(--b3); text-wrap: pretty; }
+.coach p b { font: 400 17px/1.4 var(--caps); letter-spacing: .04em; color: var(--br5); }
+.coach p .i { vertical-align: -5px; }
+.coach .cacts { display: flex; flex-direction: column; align-items: stretch; gap: 10px; min-width: 170px; padding: 4px 2px 0; }
+.coach .cacts .btn { justify-content: center; }
+.coach .cacts .link { align-self: center; color: var(--b2); }
+.coach .cacts .link:hover { color: var(--br5); }
+.coach .todo { display: inline-flex; align-items: center; gap: 6px; font: italic 15px/1.25 var(--body); color: var(--br4); }
+.coach.min .cbody, .coach.min .cacts { display: none; }
+/* on the title, the training's card with what it covers beside it */
+.lessonrow { display: grid; grid-template-columns: minmax(0, 330px) minmax(0, 1fr); gap: 24px; align-items: start; }
+.syllabus { display: grid; gap: 14px; align-content: start; }
+.syllabus > p { max-width: 62ch; font: italic 17px/1.4 var(--body); color: var(--b2); }
+/* what the guide points at: a ring of bronze that breathes, drawn over whatever it is (a thing in the camp, a button, a figure of the ledger). A dark line lies inside it,
+   since bronze on paper (the notices) does not show: the bronze is for the dark of the camp and the bar, the soot for the paper. */
+.aim { outline: 2px solid var(--br5); outline-offset: 3px; box-shadow: 0 0 0 2px var(--s0); animation: aim 1s steps(1) infinite; }
+.spot.aim { outline-offset: -2px; box-shadow: none; background: rgba(232, 200, 116, .14); animation-name: aimin; }
+@keyframes aim { 0% { outline-color: var(--br5); outline-offset: 3px; } 50% { outline-color: var(--br3); outline-offset: 5px; } }
+@keyframes aimin { 0% { outline-color: var(--br5); } 50% { outline-color: var(--br3); } }
+@media (max-width: 760px) {
+  .coach { max-height: 52vh; overflow-y: auto; overscroll-behavior: contain; }
+  .coach .cin { grid-template-columns: minmax(0, 1fr); gap: 4px; padding-bottom: 10px; }
+  .coach .cacts { flex-direction: row; flex-wrap: wrap; align-items: center; min-width: 0; gap: 8px 16px; }
+  .coach h2 { font-size: 19px; }
+  .coach p { font-size: 15.5px; line-height: 1.35; }
+  .coach .prog { width: 62px; }
+}
+
 @media (max-width: 1100px) {
   .muster { grid-template-columns: 280px minmax(0, 1fr); }
   .verdict-box { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); justify-items: center; }
 }
 @media (max-width: 900px) {
-  .hero, .mapgrid, .muster, .command, .duo { grid-template-columns: minmax(0, 1fr); }
+  .hero, .mapgrid, .muster, .command, .duo, .lessonrow { grid-template-columns: minmax(0, 1fr); }
   .rail { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
   .sides { grid-template-columns: 1fr; }
 }
@@ -588,6 +634,18 @@ kbd { font: 600 11px/1 var(--num); padding: 3px 4px; box-shadow: inset 0 0 0 2px
   .cards { grid-template-columns: repeat(auto-fill, minmax(min(100%, 170px), 1fr)); }
   .log .d { width: 76px; }
   .dialog .banner { font-size: 34px; }
+}
+/* A phone's fight. The three orders, with an icon, a word and a key side by side, come to nearly 400 px, which is more than a phone has: they are three equal buttons, the icon
+   over the word, and the keys, which a phone has not got, are left out. The field is then as wide as the window, which makes it only 100 to 185 px high, so the verdict laid over
+   it is made to fit: the word is sized to the field (its longest wording is about 9 em of the display face) and so is kept to one line, and the button under it is smaller. */
+@media (max-width: 480px) {
+  .cmd .seg.big { flex: 1 1 100%; }
+  .seg.big button { flex: 1 1 0; min-width: 0; height: auto; min-height: 52px; flex-direction: column; justify-content: center; gap: 3px; padding: 6px 4px 8px; font-size: 15px; }
+  .cmd kbd { display: none; }
+  .fight .plate.field { container-type: inline-size; }
+  .verdict { gap: 6px; padding: 6px; }
+  .verdict .ribbon-word { font-size: clamp(16px, calc((100cqw - 32px) / 8.8), 40px); padding-bottom: 4px; text-shadow: 0 2px 0 var(--s0), 2px 2px 0 var(--s0), -2px 2px 0 var(--s0), 2px 0 0 var(--s0), -2px 0 0 var(--s0), 0 -2px 0 var(--s0); }
+  .verdict .btn.big { height: 36px; padding: 0 14px; font-size: 15px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 
