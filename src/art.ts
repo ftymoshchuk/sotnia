@@ -1300,7 +1300,7 @@ function foliage(p: Pix, blobs: readonly (readonly [number, number, number])[], 
     const d2 = (x0 + x + 0.5 - cx) ** 2 + (y0 + y + 0.5 - cy) ** 2, v = Math.sqrt(Math.max(0, r * r - d2));
     if (v > hgt[y * w + x]) hgt[y * w + x] = v;
   }
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) tex[y * w + x] = vnoise(x0 + x, y0 + y, seed + 3, 3.2, 3.2);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) tex[y * w + x] = vnoise((((x0 + x + seed * 13) % 600) + 600) % 600, (((y0 + y + seed * 7) % 250) + 250) % 250, 3, 3.2, 3.2);
   const hh = (x: number, y: number) => { x = clamp(x, 0, w - 1); y = clamp(y, 0, h - 1); return hgt[y * w + x] + tex[y * w + x] * 0.35 * 4; };
   const mask = mkOf(x0, y0, w, h), shade = new Float32Array(w * h);
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
