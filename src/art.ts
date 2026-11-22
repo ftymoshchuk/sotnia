@@ -1270,7 +1270,7 @@ function paintGround(L: CampLayers, land: LandId) {
     const size = 0.55 + 0.65 * (y - 150) / 150, n = Math.max(3, Math.round(3 + 2 * size));
     for (let j = 0; j < n; j++) {
       const bx = x + (j - (n >> 1)) * (size < 1.3 ? 1 : 2), hgt = Math.round((2 + 2.4 * r()) * size), lean = Math.floor(r() * 3) - 1;
-      for (let h = 0; h < hgt; h++) pen.px(bx + (h >= (hgt >> 1) ? lean : 0), y - h, tone.dry || dry ? (h < hgt - 1 ? 'ochre1' : 'ochre3') : (h < hgt - 1 ? 'moss1' : 'moss3'));
+      for (let h = 0; h < hgt; h++) pen.px(bx + (h >= (hgt >> 1) ? lean : 0), y - h, tone.dry ? (h < hgt - 1 ? 'ochre1' : 'ochre2') : dry ? (h < hgt - 1 ? 'soot4' : 'soot5') : (h < hgt - 1 ? 'moss1' : 'moss3'));
     }
   }
   for (let k = 0; k < 80; k++) {
@@ -1348,6 +1348,21 @@ function paintTrees(far: Pix, land: LandId) {
   poplar(far, 513, 156, 58, 9, 61, hazy); pine(far, 548, 156, 72, 20, 62, 6, hazy); poplar(far, 580, 156, 52, 9, 63, hazy);
   poplar(far, 500, 158, 24, 11, 21, dark); pine(far, 531, 158, 54, 24, 36, 7, dark); poplar(far, 562, 160, 36, 11, 22, dark); pine(far, 586, 160, 60, 22, 41, 7, dark);
   if (land === 'lithuania' || land === 'prussia') { pine(far, 470, 158, 62, 22, 71, 6, hazy); pine(far, 606, 158, 66, 20, 72, 6, dark); pine(far, 622, 160, 82, 18, 73, 5, hazy); }
+}
+/** The camp's lookout: a tower of three legs braced across, a platform with a roof, and a pole with a tar barrel for a beacon, black against the sky and its lantern lit. */
+function paintLookout(far: Pix, cx = 296, base = 150, top = 112) {
+  const b = penOf(far), col = 'night2', mid = 'night3', rim = 'night5';
+  b.line(cx - 3, top + 2, cx - 11, base, col); b.line(cx + 3, top + 2, cx + 11, base, col); b.line(cx - 2, top + 2, cx - 10, base, col); b.line(cx + 2, top + 2, cx + 10, base, col); b.line(cx, top + 2, cx, base, mid);
+  for (const fy of [0.4, 0.68]) {
+    const y = Math.floor(top + 2 + (base - top - 2) * fy), w = 3 + 8 * (y - top - 2) / (base - top - 2);
+    b.line(Math.floor(cx - w), y, Math.floor(cx + w), y, col); b.line(Math.floor(cx - w), y, Math.floor(cx + w * 0.55), y - 7, mid); b.line(Math.floor(cx + w), y, Math.floor(cx - w * 0.55), y - 7, mid);
+  }
+  for (let k = 0; k < base - top - 2; k += 3) b.px(cx - 3 - Math.floor(8 * k / (base - top - 2)) - 1, top + 2 + k, rim);
+  b.rect(cx - 7, top, 15, 2, col); b.rect(cx - 7, top - 4, 1, 4, col); b.rect(cx + 7, top - 4, 1, 4, col); b.rect(cx - 7, top - 3, 15, 1, mid); b.rect(cx - 6, top - 9, 1, 5, col); b.rect(cx + 6, top - 9, 1, 5, col);
+  for (let j = 0; j < 4; j++) b.rect(cx - 8 + j, top - 10 - j, 17 - 2 * j, 1, col);
+  b.px(cx - 8, top - 10, rim); b.px(cx - 7, top - 11, rim); b.px(cx - 6, top - 12, rim); b.px(cx - 7, top - 1, 'fire3');
+  const bx = cx + 12;
+  b.line(bx, base - 2, bx, top - 17, col); b.rect(bx - 2, top - 24, 5, 6, col); b.rect(bx - 2, top - 22, 5, 1, mid); b.px(bx - 2, top - 24, rim); b.px(bx - 2, top - 23, rim); b.line(bx + 1, top - 18, cx + 7, top - 3, mid);
 }
 /** A bush at the foot of things: a few domes of leaves. */
 function paintBush(L: CampLayers, cx: number, base: number, r: number, seed: number) {
@@ -2031,7 +2046,7 @@ function campVariant(back: HTMLCanvasElement, mode: CampMode) {
 function paintCamp(st: Campaign): CampLayers {
   const L: CampLayers = { far: newPix(FW, FH), gnd: newPix(FW, FH), props: newPix(FW, FH), fin: newPix(FW, FH), pl: new Float32Array(FW * FH), doors: [], lantern: null, late: [] };
   const land = here(st).land, q = questOf(st), load = st.cargo0 ? st.cargo / st.cargo0 : 1, work = has(st, 'work');
-  paintTrees(L.far, land);
+  paintTrees(L.far, land); paintLookout(L.far);
   paintGround(L, land);
   paintPit(L);
   paintFence(L, 258, 322, 157);
