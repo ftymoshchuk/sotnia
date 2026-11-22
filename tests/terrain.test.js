@@ -2,7 +2,9 @@
 /* The terrain, run headless: the backdrops of the lands, drawn by the same scripts the page loads onto a canvas that records what is painted.
  * That is enough to check that each land has a picture of its own in every weather, that a piece of work puts its fight where it names, that
  * the camp and the cards take their scenery from the land, and that the rules of the weather the page quotes are the ones the battle plays
- * by. How the scenery looks is for the eye (docs/lands.html); nothing here judges a colour. */
+ * by. How the scenery looks is for the eye (docs/lands.html). What it is made of is checked, from the colours its canvas is told to paint with:
+ * that every one is a step of the master palette, that the light is as the weather and the moon make it, and that the ground the men stand on is
+ * mid-value, so that they read on it. */
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { load, plain } = require('./canvas-stub');
@@ -18,7 +20,9 @@ test('every land is drawn in every weather, each differently, and the same each 
   for (const land of LANDS) for (const w of WEATHER) {
     const a = pic(r, 7, w, { land }), b = pic(r, 7, w, { land });
     assert.equal(a, b, `${land} in ${w} is drawn the same each time`);
-    assert.ok(+a.split('-').pop() > 1500, `${land} in ${w}: more than a few rectangles`);
+    const rects = +a.split('-').pop();
+    assert.ok(rects > 1500, `${land} in ${w}: more than a few rectangles`);
+    assert.ok(rects < 30000, `${land} in ${w}: ${rects} rectangles is a picture made of pixels, not of runs (dither with a pattern, or in runs)`);
     assert.ok(!seen.has(a), `${land} in ${w} looks like another picture`); seen.add(a);
   }
   assert.notEqual(pic(r, 1, 'clear', { land: 'poland' }), pic(r, 2, 'clear', { land: 'poland' }), 'another seed, another picture of the same land');
@@ -35,9 +39,9 @@ test('a site is drawn over its land, and says where along the picture it stands'
   const r = game(), sites = plain(r, 'Object.keys(SITE_ART)');
   assert.equal(sites.length, 14);
   for (const site of sites) {
-    const land = LANDS[sites.indexOf(site) % LANDS.length], bare = pic(r, 5, 'clear', { land }), with_ = pic(r, 5, 'clear', { land, site });
+    const land = LANDS[sites.indexOf(site) % LANDS.length], bare = pic(r, 5, 'clear', { land });
+    const [with_, x] = plain(r, `(() => { const c = makeBackdrop(5, 'clear', { land: '${land}', site: '${site}' }); return [c.toDataURL(), c.siteX]; })()`);
     assert.notEqual(bare, with_, `${site} in ${land} changes the picture`);
-    const x = plain(r, `makeBackdrop(5, 'clear', { land: '${land}', site: '${site}' }).siteX`);
     assert.ok(x >= 0 && x <= 600, `${site}: stands at ${x}`);
   }
 });
@@ -96,4 +100,82 @@ test('the rules of the weather the page quotes are those the battle plays by', (
   let n = { clear: 0, rain: 0, fog: 0 };
   for (let i = 0; i < 4000; i++) n[r('rollWeather()')]++;
   for (const w of WEATHER) assert.ok(Math.abs(n[w] / 4000 - odds[w]) < 0.04, `${w} turns up about as often as it should (${n[w]} of 4000)`);
+});
+
+/* ---------- what the pictures are made of ---------- */
+/**
+ * Runs a drawing on a page of canvases that remember what they are told to paint with, in place of the recording ones, and returns what they took: every
+ * colour set as a fill (a pattern's tile counts for its own colours), the patterns made, and the mean brightness (0 to 255) of what was painted in the rows
+ * the men stand in, FY to FY + BD of the scene, a pattern counting as the mean of its tile and a stipple, which lays itself over what is there, not at all.
+ */
+function inspect(r, draw) {
+  r(`
+    globalThis.__seen = { colours: new Set(), sum: 0, area: 0, dithers: 0 };
+    landPatterns.clear();
+    globalThis.__bright = h => { const n = parseInt(h.slice(1), 16); return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255); };
+    document.createElement = () => {
+      const tile = [], c = { width: 0, height: 0 };
+      const g = {
+        fillStyle: '#000', imageSmoothingEnabled: true, scale() {}, drawImage() {},
+        createPattern() { __seen.dithers++; return { mean: tile.length === 16 ? tile.reduce((a, h) => a + __bright(h), 0) / 16 : null, setTransform() {} }; },
+        fillRect(x, y, w, h) {
+          const f = this.fillStyle;
+          if (typeof f === 'string') { __seen.colours.add(f); if (c.width === 4) tile.push(f); }
+          const overlap = Math.max(0, Math.min(y + h, FY + BD) - Math.max(y, FY)) * w;
+          if (overlap > 0 && c.width !== 4) { const v = typeof f === 'string' ? __bright(f) : f.mean; if (v !== null) { __seen.sum += v * overlap; __seen.area += overlap; } }
+        }
+      };
+      c.getContext = () => g; c.toDataURL = () => ''; return c;
+    };
+  `);
+  r(draw);
+  return plain(r, '({ colours: [...__seen.colours], mean: __seen.sum / __seen.area, dithers: __seen.dithers })');
+}
+
+test('every colour a backdrop is painted in is a step of the master palette, however far, wet, foggy or moonlit it is', () => {
+  const r = game(), dyes = new Set(plain(r, 'LAND_DYES'));
+  assert.equal(dyes.size, 100, 'the palette has its hundred steps');
+  // the colours the page is told to paint with: the lands in every weather, every site in some land and weather, and the night skylines
+  const drawn = [];
+  for (const land of LANDS) for (const w of WEATHER) drawn.push(`makeBackdrop(3, '${w}', { land: '${land}' })`);
+  for (const [i, site] of plain(r, 'Object.keys(SITE_ART)').entries()) drawn.push(`makeBackdrop(4, '${WEATHER[i % 3]}', { land: '${LANDS[i % LANDS.length]}', site: '${site}' })`);
+  for (const land of LANDS) drawn.push(`skylineOf('${land}', 2, 320)`);
+  const seen = inspect(r, drawn.join(';\n') + ';');
+  assert.ok(seen.dithers > 100 && seen.colours.length > 60, 'it is painted in dither, and in a great many of the palette\'s colours');
+  assert.deepEqual(seen.colours.filter(c => !dyes.has(c)), [], 'and in none that is not one of them');
+  // what a grade does to a dye (the rain, the fog, the moon) is another dye
+  for (const grade of ['RAIN_GRADE', 'FOG_GRADE', 'MOON_GRADE']) for (const c of dyes) assert.ok(dyes.has(r(`${grade}('${c}')`)), `${grade} of ${c}`);
+  // and the colours of the lands, in each weather, and what buildings and water are made of, are dyes
+  const tones = plain(r, `(() => { const o = []; for (const l of ${JSON.stringify(LANDS)}) for (const w of ${JSON.stringify(WEATHER)}) o.push(JSON.stringify(weatherTone(TONES[l], w))); return o; })()`);
+  for (const t of tones) for (const c of t.match(/#[0-9a-f]{6}/g)) assert.ok(dyes.has(c), `a tone of the land is a dye: ${c}`);
+  for (const m of Object.values(plain(r, 'STUFF'))) for (const c of Object.values(m)) assert.ok(dyes.has(c), `a material is made of dyes: ${c}`);
+});
+
+test('the dither is the ordered one of a Bayer matrix, so that it is a pattern and never speckle', () => {
+  const r = game(), bayer = plain(r, 'BAYER');
+  assert.deepEqual(bayer.flat().sort((a, b) => a - b), [...Array(16).keys()], 'each of sixteen levels once');
+  for (let n = 0; n <= 16; n++) assert.equal(bayer.flat().filter(v => v < n).length, n, `level ${n} sets ${n} of the sixteen pixels`);
+  for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) assert.equal(bayer[y][x] < 8, (x + y) % 2 === 0, 'half-way is a checkerboard');
+  // a ramp is laid in sixteen levels between each pair of its colours
+  const ramp = plain(r, "(() => { const s = makeScene(document.createElement('canvas').getContext('2d'), 1, 'clear', TONES.poland); const f = s.ramp(['#000000', '#ffffff', '#ff0000']); return [f.levels, f(0), f(1), f(0.5), f.at(8).n, f.at(24).a, f.at(24).n]; })()");
+  assert.deepEqual(ramp, [32, '#000000', '#ff0000', '#ffffff', 8, '#ffffff', 8], 'two steps of sixteen levels');
+});
+
+test('the light is the weather\'s: rain darkens a land and fog pales it, and the camp\'s skyline is moonlit', () => {
+  const r = game(), mean = (land, w) => inspect(r, `makeBackdrop(3, '${w}', { land: '${land}' })`).mean;
+  for (const land of LANDS) {
+    const clear = mean(land, 'clear'), rain = mean(land, 'rain'), fog = mean(land, 'fog');
+    assert.ok(rain < clear - 3, `${land}: rain (${rain.toFixed(0)}) is darker than a clear day (${clear.toFixed(0)}) where the men stand`);
+    assert.ok(fog > clear + 3, `${land}: fog (${fog.toFixed(0)}) is paler than a clear day (${clear.toFixed(0)}) where the men stand`);
+  }
+  const night = new Set(plain(r, '[...rNight, rFire[3], rFire[4], rFire[5], rBronze[5], rBronze[6]]'));
+  for (const land of LANDS) assert.deepEqual(inspect(r, `skylineOf('${land}', 3, 320)`).colours.filter(c => !night.has(c)), [], `${land} by night is painted in the night's blues, with here and there a fire or a gold`);
+});
+
+test('the ground the men stand on is mid-value in every land, in every weather, so that dark-edged, bright-dyed men read on it', () => {
+  const r = game();
+  for (const land of LANDS) for (const w of WEATHER) {
+    const m = inspect(r, `makeBackdrop(5, '${w}', { land: '${land}' })`).mean;
+    assert.ok(m > 62 && m < 185, `${land} in ${w}: the rows the men stand in are ${m.toFixed(0)} bright, of 255 (a man's own darks are about 20 and his dyes 70 to 200)`);
+  }
 });

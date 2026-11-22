@@ -73,7 +73,7 @@ const RAIN_GRADE = dyeGrade(c => {
         return viaRamp(c, rIron, 0.95);
     if (ramp === rOchre || ramp === rBronze)
         return viaRamp(c, rPaper, 0.92);
-    return ramp === rSoot || ramp === rFire || ramp === rSkin || ramp === rNight || ramp === rPlum || ramp === rTeal ? c : stepped(c, -1);
+    return ramp === rSoot || ramp === rFire || ramp === rSkin || ramp === rNight || ramp === rPlum || ramp === rTeal ? c : stepped(c, brightness(c) > 70 ? -1 : 0); // the darks are dark enough
 });
 /** Fog: every dye a step paler on its own ramp (the soot of an outline two), the rest is done by the haze laid over the picture. */
 const FOG_GRADE = dyeGrade(c => stepped(c, dyeAt.get(c)?.[0] === rSoot ? 2 : 1));
@@ -264,11 +264,15 @@ function makeScene(g, seed, weather, T, W = LW * SS, sky = true, night = false) 
         else
             rect(a, sh.y0 + i, ww, 1, c);
     } });
-    const fadeGrade = (t) => { let f = fades.get(t); if (!f) {
-        const to = towards(baseGrade ? baseGrade(T.haze) : T.haze, t);
-        f = baseGrade ? (c => to(baseGrade(c))) : to;
-        fades.set(t, f);
-    } return f; };
+    const fadeGrade = (t) => {
+        let f = fades.get(t);
+        if (!f) {
+            const to = towards(baseGrade ? baseGrade(T.haze) : T.haze, t);
+            f = baseGrade ? (night ? (c => MOON_GRADE(to(baseGrade(c)))) : (c => to(baseGrade(c)))) : to;
+            fades.set(t, f);
+        } // by night the far country is brought back to the night's blues
+        return f;
+    };
     return {
         W, H, HZ: HZ * SS, sky, night, weather, T, r: mulberry(seed), ridge: () => HZ * SS - 4, rect, line, disc, poly, shape, edge, fill, run,
         lit: (sh, c, w = 1) => rims(sh, c, w, false), shade: (sh, c, w = 1) => rims(sh, c, w, true),
@@ -301,7 +305,7 @@ function makeScene(g, seed, weather, T, W = LW * SS, sky = true, night = false) 
         finally {
             grade = was;
         } },
-        plain(draw) { const was = grade; grade = null; try {
+        plain(draw) { const was = grade; grade = night ? MOON_GRADE : null; try {
             return draw();
         }
         finally {
@@ -315,28 +319,28 @@ function makeScene(g, seed, weather, T, W = LW * SS, sky = true, night = false) 
 const TONES = {
     steppe: {
         sky: [rSky[0], rSky[1], rSky[2], rSky[3], rSky[4], rSky[5]], glow: rOchre[6], sun: rBone[5], haze: rSky[5], cloud: [rSky[5], rOchre[6], rSky[2]],
-        far: [rSky[4], rSky[3], rSky[2], rSky[1]], hill: [rOchre[6], rOchre[5], rOchre[4], rOchre[2]],
-        ground: [rPaper[4], rPaper[3], rOchre[3], rMoss[4], rMoss[3], rMoss[2]], earth: [rSoot[4], rSoot[6], rPaper[2]], leaf: [rMoss[2], rMoss[4], rMoss[5]], dry: rPaper[3], mark: rBronze[3]
+        far: [rSky[4], rSky[3], rSky[2], rSky[1]], hill: [rOchre[6], rOchre[5], rOchre[4], rPaper[1]],
+        ground: [rPaper[4], rPaper[3], rPaper[2], rMoss[4], rMoss[3]], earth: [rSoot[4], rSoot[6], rPaper[2]], leaf: [rMoss[2], rMoss[4], rMoss[5]], dry: rOchre[3], mark: rBronze[3]
     },
     ukraine: {
         sky: [rSky[0], rSky[1], rSky[2], rSky[3], rSky[4], rBone[5]], glow: rOchre[6], sun: rBone[5], haze: rSky[5], cloud: [rSky[5], rOchre[6], rSky[2]],
         far: [rSky[3], rSky[2], rSky[1], rWoad[4]], hill: [rMoss[6], rMoss[5], rMoss[4], rMoss[3]],
-        ground: [rMoss[6], rMoss[5], rMoss[4], rMoss[3], rMoss[2]], earth: [rSoot[4], rSoot[5], rPaper[2]], leaf: [rMoss[2], rMoss[4], rMoss[5]], dry: rOchre[4], mark: rMoss[4]
+        ground: [rMoss[6], rMoss[5], rMoss[4], rMoss[3]], earth: [rSoot[4], rSoot[5], rPaper[2]], leaf: [rMoss[2], rMoss[4], rMoss[5]], dry: rOchre[3], mark: rMoss[4]
     },
     poland: {
         sky: [rSky[1], rSky[2], rSky[3], rSky[4], rSky[5], rBone[5]], glow: rBronze[6], sun: rBone[5], haze: rSky[5], cloud: [rBone[5], rBronze[6], rSky[3]],
         far: [rSky[4], rSky[3], rSky[2], rWoad[5]], hill: [rMoss[6], rMoss[5], rMoss[4], rMoss[3]],
-        ground: [rPaper[4], rMoss[5], rMoss[4], rMoss[3], rMoss[2]], earth: [rSoot[4], rSoot[6], rPaper[3]], leaf: [rMoss[2], rMoss[4], rMoss[5]], dry: rPaper[3], mark: rMoss[5]
+        ground: [rPaper[4], rMoss[5], rMoss[4], rMoss[3]], earth: [rSoot[4], rSoot[6], rPaper[3]], leaf: [rMoss[2], rMoss[4], rMoss[5]], dry: rPaper[3], mark: rMoss[5]
     },
     prussia: {
         sky: [rSky[0], rSky[1], rSky[2], rIron[6], rIron[7], rIron[7]], glow: rSky[5], sun: rIron[7], haze: rIron[7], cloud: [rIron[7], rSky[5], rIron[5]],
         far: [rIron[6], rSky[3], rSky[2], rSky[1]], hill: [rBone[4], rPaper[4], rPaper[3], rMoss[4]],
-        ground: [rBone[4], rPaper[4], rMoss[5], rMoss[4], rMoss[3], rMoss[2]], earth: [rSoot[5], rBone[1], rBone[3]], leaf: [rMoss[2], rMoss[3], rMoss[5]], dry: rBone[3], mark: rWoad[4]
+        ground: [rBone[4], rPaper[4], rMoss[5], rMoss[4], rMoss[3]], earth: [rSoot[5], rBone[1], rBone[3]], leaf: [rMoss[2], rMoss[3], rMoss[5]], dry: rBone[3], mark: rWoad[4]
     },
     lithuania: {
         sky: [rWoad[2], rWoad[3], rWoad[4], rSky[1], rSky[3], rBone[3]], glow: rMadder[6], sun: rBone[5], haze: rWoad[5], cloud: [rBone[4], rMadder[6], rWoad[5]],
         far: [rSky[2], rWoad[5], rWoad[4], rWoad[3]], hill: [rMoss[5], rMoss[4], rMoss[3], rMoss[1]],
-        ground: [rMoss[6], rMoss[5], rMoss[4], rMoss[3], rMoss[2]], earth: [rSoot[3], rSoot[5], rBone[1]], leaf: [rMoss[0], rMoss[2], rMoss[4]], dry: rMoss[5], mark: rMoss[2]
+        ground: [rMoss[6], rMoss[5], rMoss[4], rMoss[3]], earth: [rSoot[3], rSoot[5], rBone[1]], leaf: [rMoss[0], rMoss[2], rMoss[4]], dry: rMoss[5], mark: rMoss[2]
     },
     front: {
         sky: [rIron[3], rIron[4], rIron[5], rBone[2], rBone[3], rPaper[5]], glow: rOchre[6], sun: rFire[5], haze: rPaper[4], cloud: [rBone[3], rOchre[6], rIron[4]],
@@ -346,12 +350,12 @@ const TONES = {
     silesia: {
         sky: [rSky[0], rSky[1], rSky[2], rSky[3], rSky[4], rIron[7]], glow: rSky[5], sun: rBone[5], haze: rSky[4], cloud: [rIron[7], rBone[5], rSky[2]],
         far: [rSky[3], rSky[2], rWoad[5], rWoad[4]], hill: [rOchre[6], rOchre[4], rPaper[2], rBone[1]],
-        ground: [rPaper[4], rPaper[3], rMoss[5], rMoss[4], rMoss[3], rMoss[2]], earth: [rSoot[4], rSoot[6], rPaper[3]], leaf: [rMoss[2], rMoss[4], rMoss[5]], dry: rPaper[3], mark: rBronze[2]
+        ground: [rPaper[4], rPaper[3], rMoss[5], rMoss[4], rMoss[3]], earth: [rSoot[4], rSoot[6], rPaper[3]], leaf: [rMoss[2], rMoss[4], rMoss[5]], dry: rPaper[3], mark: rBronze[2]
     },
     saxony: {
         sky: [rSky[0], rSky[1], rSky[2], rSky[3], rSky[4], rSky[5]], glow: rBone[5], sun: rBone[5], haze: rSky[4], cloud: [rSky[5], rBone[5], rSky[2]],
         far: [rSky[3], rSky[2], rWoad[5], rWoad[4]], hill: [rMoss[6], rMoss[5], rMoss[4], rMoss[3]],
-        ground: [rMoss[6], rMoss[5], rMoss[4], rMoss[3], rMoss[2]], earth: [rSoot[4], rSoot[6], rPaper[3]], leaf: [rMoss[2], rMoss[4], rMoss[5]], dry: rMoss[5], mark: rMoss[3]
+        ground: [rMoss[6], rMoss[5], rMoss[4], rMoss[3]], earth: [rSoot[4], rSoot[6], rPaper[3]], leaf: [rMoss[2], rMoss[4], rMoss[5]], dry: rMoss[5], mark: rMoss[3]
     }
 };
 /** A land's colours on a day of this weather: rain closes the sky over it in grey and fog pales it (the rest is graded as it is painted, see makeScene). */
@@ -367,7 +371,7 @@ const STUFF = {
     wall: mat(rIron[4], rIron[5], rBone[3], rBone[4], rBone[5]), // whitewash, warm in the light and cool in its lee
     thatch: mat(rOchre[1], rOchre[3], rOchre[4], rOchre[5], rOchre[6]),
     tile: mat(rMadder[1], rMadder[2], rMadder[3], rMadder[4], rMadder[5]),
-    brick: mat(rMadder[1], rMadder[2], rMadder[3], rMadder[4], rMadder[5]),
+    brick: mat(rMadder[1], rMadder[2], rMadder[2], rMadder[3], rMadder[4]), // brick walls: the face is the darker madder, so that a church of it does not shout
     shingle: mat(rIron[1], rIron[2], rIron[3], rIron[4], rIron[5]), // slate and weathered shingle
     timber: mat(rSoot[2], rSoot[4], rSoot[5], rSoot[6], rSoot[7]),
     stone: mat(rIron[2], rIron[3], rIron[4], rIron[5], rIron[6]),
@@ -397,7 +401,7 @@ function cloud(s, cx, cy, w, h, flat = false) {
         if (y > b)
             return y === b + 3 && ((i >> 3) % 3 !== 1) && i > 4 && i < n - 4 ? shade : undefined;
         if (y === t)
-            return i === 0 || t <= top[i - 1] ? rim : body;
+            return flat ? s.dither(body, rim, 7) : i === 0 || t <= top[i - 1] ? rim : body;
         if (y === t + 1 && h > 9 && i > 0 && t <= top[i - 1] && t < top[Math.min(n - 1, i + 2)])
             return s.dither(body, rim, 5);
         const up = b - y;
@@ -446,11 +450,12 @@ function skyArt(s, o) {
         }
         else {
             // a close sky: long banks of cloud lying across the whole of it, the high ones first
-            const n = o.clouds + 4;
-            for (let i = 0; i < n; i++) {
-                const w = 380 + r() * 300;
-                cloud(s, w / 2 + r() * (W - w) - 30, 12 + (i + r() * 0.8) * HZ * 0.66 / n, w, 7 + r() * 9, true);
+            const banks = [];
+            for (let i = 0; i < o.clouds + 3; i++) {
+                const w = 360 + r() * 320;
+                banks.push([w / 2 + r() * (W - w) - 30, 14 + r() * HZ * 0.6, w, 8 + r() * 12]);
             }
+            banks.sort((a, b) => a[1] - b[1]).forEach(m => cloud(s, m[0], m[1], m[2], m[3], true));
         }
     });
 }
@@ -533,7 +538,7 @@ function grassMarks(s, n) {
             if (c < 0.7)
                 s.rect(x + 2, y - 1, 1, 2, l);
         }
-        else
+        else if (c < 0.93)
             s.rect(x, y, k, 1, T.dry);
     }
 }
@@ -616,10 +621,11 @@ function ball(s, cx, cy, rx, ry, p, edge) {
 function sails(s, hx, hy, len, k, turn) {
     for (let i = 0; i < 4; i++) {
         const a = turn + i * Math.PI / 2, ux = Math.cos(a), uy = Math.sin(a), nx = -uy, ny = ux;
-        s.line(hx, hy, hx + ux * len, hy + uy * len, STUFF.timber.mid);
-        s.line(hx + ux * len * 0.25 + nx * 4 * k, hy + uy * len * 0.25 + ny * 4 * k, hx + ux * len + nx * 4 * k, hy + uy * len + ny * 4 * k, STUFF.timber.lit);
+        s.line(hx, hy, hx + ux * len, hy + uy * len, STUFF.timber.dk);
+        s.line(hx + (Math.abs(ux) > Math.abs(uy) ? 0 : 1), hy + (Math.abs(ux) > Math.abs(uy) ? 1 : 0), hx + ux * len + (Math.abs(ux) > Math.abs(uy) ? 0 : 1), hy + uy * len + (Math.abs(ux) > Math.abs(uy) ? 1 : 0), STUFF.timber.lo);
+        s.line(hx + ux * len * 0.25 + nx * 4 * k, hy + uy * len * 0.25 + ny * 4 * k, hx + ux * len + nx * 4 * k, hy + uy * len + ny * 4 * k, STUFF.timber.lo);
         for (let d = 0.3; d < 1; d += 0.14)
-            s.line(hx + ux * len * d, hy + uy * len * d, hx + ux * len * d + nx * 4 * k, hy + uy * len * d + ny * 4 * k, STUFF.timber.mid);
+            s.line(hx + ux * len * d, hy + uy * len * d, hx + ux * len * d + nx * 4 * k, hy + uy * len * d + ny * 4 * k, rPaper[1]);
     }
     s.rect(hx - 1, hy - 1, 3, 3, OUT);
 }
@@ -738,7 +744,7 @@ const PROPS = {
         s.rect(x - 2 * k, y, 4 * k + 1, 1, L[0]);
     },
     kovyl(s, x, y, k) {
-        const stem = s.T.dry;
+        const stem = rPaper[3];
         for (let i = -2; i <= 2; i++) {
             const h = (7 + 2 * (2 - Math.abs(i))) * k, tx = x + i * 1.6 * k;
             s.line(x + i * 0.6 * k, y, tx, y - h, stem);
@@ -1020,7 +1026,6 @@ const PROPS = {
             const cx = x + dx * w;
             wall(s, cx - 5 * k, y - 12 * k, 10 * k, 14 * k, m, 3 * k);
             dome(s, cx, y - 26 * k, 8 * k, 9 * k, STUFF.thatch);
-            s.rect(cx - 1, y - 40 * k, 1, 4 * k, rBronze[5]);
         }
         for (let mx = x0; mx < x0 + w; mx += 4 * k) {
             s.rect(mx - 1, y - 17 * k - 1, 2 * k + 2, 3 * k + 1, OUT);
@@ -1255,7 +1260,7 @@ function mound(s, x, w, h) {
         const i = px - x0, t = top[i];
         if (y < t)
             return undefined;
-        const u = (2 * i + 1) / n - 1, d = y - t, term = 0.22 - 0.02 * d; // where the light gives out, further left lower down
+        const u = (2 * i + 1) / n - 1, d = y - t, term = 0.3 - 0.02 * d; // where the light gives out, further left lower down
         if (d === 0)
             return u < term ? rim : lit;
         if (y > s.HZ - 3)
@@ -1266,7 +1271,7 @@ function mound(s, x, w, h) {
             return d < 3 ? lit : s.dither(mid, lit, 8);
         if (u < term + 0.06)
             return mid;
-        return u < term + 0.2 ? s.dither(mid, lee, 9) : lee;
+        return u < term + 0.2 ? s.dither(mid, lee, 9) : d < 9 ? lee : s.dither(lee, mid, Math.min(9, (d - 8) * 2));
     });
     return base - h;
 }
@@ -1320,7 +1325,7 @@ function water(s, x0, x1, y0, y1) {
 /** A wood along the skyline from x to x1: trees of the kinds given, every few pixels, a row far off and a row near. */
 function wood(s, from, to, kinds, kLo, kHi) {
     for (const far of [true, false]) {
-        for (let x = from + (far ? 4 : 0); x < to; x += (far ? 11 : 9) + (s.r() * 7 | 0)) {
+        for (let x = from + (far ? 4 : 0); x < to; x += (far ? 9 : 7) + (s.r() * 6 | 0)) {
             const k = (kLo + s.r() * (kHi - kLo)) * (far ? 0.85 : 1), kind = kinds[s.r() * kinds.length | 0], y = s.ridge(x) + (far ? 0 : 3);
             if (far)
                 s.fade(0.5, () => PROPS[kind](s, x, y, k));
@@ -1341,15 +1346,16 @@ function field(s, cx, wTop, wBot, y0 = 14, y1 = 92) {
             return d < 2 ? s.dither(null, mid, 2) : undefined;
         if (d > -3 || e < 2)
             return s.dither(null, mid, 3);
-        return fr < 0.18 ? s.dither(null, dk, 5) : Math.floor(band) % 2 ? s.dither(null, lit, 4) : s.dither(null, mid, 4);
+        return fr < 0.18 ? s.dither(null, dk, 4) : Math.floor(band) % 2 ? s.dither(null, lit, 3) : s.dither(null, mid, 4);
     });
 }
 /** The rows of a vineyard on the slope between x0 and x1, from the skyline down to the foot of the hill. */
 function vines(s, x0, x1) {
     const L = s.T.leaf;
-    for (let x = x0; x < x1; x += 4)
+    for (let x = x0; x < x1; x += 5)
         for (let y = s.ridge(x) + 5; y < s.HZ - 3; y += 4) {
-            s.rect(x, y, 1, 3, L[1]);
+            s.rect(x, y, 1, 3, L[0]);
+            s.rect(x + 1, y, 1, 2, L[1]);
             s.rect(x, y, 1, 1, L[2]);
         }
 }
@@ -1392,6 +1398,7 @@ const LAND_ART = {
     steppe(s) {
         const T = s.T, r = s.r;
         skyArt(s, { clouds: 3, sun: [300, 78], sunK: 1.2 });
+        birds(s, 2);
         hillsArt(s, 108, [[0.006, 2], [0.02, 1]], { pal: T.far, haze: 12, jag: 1 });
         s.ridge = hillsArt(s, 106, [[0.0105, 2.4], [0.034, 1.2]], { pal: T.hill });
         place(s, [
@@ -1399,7 +1406,7 @@ const LAND_ART = {
             [110, x => { const t = mound(s, x, 70 + (r() * 30 | 0), 9); PROPS.beacon(s, x - 4, t + 1, 0.95); }],
             [40, x => PROPS.thorn(s, x, s.ridge(x) + 2, 0.85)], [70, x => herd(s, x - 35, s.HZ - 3, 60)]
         ]);
-        groundArt(s, { dry: 7 });
+        groundArt(s, { dry: 9 });
         track(s, 20, 58);
         PROPS.well(s, 60 + (r() * 480 | 0), s.HZ + 26, 0.85);
         scatter(s, 36, (x, y, k) => PROPS.tuft(s, x, y, k));
@@ -1409,6 +1416,7 @@ const LAND_ART = {
     ukraine(s) {
         const T = s.T, r = s.r, church = r() < 0.55, mill = !church || r() < 0.5;
         skyArt(s, { clouds: 3, sun: [250, 76] });
+        birds(s, 4);
         hillsArt(s, 90, [[0.007, 7], [0.021, 3.5]], { pal: T.far, haze: 12, jag: 1 });
         s.ridge = hillsArt(s, 100, [[0.013, 6], [0.04, 2.5]], { pal: T.hill });
         const items = [[150, x => hamlet(s, x, 'khata', [-42, -14, 14, 42], 0.82, 'willow')], [76, x => along(s, 'poplar', x - 30, 5, 14, 0.75)]];
@@ -1424,7 +1432,8 @@ const LAND_ART = {
     },
     poland(s) {
         const T = s.T, r = s.r;
-        skyArt(s, { clouds: 3, sun: [270, 78] });
+        skyArt(s, { clouds: 4, sun: [270, 78] });
+        birds(s, 3);
         hillsArt(s, 94, [[0.008, 4], [0.025, 2]], { pal: T.far, haze: 12, jag: 1 });
         s.ridge = hillsArt(s, 102, [[0.012, 4], [0.036, 2]], { pal: T.hill });
         place(s, [
@@ -1442,7 +1451,7 @@ const LAND_ART = {
         const T = s.T, r = s.r;
         skyArt(s, { clouds: 4, sun: [290, 74], sunK: 0.8 });
         birds(s, 5);
-        s.ridge = hillsArt(s, 104, [[0.006, 1.6], [0.03, 0.9]], { pal: T.hill });
+        s.ridge = hillsArt(s, 104, [[0.006, 2.4], [0.03, 1.3]], { pal: T.hill });
         const left = r() < 0.5, sea = left ? [0, 230] : [370, 600];
         water(s, sea[0], sea[1], 100, s.HZ - 1);
         [0.2, 0.62].forEach(t => PROPS.ship(s, sea[0] + (sea[1] - sea[0]) * t, 104, 0.85));
@@ -1464,8 +1473,8 @@ const LAND_ART = {
         hillsArt(s, 84, [[0.009, 6], [0.03, 3]], { pal: T.far, haze: 12, jag: 2 });
         s.ridge = hillsArt(s, 98, [[0.011, 5], [0.04, 2]], { pal: T.hill });
         const gap = 130 + (r() * 340 | 0), gw = 190;
-        wood(s, 0, gap - gw / 2, ['spruce', 'spruce', 'pine'], 0.85, 1.15);
-        wood(s, gap + gw / 2, s.W, ['spruce', 'pine', 'spruce', 'birch'], 0.85, 1.15);
+        wood(s, 0, gap - gw / 2, ['spruce', 'spruce', 'pine'], 0.95, 1.3);
+        wood(s, gap + gw / 2, s.W, ['spruce', 'pine', 'spruce', 'birch'], 0.95, 1.3);
         hamlet(s, gap - 14, 'logHut', [-44, -16, 18, 46], 0.78);
         PROPS.chapel(s, gap + 80, s.ridge(gap + 80) + 3, 0.95);
         groundArt(s);
@@ -1479,6 +1488,7 @@ const LAND_ART = {
     front(s) {
         const T = s.T, r = s.r;
         skyArt(s, { clouds: 3, sun: [250, 84], sunK: 0.9 });
+        birds(s, 6);
         hillsArt(s, 92, [[0.007, 5], [0.025, 2.5]], { pal: T.far, haze: 12 });
         s.ridge = hillsArt(s, 100, [[0.01, 3], [0.032, 1.6]], { pal: T.hill });
         place(s, [
@@ -1656,17 +1666,28 @@ const SITE_ART = {
         return x + 35;
     },
     ravine(s) {
-        const x = 170 + (s.r() * 260 | 0), base = s.ridge(x), lip = [[-52, -1], [-38, 8], [-28, 15], [-12, 20], [14, 20], [28, 14], [40, 7], [54, -1]], [, , , lee] = s.T.hill;
-        const pts = [];
-        for (const [dx, dy] of lip)
-            pts.push(x + dx, Math.min(s.HZ + 3, base + dy));
-        const sh = s.poly(pts, lee, OUT);
-        s.cap(sh, s.T.hill[2], 1);
-        s.courses(sh, s.dither(null, rSoot[1], 7), 3, 2);
-        for (const dx of [-62, -44, 46, 64])
-            PROPS.bush(s, x + dx, s.ridge(x + dx) + 3, 0.9);
-        PROPS.rock(s, x + 20, s.HZ + 5, 1);
-        PROPS.rock(s, x - 24, s.HZ + 4, 0.9);
+        const x = 170 + (s.r() * 260 | 0), y = s.HZ + 10, e = STUFF.earth, cleft = s.ramp([e.mid, e.lo, e.dk, e.dk]), top = [], bot = [];
+        // a cleft cut across the country: raw earth dropping into the dark, its far lip lit and edged with scrub, its edges broken like a torn bank
+        for (let dx = -64; dx <= 64; dx += 5) {
+            const u = dx / 64, w = Math.sqrt(Math.max(0, 1 - u * u)), j = ((dx * 13) % 7) % 3 - 1;
+            top.push(x + dx, y - 1 - 4 * w - (j > 0 ? 1 : 0));
+            bot.unshift(x + dx, y + 1 + 6 * w + (j < 0 ? 1 : 0));
+        }
+        const sh = s.shape([...top, ...bot]), n = sh.runs.length;
+        s.edge(sh, OUT);
+        sh.runs.forEach((row, i) => { for (let k = 0; k < row.length; k += 2)
+            s.rect(row[k], sh.y0 + i, row[k + 1] - row[k], 1, cleft.at(Math.round(i / Math.max(1, n - 1) * cleft.levels))); });
+        s.cap(sh, e.lit, 1);
+        s.lit(sh, e.lit, 2);
+        s.courses(sh, s.dither(null, e.dk, 6), 3, 2);
+        for (let dx = -56; dx <= 56; dx += 4) {
+            const h = 2 + ((dx * 11) % 5 + 5) % 3;
+            s.rect(x + dx, y - 6 - h + 2, 1, h, e.lo);
+        }
+        for (const dx of [-54, -32, -8, 20, 46])
+            PROPS.bush(s, x + dx, y - 4 - ((dx * 7) % 3), 0.7);
+        PROPS.rock(s, x + 20, y + 20, 1);
+        PROPS.rock(s, x - 24, y + 22, 0.9);
         return x;
     },
     edge(s) {
