@@ -6,27 +6,27 @@
 <title>Sotnia: lands</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,700;1,400&family=Alegreya+SC:wght@400;700&family=Grenze+Gotisch:wght@700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IM+Fell+DW+Pica:ital@0;1&family=IM+Fell+English+SC&family=Jacquard+24&display=swap" rel="stylesheet">
 <style>
   /* The sheet of the lands: the scenery behind a fight in each land of the game, in each weather, with the places a fight can be fought at and
      the camp's skyline by night, from the same scripts the game loads. Open it from the repository (file:// works) after `npm run build`.
      It is a tool for the artist, not part of the game. */
-  :root { --table: #1a120c; --walnut: #24180f; --line: #5c4526; --parchment: #e8dcc0; --cream: #f3ead4; --mute: #c4b796; --gilt: #e8c46a; --ink: #1c1a17; }
+  :root { --table: #14100c; --walnut: #2a2018; --line: #5b4219; --parchment: #e7ddbf; --cream: #f4edd6; --mute: #b3a784; --gilt: #e8c874; --ink: #14100c; }
   * { box-sizing: border-box; }
-  body { margin: 0; padding: 36px 40px 60px; background: var(--table); color: var(--parchment); font: 16px/1.4 Alegreya, Georgia, serif; }
+  body { margin: 0; padding: 36px 40px 60px; background: var(--table); color: var(--parchment); font: 17px/1.4 'IM Fell DW Pica', Georgia, serif; }
   header { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 32px; margin-bottom: 28px; }
-  h1 { margin: 0; font: 900 54px/.95 'Grenze Gotisch', serif; color: var(--cream); }
+  h1 { margin: 0; font: 400 54px/.95 'Jacquard 24', serif; color: var(--gilt); }
   header p { margin: 0; max-width: 62ch; color: var(--mute); }
-  h2 { display: flex; align-items: center; gap: 12px; margin: 38px 0 14px; font: 500 15px/1.1 'Alegreya SC', serif; letter-spacing: .16em; color: var(--gilt); }
-  h2::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+  h2 { display: flex; align-items: center; gap: 12px; margin: 38px 0 14px; font: 400 15px/1.1 'IM Fell English SC', serif; letter-spacing: .16em; color: var(--gilt); }
+  h2::after { content: ''; flex: 1; height: 2px; background: #3a2d21; }
   .note { margin: -6px 0 14px; color: var(--mute); font-size: 14.5px; max-width: 80ch; }
   .grid { display: flex; flex-wrap: wrap; gap: 14px; }
-  figure { margin: 0; padding: 8px 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--walnut); }
-  figure canvas { display: block; border-radius: 4px; }
-  figcaption { margin-top: 7px; font: 700 14px/1.15 'Alegreya SC', serif; color: var(--cream); }
-  figcaption small { display: block; margin-top: 2px; font: italic 13px/1.2 Alegreya, serif; color: var(--mute); }
+  figure { margin: 2px; padding: 8px 8px 10px; background: var(--walnut); box-shadow: 0 -2px 0 var(--line), 0 2px 0 var(--line), -2px 0 0 var(--line), 2px 0 0 var(--line); }
+  figure canvas { display: block; }
+  figcaption { margin-top: 8px; font: 400 14px/1.15 'IM Fell English SC', serif; letter-spacing: .05em; color: var(--cream); }
+  figcaption small { display: block; margin-top: 3px; font: italic 13px/1.2 'IM Fell DW Pica', serif; letter-spacing: 0; color: var(--mute); }
   .row { display: flex; flex-wrap: wrap; align-items: stretch; gap: 14px; }
-  .label { flex: none; width: 100%; font: 500 13px/1 'Alegreya SC', serif; letter-spacing: .14em; color: var(--gilt); margin: 8px 0 -4px; }
+  .label { flex: none; width: 100%; font: 400 13px/1 'IM Fell English SC', serif; letter-spacing: .14em; color: var(--gilt); margin: 8px 0 -4px; }
 </style>
 </head>
 <body>
