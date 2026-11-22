@@ -287,20 +287,23 @@ function drawMap(cv, st, plan) {
     else
         g.moveTo(p[0], p[1]); });
     g.stroke();
-    // a course set from here, dashed in weld
+    // a course set from here, dashed in weld (bronze on an edge of ink, which paper alone would lose it on)
     const target = plan && plan.length ? plan[plan.length - 1].to : null;
     if (target) {
-        g.setLineDash([7, 5]);
-        g.strokeStyle = PAL.ochre;
-        g.lineWidth = 3;
-        g.beginPath();
-        g.moveTo(here0[0], here0[1]);
-        for (const l of plan) {
+        const course = () => { g.beginPath(); g.moveTo(here0[0], here0[1]); for (const l of plan) {
             const p = at(l.to);
             g.lineTo(p[0], p[1]);
-        }
-        g.stroke();
+        } g.stroke(); };
+        g.setLineDash([7, 5]);
+        g.lineCap = 'butt';
+        g.strokeStyle = 'rgba(20,16,12,.6)';
+        g.lineWidth = 4.6;
+        course();
+        g.strokeStyle = '#cba34f';
+        g.lineWidth = 3;
+        course();
         g.setLineDash([]);
+        g.lineCap = 'round';
     }
     // places: a filled dot where there is a market, an open one where there is none
     const q = questOf(st), named = new Set([st.at, q.to].concat(target ? [target] : [], out.map(r => r.to), [q.from]));
