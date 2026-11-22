@@ -487,8 +487,8 @@ kbd { font: 600 11px/1 var(--num); padding: 3px 4px; box-shadow: inset 0 0 0 2px
 .blog li { font-size: 16px; line-height: 1.3; padding: 4px 0; box-shadow: inset 0 -2px 0 0 var(--s3); color: var(--b4); }
 .blog li:last-child { box-shadow: none; }
 .blog li.bad { color: var(--alarm); }
-/* the word of the verdict is set over the field in the display face with a dark edge, and the field is dimmed with a dither */
-.verdict { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 16px; background: conic-gradient(var(--s0) 0 25%, transparent 0) 0 0 / 4px 4px; padding: 12px; line-height: 1.1; text-align: center; }
+/* the word of the verdict is set over the field in the display face with a dark edge, and the field is dimmed (a plain veil: a dither over a painted field is only noise) */
+.verdict { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 16px; background: rgba(11, 9, 7, .4); padding: 12px; line-height: 1.1; text-align: center; }
 .ribbon-word, .ribbon-banner h2 { font: 400 clamp(40px, 7vw, 72px) / 1 var(--display); color: var(--b5); text-shadow: 0 4px 0 var(--s0), 4px 4px 0 var(--s0), -4px 4px 0 var(--s0), 4px 0 0 var(--s0), -4px 0 0 var(--s0), 0 -4px 0 var(--s0); padding-bottom: 8px; text-wrap: balance; text-align: center; }
 .verdict.lost .ribbon-word, .ribbon-banner.bad h2 { color: var(--b3); }
 

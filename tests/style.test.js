@@ -168,3 +168,10 @@ test('the colours of the stylesheet are the ramps the pictures are painted from'
     assert.ok(dyes.has(coat.toLowerCase()), `the coat of the ${id} (${coat}) is a dye of the ramps`);
   }
 });
+
+test('the lands are painted from the same ramps as the camp and the page', () => {
+  const r = load(['core', 'journey', 'command', 'geo', 'art', 'figures', 'terrain']), ramps = plain(r, 'RAMPS');
+  const IN_TERRAIN = { soot: 'rSoot', bone: 'rBone', paper: 'rPaper', bronze: 'rBronze', madder: 'rMadder', woad: 'rWoad', moss: 'rMoss', ochre: 'rOchre', iron: 'rIron', skin: 'rSkin', night: 'rNight', fire: 'rFire', teal: 'rTeal', plum: 'rPlum', sky: 'rSky' };
+  for (const [ramp, name] of Object.entries(IN_TERRAIN)) assert.deepEqual(plain(r, name), ramps[ramp], `${name} in src/terrain.ts is ${ramp} in src/art.ts`);
+  assert.deepEqual(Object.keys(ramps).sort(), Object.keys(IN_TERRAIN).sort(), 'and neither has a ramp the other lacks');
+});
