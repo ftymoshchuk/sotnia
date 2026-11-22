@@ -521,9 +521,9 @@ kbd { font: 600 11px/1 var(--num); padding: 3px 4px; box-shadow: inset 0 0 0 2px
 .fx b { font: 600 14px/1 var(--num); }
 .fx span { color: var(--b3); }
 .fx.up { background: var(--wd3); box-shadow: 0 -2px 0 var(--s0), 0 2px 0 var(--s0), -2px 0 0 var(--s0), 2px 0 0 var(--s0), inset 2px 2px 0 0 var(--wd5); color: var(--b5); }
-.fx.up span { color: var(--wd6); }
+.fx.up span { color: var(--b4); }
 .fx.down { background: var(--md3); box-shadow: 0 -2px 0 var(--s0), 0 2px 0 var(--s0), -2px 0 0 var(--s0), 2px 0 0 var(--s0), inset 2px 2px 0 0 var(--md5); color: var(--b5); }
-.fx.down span { color: var(--md6); }
+.fx.down span { color: var(--b4); }
 
 /* ---------- the title ---------- */
 .hero { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 28px; align-items: start; }
