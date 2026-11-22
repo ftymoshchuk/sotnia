@@ -69,7 +69,7 @@ function tint(hex, k) {
 /** What the figures are made of: each material in its base colour and, where it shines or lies in shadow, its light (Hi) and shade (Lo). */
 const MAT = {
     ink: PAL.ink, hose: '#2e2a27', boot: '#43301f', bootHi: '#6b4a2b', leather: '#3d2b1b',
-    skin: PAL.skin, skinLo: '#b98c68', skinHi: '#e4c19d', linen: '#ebe3cd',
+    skin: PAL.skin, skinLo: '#a5714f', skinHi: '#e8bd96', linen: '#e7ddbf',
     buff: '#c4a265', buffLo: '#94743f', buffHi: '#dcc18a',
     steel: '#8f979c', steelHi: '#dde3e4', steelLo: '#59616a', steelDk: '#363b40',
     gilt: '#d8b25a', giltHi: '#f4dc92', giltLo: '#8c6c2c',
@@ -98,24 +98,24 @@ function glow(hex, k) {
  * the rest (his legs, his cap, his feather, his mark) from his nation, if his skin has one (see NATION_OF_SKIN).
  */
 const NATIONS = {
-    cossack: { coat: '#3f78c4', trim: '#e3b93c', hose: '#26416e', boot: '#d2a63a', head: { pike: 'kolpak', shot: 'kolpak' }, bag: '#b3262f',
-        hair: ['#1e140d', '#2a1c12', '#4a3220'], mus: [2, 2, 1], flag: ['#3f78c4', '#e3b93c'] },
-    pole: { coat: '#a3222f', trim: '#f1ece0', boot: '#6d2a22', bag: '#a3222f', plume: '#f1ece0', mark: 'hanging',
-        hair: ['#4a3220', '#7b5b33', '#2a1c12', '#77736b'], mus: [1, 2, 2], flag: ['#f1ece0', '#a3222f'] },
-    german: { coat: '#2f2d33', trim: '#d6aa3a', hose: ['#2e2a27', '#a8232f'], plume: '#a8232f', mark: 'slashes',
-        hair: ['#a8803e', '#7b5b33', '#4a3220'], mus: [0, 1, 0], flag: ['#2f2d33', '#b02a30', '#d6aa3a'] },
-    swede: { coat: '#dcb040', trim: '#2d4b70', hose: '#2d4b70', plume: '#dcb040',
-        hair: ['#d9b45a', '#a8803e', '#c99a52'], mus: [0, 0, 1], flag: ['#2d4b70', '#dcb040'] },
-    scot: { coat: '#2f4f86', trim: '#f1ece0', hose: '#a8232f', head: { pike: 'bonnet', shot: 'bonnet' }, bag: '#1f3a63', mark: 'plaid',
-        hair: ['#b0552b', '#7b5b33', '#a8803e', '#4a3220'], mus: [0, 1], flag: ['#2f4f86', '#f1ece0'] },
-    magyar: { coat: '#3f7a4e', trim: '#f1ece0', hose: '#a8232f', head: { pike: 'kalpak', shot: 'kalpak', sabre: 'kalpak' }, bag: '#a8232f', plume: '#f1ece0', mark: 'braid',
-        hair: ['#1e140d', '#2a1c12'], mus: [2, 2, 1], flag: ['#a8232f', '#f1ece0', '#3f7a4e'] },
-    croat: { coat: SKINS.croat.coat, trim: SKINS.croat.trim, head: { sabre: 'hat' }, plume: '#c0392b', mark: 'cravat',
-        hair: ['#2a1c12', '#4a3220'], mus: [1, 2], flag: ['#c0392b', '#f1ece0', '#2f4f86'] },
-    tatar: { coat: SKINS.tatar.coat, trim: SKINS.tatar.trim, head: { pike: 'tatar', shot: 'tatar', sabre: 'tatar' }, bag: '#3b9a86',
-        hair: ['#1a1210', '#2a1c12'], mus: [1, 0], flag: ['#2b7d78', '#f1ece0'] },
-    imperial: { coat: SKINS.imperial.coat, trim: SKINS.imperial.trim, flag: ['#1c1a17', '#b98a2b'] },
-    muscovite: { coat: SKINS.muscovite.coat, trim: SKINS.muscovite.trim, head: { pike: 'kolpak', shot: 'kolpak', sabre: 'kolpak' }, flag: ['#f1ece0', '#2d4b70', '#a8232f'] }
+    cossack: { coat: '#4b6f98', trim: '#cf9f3c', hose: '#233756', boot: '#cf9f3c', head: { pike: 'kolpak', shot: 'kolpak' }, bag: '#8f3328',
+        hair: ['#1e140d', '#2a1c12', '#4a3220'], mus: [2, 2, 1], flag: ['#4b6f98', '#cf9f3c'] },
+    pole: { coat: '#8f3328', trim: '#e7ddbf', boot: '#4a1816', bag: '#8f3328', plume: '#e7ddbf', mark: 'hanging',
+        hair: ['#4a3220', '#7b5b33', '#2a1c12', '#77736b'], mus: [1, 2, 2], flag: ['#e7ddbf', '#8f3328'] },
+    german: { coat: '#2a2018', trim: '#cba34f', hose: ['#1d2227', '#8f3328'], plume: '#8f3328', mark: 'slashes',
+        hair: ['#a8803e', '#7b5b33', '#4a3220'], mus: [0, 1, 0], flag: ['#2a2018', '#b2493a', '#cba34f'] },
+    swede: { coat: '#cf9f3c', trim: '#33507a', hose: '#33507a', plume: '#cf9f3c',
+        hair: ['#d9b45a', '#a8803e', '#c99a52'], mus: [0, 0, 1], flag: ['#33507a', '#cf9f3c'] },
+    scot: { coat: '#233756', trim: '#e7ddbf', hose: '#8f3328', head: { pike: 'bonnet', shot: 'bonnet' }, bag: '#17233a', mark: 'plaid',
+        hair: ['#b0552b', '#7b5b33', '#a8803e', '#4a3220'], mus: [0, 1], flag: ['#233756', '#e7ddbf'] },
+    magyar: { coat: '#587030', trim: '#e7ddbf', hose: '#8f3328', head: { pike: 'kalpak', shot: 'kalpak', sabre: 'kalpak' }, bag: '#8f3328', plume: '#e7ddbf', mark: 'braid',
+        hair: ['#1e140d', '#2a1c12'], mus: [2, 2, 1], flag: ['#8f3328', '#e7ddbf', '#587030'] },
+    croat: { coat: SKINS.croat.coat, trim: SKINS.croat.trim, head: { sabre: 'hat' }, plume: '#b2493a', mark: 'cravat',
+        hair: ['#2a1c12', '#4a3220'], mus: [1, 2], flag: ['#b2493a', '#e7ddbf', '#33507a'] },
+    tatar: { coat: SKINS.tatar.coat, trim: SKINS.tatar.trim, head: { pike: 'tatar', shot: 'tatar', sabre: 'tatar' }, bag: '#3f867a',
+        hair: ['#1a1210', '#2a1c12'], mus: [1, 0], flag: ['#2a625a', '#e7ddbf'] },
+    imperial: { coat: SKINS.imperial.coat, trim: SKINS.imperial.trim, flag: ['#1d2227', '#cf9f3c'] },
+    muscovite: { coat: SKINS.muscovite.coat, trim: SKINS.muscovite.trim, head: { pike: 'kolpak', shot: 'kolpak', sabre: 'kolpak' }, flag: ['#e7ddbf', '#33507a', '#8f3328'] }
 };
 /** The foes whose skins are the dress of a people. */
 const NATION_OF_SKIN = { swede: 'swede', imperial: 'imperial', muscovite: 'muscovite', tatar: 'tatar', croat: 'croat' };
@@ -226,13 +226,13 @@ const PLAIN_LEGS = { hoseB: MAT.hose, hoseF: MAT.hose, boot: MAT.boot };
 function behind(U, d) {
     if (d.mark === 'plaid') {
         // tartan, in red crossed with green and navy: a cloak from the shoulders to the knee
-        U(-12, -25, 6, 17, '#a8232f');
-        U(-10, -25, 1, 17, '#2f6a45');
-        U(-12, -21, 6, 1, '#2f6a45');
-        U(-12, -15, 6, 1, '#2f6a45');
-        U(-12, -18, 6, 1, '#1f3a63');
-        U(-12, -12, 6, 1, '#1f3a63');
-        U(-8, -25, 1, 17, '#1f3a63');
+        U(-12, -25, 6, 17, '#8f3328');
+        U(-10, -25, 1, 17, '#3f5524');
+        U(-12, -21, 6, 1, '#3f5524');
+        U(-12, -15, 6, 1, '#3f5524');
+        U(-12, -18, 6, 1, '#17233a');
+        U(-12, -12, 6, 1, '#17233a');
+        U(-8, -25, 1, 17, '#17233a');
         U(-12, -8, 6, 1, '#6d1a22');
         U(-12, -25, 6, 1, '#d8b25a');
     }
@@ -356,10 +356,10 @@ function head(U, d) {
         U(1, -28, 1, 1, d.hair);
     }
     if (d.mark === 'cravat') {
-        U(-2, -27, 6, 2, '#c0392b');
+        U(-2, -27, 6, 2, '#b2493a');
         U(0, -27, 1, 2, PAL.white);
         U(2, -27, 1, 2, PAL.white);
-        U(1, -25, 3, 3, '#c0392b');
+        U(1, -25, 3, 3, '#b2493a');
         U(2, -25, 1, 3, PAL.white);
     }
 }
@@ -1245,8 +1245,8 @@ function drawPerson(g, x, y, L, face) {
             R(-6, -8, 2, 1, MAT.ember);
             break;
         case 'cane':
-            R(-5, -17, 11, 2, '#a3222f');
-            R(-5, -17, 11, 1, tint('#a3222f', 1.3));
+            R(-5, -17, 11, 2, '#8f3328');
+            R(-5, -17, 11, 1, tint('#8f3328', 1.3));
             arm(11, -26);
             seg(R, 11, -27, 15, -42, 1, MAT.wood);
             R(14, -44, 3, 2, MAT.gilt);
@@ -1294,7 +1294,7 @@ function drawPerson(g, x, y, L, face) {
             arm(10, -21);
             R(9, -25, 6, 5, white);
             R(9, -25, 6, 1, '#cfc8b4');
-            R(11, -23, 2, 2, '#a3222f');
+            R(11, -23, 2, 2, '#8f3328');
             R(-9, -28, 4, 16, cd);
             break;
         case 'cross':

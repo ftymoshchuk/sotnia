@@ -51,7 +51,7 @@ const foeName = (u) => TIER[u.tier] + ' ' + CLS[u.cls].name.toLowerCase();
 const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
 const DANGER = ['A quiet road', 'Robbers about', 'Dangerous country', 'Deadly country'];
 const sr = (t) => '<span class="sr">' + t + '</span>';
-const meter = (kind, v, max) => '<span class="meter ' + kind + '"><i style="width:' + pct(v, max) + '%"></i></span>';
+const meter = (kind, v, max) => '<span class="meter ' + kind + '"><i style="--v:' + pct(v, max) + '"></i></span>';
 const pips = (n, of, label) => '<span class="pips" role="img" aria-label="' + esc(label) + '">' + Array.from({ length: of }, (_, i) => '<i' + (i < n ? ' class="on"' : '') + '></i>').join('') + '</span>';
 const oddsPips = (p) => (p >= 0.85 ? 5 : p >= 0.65 ? 4 : p >= 0.42 ? 3 : p >= 0.2 ? 2 : 1);
 // An icon and its number; the word is there for screen readers and on hover.
@@ -67,14 +67,15 @@ const tipText = (t) => [t.title, ...t.lines, ...(t.warns || [])].map(s => s.repl
 // The card: a name banner, a picture, its body, and the type bar along the foot with the coin at its left.
 function cardHTML(o) {
     const tag = o.tag || 'article', head = tag === 'article' ? 'h3' : 'span';
-    let h = '<' + tag + ' class="card ' + (o.cls || '') + '"' + (o.attrs || '') + '><span class="face">';
+    // the kind of the card (its look) is a class after its own, and the colours of a nation are custom properties of the card as well as of its foot, for the rule under the name
+    let h = '<' + tag + ' class="card ' + (o.cls || '') + (o.type ? ' k-' + (o.type.look || 'ink') : '') + '"' + (o.type && o.type.style ? ' style="' + o.type.style + '"' : '') + (o.attrs || '') + '><span class="face">';
     h += '<' + head + ' class="banner">' + o.title + '</' + head + '>';
     if (o.art)
         h += '<span class="art ' + (o.artCls || '') + '"><img src="' + o.art + '" alt="">' + (o.badges || '') + '</span>';
     h += o.body || '';
     if (o.type) {
         const t = o.type;
-        h += '<span class="type ' + (t.look || 'ink') + (t.coin != null ? ' coined' : '') + (t.lvl ? ' levelled' : '') + (t.end ? ' ended' : '') + '"' + (t.style ? ' style="' + t.style + '"' : '') + '>' + (t.coin != null ? '<span class="coin" title="' + esc(t.coinLabel || '') + '">' + t.coin + sr(' ' + (t.coinLabel || '')) + '</span>' : '') +
+        h += '<span class="type ' + (t.look || 'ink') + (t.coin != null ? ' coined' : '') + (t.lvl ? ' levelled' : '') + (t.end ? ' ended' : '') + '"' + (t.style ? ' style="' + t.style + '"' : '') + '>' + (t.coin != null ? '<span class="coin" title="' + esc(t.coinLabel || '') + '">' + ic('coin') + t.coin + sr(' ' + (t.coinLabel || '')) + '</span>' : '') +
             '<span class="tt">' + t.text + '</span>' + (t.lvl ? '<span class="lvl" title="Level">' + t.lvl + sr(' level') + '</span>' : '') + (t.end || '') + '</span>';
     }
     return h + '</span></' + tag + '>';

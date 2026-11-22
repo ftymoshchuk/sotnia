@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sotnia: style</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IM+Fell+DW+Pica:ital@0;1&family=IM+Fell+DW+Pica+SC&family=IM+Fell+English+SC&family=Jacquard+24&family=Pixelify+Sans:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/sotnia.css">
+<style>
+  /* The style sheet of the game: the palette, the type, the frames and the icons, drawn with the stylesheet and the scripts the game loads (so
+     it cannot drift from them). Open it from the repository (file:// works) after `npm run build`. It is a tool for the artist, not part of the game. */
+  main { width: min(100% - 48px, 1180px); margin: 0 auto; padding: 28px 0 60px; display: grid; gap: 34px; }
+  header h1 { font: 400 64px/1 var(--display); color: var(--br5); margin-bottom: 10px; }
+  header p { max-width: 70ch; color: var(--b2); font-size: 18px; }
+  .row { display: flex; flex-wrap: wrap; gap: 22px 20px; align-items: flex-start; padding: 2px; }
+  .ramp { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-end; padding: 2px; }
+  .ramp h3 { flex: 1 1 100%; font: 400 14px/1 var(--caps); letter-spacing: .12em; color: var(--b3); }
+  .sw2 { width: 64px; }
+  .sw2 i { display: block; height: 44px; box-shadow: 0 -2px 0 var(--s0), 0 2px 0 var(--s0), -2px 0 0 var(--s0), 2px 0 0 var(--s0); }
+  .sw2 code { display: block; margin-top: 8px; font: 600 12px/1.2 var(--num); color: var(--b2); }
+  .specimen { width: 270px; padding: 14px; background: var(--s3); box-shadow: 0 -2px 0 var(--br1), 0 2px 0 var(--br1), -2px 0 0 var(--br1), 2px 0 0 var(--br1); display: grid; gap: 10px; }
+  .specimen small { font: 400 13px/1 var(--caps); letter-spacing: .1em; color: var(--br4); padding-top: 8px; box-shadow: inset 0 2px 0 0 var(--s4); }
+  .cell { width: 270px; display: grid; gap: 8px; align-content: start; }
+  .cell > small, .iconset small { font: 400 12px/1.2 var(--caps); letter-spacing: .1em; color: var(--b2); }
+  .iconset { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 14px 10px; padding: 2px; }
+  .iconset span { display: grid; justify-items: center; gap: 6px; }
+  .iconset .i.big { width: 40px; height: 40px; }
+  .rules { display: flex; gap: 12px; flex-wrap: wrap; }
+  .rules span { width: 120px; padding-bottom: 6px; font: 400 14px/1 var(--caps); letter-spacing: .05em; color: var(--b5); border-bottom: 2px solid var(--rule); }
+  .well { background: var(--s1); padding: 14px; box-shadow: 0 -2px 0 var(--s0), 0 2px 0 var(--s0), -2px 0 0 var(--s0), 2px 0 0 var(--s0); display: grid; gap: 10px; width: 270px; }
+  .paper { background: var(--p3); color: var(--s1); padding: 12px; box-shadow: 0 -2px 0 var(--s1), 0 2px 0 var(--s1), -2px 0 0 var(--s1), 2px 0 0 var(--s1), inset 2px 2px 0 0 var(--p4); width: 270px; font-style: italic; }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>Style</h1>
+  <p>One art pixel is two screen pixels. Everything that has an edge has one two-pixel line, notched at its corners, and no corner is rounded and no shadow blurred. What kind a thing is, is told by a rule under its name. The pictures carry the weight; the chrome stays light.</p>
+</header>
+
+<section>
+  <h2 class="sect">Palette <small>dark to light; the tokens are on :root</small></h2>
+  <div class="row" id="ramps"></div>
+</section>
+
+<section>
+  <h2 class="sect">Type</h2>
+  <div class="row">
+    <div class="specimen"><span style="font: 400 48px/1 var(--display); color: var(--b5)">Sotnia</span><small>Jacquard 24: the wordmark, a verdict, the one big action</small></div>
+    <div class="specimen"><span style="font: 400 24px/1.1 var(--caps); letter-spacing: .05em; color: var(--b5)">Danylo Holota</span><small>IM Fell English SC: names, labels, buttons</small></div>
+    <div class="specimen"><span style="font: italic 19px/1.3 var(--body); color: var(--b3)">A sutler-woman has a barrel of gorzałka, and names a soldier’s price for it.</span><small>IM Fell DW Pica: prose</small></div>
+    <div class="specimen"><span style="font: 600 28px/1 var(--num); color: var(--b5)">212 82/82</span><small>Pixelify Sans: figures only (its 5 and S are one glyph)</small></div>
+  </div>
+</section>
+
+<section>
+  <h2 class="sect">Kinds <small>the colour of the rule under a name</small></h2>
+  <div class="rules">
+    <span style="--rule: var(--md4)">Sabreur</span><span style="--rule: var(--wd4)">Pikeman</span><span style="--rule: var(--ir5)">Musketeer</span>
+    <span style="--rule: var(--oc4)">Supply</span><span style="--rule: var(--ms4)">Staff</span><span style="--rule: var(--br4)">Cargo</span><span style="--rule: var(--b2)">Work</span><span style="--rule: var(--b1)">Fallen</span>
+  </div>
+</section>
+
+<section>
+  <h2 class="sect">Plaques, windows, tags</h2>
+  <div class="row">
+    <div class="cell"><small>a card, its kind and its foot</small>
+      <article class="card soldier k-madder"><span class="face">
+        <h3 class="banner">Danylo Holota<small><i class="flag" style="background:linear-gradient(#4b6f98 0 50%,#cf9f3c 50% 100%)"></i>Zaporozhian</small></h3>
+        <span class="art"><img alt="" src="data:image/gif;base64,R0lGODlhAQABAIAAABQQDAAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==" style="aspect-ratio:48/30"><span class="badge"><svg class="i" viewBox="0 0 10 10"><use href="#i-star"/></svg>Hardy</span><span class="ribbon"><svg class="i" viewBox="0 0 10 10"><use href="#i-star"/></svg>Promotion earned</span></span>
+        <span class="bars"><svg class="i" viewBox="0 0 10 10"><use href="#i-drop"/></svg><span class="meter hp"><i style="--v:82"></i></span><span class="n">66/80</span>
+          <svg class="i" viewBox="0 0 10 10"><use href="#i-flame"/></svg><span class="meter mo"><i style="--v:55"></i></span><span class="n">55</span></span>
+        <span class="strip"><span class="st"><svg class="i" viewBox="0 0 10 10"><use href="#i-heart"/></svg><b>80</b></span><span class="st"><svg class="i" viewBox="0 0 10 10"><use href="#i-sabre"/></svg><b>11</b></span><span class="st"><svg class="i" viewBox="0 0 10 10"><use href="#i-shield"/></svg><b>9</b></span></span>
+        <span class="type levelled"><span class="coin"><svg class="i" viewBox="0 0 10 10"><use href="#i-coin"/></svg>8</span><span class="tt">Sabreur</span><span class="lvl">II</span></span>
+      </span></article></div>
+    <div class="cell"><small>a notice, on paper</small>
+      <article class="card contract k-ink"><span class="face">
+        <h3 class="banner">Raiders at the ford</h3>
+        <span class="who">Three villages on the Dunajec</span>
+        <span class="flavour">Light horsemen burned the hamlets and now fight on foot among the reeds.</span>
+        <span class="strip"><span class="st"><svg class="i" viewBox="0 0 10 10"><use href="#i-mace"/></svg><b>+8</b></span><span class="st"><svg class="i" viewBox="0 0 10 10"><use href="#i-men"/></svg><b>7</b></span><span class="st"><svg class="i" viewBox="0 0 10 10"><use href="#i-hourglass"/></svg><b>2</b></span></span>
+        <span class="type ended"><span class="coin"><svg class="i" viewBox="0 0 10 10"><use href="#i-coin"/></svg>291</span><span class="tt">Raiders</span><button class="btn go sm"><svg class="i" viewBox="0 0 10 10"><use href="#i-swords"/></svg>Muster</button></span>
+      </span></article></div>
+    <div class="cell"><small>tags on a picture, effects</small>
+      <div class="well" style="position:relative;height:150px">
+        <span class="badge"><svg class="i" viewBox="0 0 10 10"><use href="#i-star"/></svg>Keen-eyed</span>
+        <span class="badge bad" style="top:44px"><svg class="i" viewBox="0 0 10 10"><use href="#i-warn"/></svg>Grasping</span>
+        <span class="badge moss" style="top:82px"><svg class="i" viewBox="0 0 10 10"><use href="#i-check"/></svg>In your pay</span>
+        <span class="badge gold right" style="top:6px"><svg class="i" viewBox="0 0 10 10"><use href="#i-hourglass"/></svg>10–15 minutes</span>
+      </div>
+      <div class="fxrow"><span class="fx up"><svg class="i" viewBox="0 0 10 10"><use href="#i-flame"/></svg><b>+14</b><span>spirit</span></span><span class="fx down"><svg class="i" viewBox="0 0 10 10"><use href="#i-coin"/></svg><b>−12</b><span>thalers</span></span><span class="fx"><svg class="i" viewBox="0 0 10 10"><use href="#i-dice"/></svg><b>1 in 4</b><span>a brawl</span></span></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2 class="sect">Buttons and meters</h2>
+  <div class="row">
+    <div class="cell"><small>quiet, primary, outline</small>
+      <button class="btn"><svg class="i" viewBox="0 0 10 10"><use href="#i-moon"/></svg>Rest a day</button>
+      <button class="btn go"><svg class="i" viewBox="0 0 10 10"><use href="#i-boot"/></svg>March · 4 days</button>
+      <button class="btn ghost"><svg class="i" viewBox="0 0 10 10"><use href="#i-tent"/></svg>Back to camp</button>
+      <button class="btn go huge">To arms</button></div>
+    <div class="cell"><small>orders (one chosen), price, promotion</small>
+      <span class="orders"><button aria-pressed="true"><svg class="i" viewBox="0 0 10 10"><use href="#i-drill"/></svg>Drill</button><button aria-pressed="false"><svg class="i" viewBox="0 0 10 10"><use href="#i-moon"/></svg>Rest</button><button aria-pressed="false"><svg class="i" viewBox="0 0 10 10"><use href="#i-forage"/></svg>Forage</button></span>
+      <span class="row" style="padding:0"><button class="mini"><svg class="i" viewBox="0 0 10 10"><use href="#i-up"/></svg>40</button><button class="mini gold"><svg class="i" viewBox="0 0 10 10"><use href="#i-heart"/></svg>+8</button></span></div>
+    <div class="cell"><small>meters: segments of six pixels and two</small>
+      <span class="meter hp" style="width:230px"><i style="--v:90"></i></span><span class="meter mo" style="width:230px"><i style="--v:60"></i></span><span class="meter xp" style="width:230px"><i style="--v:30"></i></span><span class="meter foe" style="width:230px"><i style="--v:75"></i></span></div>
+  </div>
+</section>
+
+<section>
+  <h2 class="sect">Icons <small>eight by eight, with a dark edge; all from one sprite</small></h2>
+  <div class="iconset" id="icons2"></div>
+</section>
+</main>
+<script src="../js/icons.js"></script>
+<script>
+  const root = getComputedStyle(document.documentElement);
+  const RAMPS = [['soot', 's', 8], ['bone', 'b', 6], ['paper', 'p', 6], ['bronze', 'br', 7], ['madder', 'md', 7], ['woad', 'wd', 7], ['moss', 'ms', 8], ['ochre', 'oc', 7], ['iron', 'ir', 8]];
+  document.getElementById('ramps').innerHTML = RAMPS.map(([name, k, n]) => '<div class="ramp"><h3>' + name + '</h3>' + Array.from({ length: n }, (_, i) => {
+    const v = root.getPropertyValue('--' + k + i).trim();
+    return v ? '<span class="sw2"><i style="background:' + v + '"></i><code>--' + k + i + '<br>' + v + '</code></span>' : '';
+  }).join('') + '</div>').join('');
+  document.getElementById('icons2').innerHTML = Object.keys(ICON).map(n => '<span>' + ic(n).replace('class="i"', 'class="i big"') + '<small>' + n + '</small></span>').join('');
+</script>
+</body>
+</html>
