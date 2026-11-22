@@ -176,7 +176,7 @@ const TRANSPORT: Record<TransportId, Transport> = {
 };
 
 /** The commissions on offer: the keys of the ids in QUESTS. */
-type QuestId = 'salt' | 'oxen' | 'grain' | 'payroll';
+type QuestId = 'salt' | 'oxen' | 'grain' | 'payroll' | 'training';
 /** What the train carries: n units to start with, and what one and several are called. */
 interface CargoSpec { n: number; one: string; many: string; unit: string }
 /** What every quest has: carry a cargo from one place to another by a date, with a starting company and purse. */
@@ -190,6 +190,9 @@ interface QuestBase {
   thalers: number; bread: number; // the company's purse and bread at the start
   men: TroopClass[]; // the company it starts with
   text: string; opening: string;
+  training?: true; // a drill: a guide walks the captain through it (see src/training.ts), and the title offers it apart from the real commissions
+  payIn?: number; // the days to the first pay day, where it is not the usual thirty (so that a short road still sees one)
+  threatCap?: number; // the most threat() reaches on this road, where the road is too short to climb the whole ramp of it and stay a quiet one
 }
 /** A venture is on the company's own account: the cargo sells at its destination for price a unit. */
 interface Venture extends QuestBase { kind: 'venture'; price: number }
@@ -218,7 +221,16 @@ const QUESTS: Quest[] = [
     from: 'warsaw', to: 'smolensk', start: dayOf(8, 12), deadline: dayOf(9, 29), until: 'Michaelmas, when their pay falls due',
     cargo: { n: 600, one: 'thaler', many: 'thalers', unit: 'thalers' }, play: '10–15 minutes', fee: 340, thalers: 100, bread: 40, men: ['pike', 'shot', 'sabre', 'shot'],
     text: 'Six hundred thalers in an iron-bound chest, for the regiments King Władysław has led to the relief of Smolensk. Bring it to the camp by Michaelmas, when their pay falls due. The fee is yours on delivery, less anything missing from the chest.',
-    opening: "The Crown's chest is chained to the wagon bed in Warsaw. Smolensk is a long way east." }
+    opening: "The Crown's chest is chained to the wagon bed in Warsaw. Smolensk is a long way east." },
+  // The training: a short, quiet road with days to spare and a full purse, under the eye of a guide that teaches the camp, the market, a fight and the road
+  // (src/training.ts). It is last so that QUESTS[0], which an unknown id falls back to, stays the salt; the title shows it first and apart. The first pay day
+  // falls on the road (payIn), and not thirty days on, so that the captain sees the men paid; and the road stays quiet to the end (threatCap), where seven
+  // days would otherwise climb the ramp of threat that a month of marching is meant to.
+  { id: 'training', title: 'A chest for the Jarosław levy', who: 'The drillmaster of the Lviv garrison', kind: 'commission', transport: 'chest', training: true,
+    from: 'lviv', to: 'jaroslaw', start: dayOf(4, 20), deadline: dayOf(5, 6), until: 'the levy musters at Jarosław',
+    cargo: { n: 100, one: 'thaler', many: 'thalers', unit: 'thalers' }, play: '10 minutes', fee: 60, thalers: 100, bread: 12, payIn: 6, threatCap: 3, men: ['pike', 'shot', 'sabre', 'shot'],
+    text: 'A hundred thalers of recruiting money, wanted at Jarosław for the levy that musters there. The road from Lviv is short and the country quiet, and the drillmaster of the garrison has taken it on himself to ride beside a new captain and show him how a company is run: the camp, the market, the noticeboard, a fight, the road. The fee is small. It is the road that is being taught.',
+    opening: "A hundred thalers lie in an iron-bound chest on the wagon bed at Lviv, and the drillmaster is tapping its lid. “A short road and a quiet one,” he says. “Let us see what you make of it.”" }
 ];
 /** Which quest the company is on and where it stands: all that finding a road needs of a campaign. */
 type Whereabouts = Pick<Campaign, 'quest' | 'at'>;
@@ -235,8 +247,9 @@ function progress(st: Whereabouts) {
   const q = questOf(st), to = PLACES[q.to];
   return clamp(1 - kmBetween(here(st), to) / kmBetween(PLACES[q.from], to), 0, 1);
 }
-// Contracts and ambushes grow harder as the company nears its goal, as they did over the old 24 days.
-const threat = (st: Whereabouts) => clamp(1 + Math.round(23 * progress(st)), 1, 24);
+// Contracts and ambushes grow harder as the company nears its goal, as they did over the old 24 days. A short road, which would climb all of it in a week,
+// may name where it stops (threatCap).
+const threat = (st: Whereabouts) => clamp(1 + Math.round(23 * progress(st)), 1, questOf(st).threatCap || 24);
 const legDays = (km: number, speed: number) => Math.max(1, Math.ceil(km / speed));
 /** One stretch of road as the company could take it: i is the road's index in ROADS, days and forced the days it takes at a steady and at a forced pace. */
 interface Leg { i: number; to: PlaceId; km: number; days: number; forced: number; danger: number; land: LandId }
@@ -613,13 +626,16 @@ interface Campaign {
   nextId: number; // the next id for a man or a contract
   odds: Record<number, StanceOdds>; // the scouts' odds, by contract id
   stats: CampaignStats;
+  // Where the guide of a training commission has got to (see src/training.ts). Only a training has it, and it was added without a new version of the save:
+  // a save without it is every other commission, and loads as it did.
+  training?: TrainingState;
 }
 /** Begin a campaign on a quest under a captain (the first of the ones genCaptains offers, if none is named). */
 function newGame(questId: string, captain?: Captain): Campaign {
   const q = QUESTS.find(x => x.id === questId) || QUESTS[0];
   const st: Campaign = {
     v: 3, quest: q.id, date: q.start, day: 1, at: q.from, path: [q.from], weather: 'clear',
-    thalers: q.thalers, bread: q.bread, powder: 14, renown: 0, cargo: q.cargo.n, cargo0: q.cargo.n, payDue: q.start + 30,
+    thalers: q.thalers, bread: q.bread, powder: 14, renown: 0, cargo: q.cargo.n, cargo0: q.cargo.n, payDue: q.start + (q.payIn || 30),
     roster: [], recruits: [], contracts: [], ambush: null, result: null,
     captain: captain || genCaptains()[0], officers: {}, pool: {}, retainer: null, offered: -99, log: [], seen: [], pending: null, over: null,
     nextId: 1, odds: {}, stats: { battles: 0, won: 0, kills: 0, earned: 0, deserted: 0, dead: [], sold: 0, start: q.thalers, lost: { rain: 0, forced: 0, raid: 0, pilfered: 0 } }
@@ -633,6 +649,7 @@ function newGame(questId: string, captain?: Captain): Campaign {
     st.roster.push(makeSoldier(st, cls, 1, mine ? home : originFor(cls, land)));
   });
   st.roster.forEach(s => { if (s.trait && !TRAITS[s.trait].good) s.trait = null; });
+  if (q.training) st.training = { step: 0 };
   arrive(st);
   logLine(st, q.opening);
   return st;

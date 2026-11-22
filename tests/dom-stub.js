@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const { load } = require('./canvas-stub');
 
 // every script of the game, in the order index.html loads them
-const SCRIPTS = ['core', 'journey', 'command', 'geo', 'art', 'figures', 'terrain', 'music', 'score', 'audio', 'icons', 'screens', 'encyclopedia', 'main'];
+const SCRIPTS = ['core', 'journey', 'command', 'geo', 'art', 'figures', 'terrain', 'music', 'score', 'audio', 'icons', 'screens', 'encyclopedia', 'training', 'main'];
 
 /** An element that keeps its attributes, its classes and what is put in it, and does nothing else. base is whatever a test or a canvas adds to it. */
 function element(tag, base) {

@@ -99,6 +99,10 @@ function act(a: string, d: ActData) {
       G = newGame(d.q, c); ui.captains = null; ui.screen = 'camp'; ui.panel = null; ui.post = 'captain'; ui.course = null; ui.open = null; ui.news = null; ui.modal = null; ui.campPos = {}; break;
     }
     case 'title': ui.screen = 'title'; ui.captains = null; ui.modal = null; break;
+    // the training's guide (src/training.ts): a step that is read goes on, a step can be skipped, the guide folded to its heading or sent away
+    case 'trainNext': case 'trainSkip': if (G) trainingNext(G); break;
+    case 'trainLeave': if (G) trainingLeave(G); break;
+    case 'trainMin': ui.coachMin = !ui.coachMin; break;
     case 'continue': {
       const s = loadSave(); if (!s) break;
       G = s; ui.screen = 'camp'; ui.panel = null; ui.post = 'captain'; ui.course = null; ui.news = null; ui.open = null; ui.campPos = {};
@@ -265,7 +269,7 @@ document.addEventListener('keydown', e => {
   else if (e.key === ' ' && !((e.target as Element).closest && (e.target as Element).closest('button:not(.stat)'))) { e.preventDefault(); ui.speed = ui.speed ? 0 : 1; paintHud(); }
 });
 window.addEventListener('resize', () => {
-  hideTip(); fitBar();
+  hideTip(); fitBar(); fitCoach(true);
   if (ui.view) fitView(ui.view);
   if (ui.screen === 'camp' && G) { if (ui.camp) { fitCamp(ui.camp); drawCamp(ui.camp, G, ui.open, 0, calm); } if (ui.panel === 'map') drawMap($<HTMLCanvasElement>('#map'), G, !atEnd(G) && ui.course ? routeTo(G, ui.course) : null); }
 });
@@ -312,6 +316,7 @@ function start(data: HotState) {
   const link = new RegExp('^#encyclopedia(?:-(' + CODEX_TABS.map(t => t[0]).join('|') + '))?$').exec(location.hash);
   if (link) { ui.codexFrom = ui.screen; ui.screen = 'codex'; if (link[1]) ui.codex = link[1] as CodexTab; }
   render();
+  watchCoach();
   requestAnimationFrame(frame);
   if (document.fonts && document.fonts.load) document.fonts.load("12px 'Alegreya SC'").catch(() => {});
 }

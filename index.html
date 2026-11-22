@@ -16,6 +16,9 @@
 <div id="modal"></div>
 <!-- The note that shows beside a figure or a thing in the camp (see showTip in src/main.ts). It is for the eye: what a reader needs is on the thing itself. -->
 <div id="tip" role="tooltip" aria-hidden="true" hidden></div>
+<!-- The guide of the training commission (see src/training.ts): the strip at the foot of the page, and the words it has for a reader of the screen, which are said once as it changes. -->
+<div id="coach"></div>
+<div id="coach-say" class="sr" aria-live="polite"></div>
 <!-- Plain scripts, not modules: they share one global scope and must load in this order.
      They are compiled from src/*.ts by `npm run build`: edit those, not these. -->
 <script src="js/core.js"></script>
@@ -31,6 +34,7 @@
 <script src="js/icons.js"></script>
 <script src="js/screens.js"></script>
 <script src="js/encyclopedia.js"></script>
+<script src="js/training.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>
