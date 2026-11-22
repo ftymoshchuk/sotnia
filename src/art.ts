@@ -1,10 +1,14 @@
 "use strict";
-/* ===== SOTNIA interface: drawing (palette, pixel sprites, the woodcut backdrop, the field) ===== */
+/* ===== SOTNIA interface: drawing (palette, the field, the map, the pictures of the cards, the camp) ===== */
 const LW = BW, LH = 124, FY = 72, HZ = 56;
+/**
+ * The colours the pictures name by what they are: the dyes of the men (red is madder, blue woad, ochre weld, green moss), and the paper family (paper, paperHi, hill,
+ * ground, drab, grey, steel, helm, smoke, flash), which is the ramps of the paper of a document, of dusk earth and of iron. All of them are steps of the ramps in RAMPS.
+ */
 const PAL = {
-  paper: '#d9d1bc', hill: '#d0c7ae', ground: '#cbc2a8', paperHi: '#e6dfcc', ink: '#14100c', red: '#b2493a', blue: '#33507a',
-  ochre: '#a67a27', green: '#587030', drab: '#77705a', grey: '#8b877c', plum: '#5e3158', black: '#2a2018', skin: '#cd9a73',
-  wood: '#6a4a2c', fur: '#4b3524', steel: '#3d4144', helm: '#7e8284', white: '#e7ddbf', flash: '#f0b93a', smoke: '#a9a498', russet: '#6e2420'
+  paper: '#bfae82', hill: '#8d7b52', ground: '#4e3d2c', paperHi: '#d3c498', ink: '#14100c', red: '#b2493a', blue: '#33507a',
+  ochre: '#a67a27', green: '#587030', drab: '#6e6249', grey: '#6b757e', plum: '#5e3158', black: '#2a2018', skin: '#cd9a73',
+  wood: '#6a4a2c', fur: '#4b3524', steel: '#2f363d', helm: '#939ca3', white: '#e7ddbf', flash: '#f6b73e', smoke: '#8f8467', russet: '#6e2420'
 } as const;
 const INK = PAL.ink;
 /** The two colours that dress a figure: coat for the body, trim for the belt and the small touches (plume, hilt). */
@@ -96,7 +100,7 @@ function stepParts(v: FieldView, dt: number) {
     if (p.k === 's') { p.vx *= 1 - Math.min(1, 1.6 * dt); p.vx += 1.5 * dt; p.vh = Math.max(1.2, p.vh * (1 - dt)); }
     else {
       p.vh -= 60 * dt;
-      if (p.h <= 0) { if (p.k === 'b') { g2.fillStyle = PAL.red; g2.fillRect(p.x | 0, (FY + p.y) | 0, 1, 1); } p.life = 99; }
+      if (p.h <= 0) { if (p.k === 'b') { g2.fillStyle = '#8f3328'; g2.fillRect(p.x | 0, (FY + p.y) | 0, 1, 1); } p.life = 99; }
     }
     if (p.life >= p.max) v.parts.splice(i, 1);
   }
@@ -105,7 +109,7 @@ function stepParts(v: FieldView, dt: number) {
 function drawField(v: FieldView, b: Battle, t: number) {
   const g = v.g; g.globalAlpha = 1; g.drawImage(v.back, 0, 0, LW, LH);
   if (v.weather === 'fog') {
-    g.fillStyle = 'rgba(244,240,228,.5)';
+    g.fillStyle = 'rgba(184,202,200,.4)';
     for (let i = 0; i < 3; i++) g.fillRect(-30 + Math.sin(t * 0.21 + i * 1.7) * 22, 42 + i * 25, LW + 60, 9);
   }
   const us = b.units.filter(u => !u.fled).sort((a, c) => a.y - c.y);
@@ -115,19 +119,19 @@ function drawField(v: FieldView, b: Battle, t: number) {
     const x = Math.round(u.x * SS) / SS, y = FY + Math.round(u.y * SS) / SS;
     drawSoldier(g, x, y, { cls: u.cls, skin: u.skin, face: u.face, mode: u.mode, moving: u.moving, anim: u.anim * 2, swing: u.swing, flash: u.flash, hurt: u.hurt, t, level: u.cls === 'pike' && u.tgt && dist(u, u.tgt) < 44, wpn: u.wpn, arm: u.arm, man: manNo(u.sid), nation: nationOf(u.origin) });
     if (!u.routing) {
-      g.fillStyle = INK; g.fillRect(x - 5, y - 27, 11, 3); g.fillStyle = PAL.paperHi; g.fillRect(x - 4, y - 26, 9, 1);
-      g.fillStyle = (SKINS[u.skin] || SKINS.own).coat; g.fillRect(x - 4, y - 26, Math.max(1, Math.round(9 * u.hp / u.max)), 1);
+      g.fillStyle = INK; g.fillRect(x - 5, y - 27, 11, 3); g.fillStyle = '#48515a'; g.fillRect(x - 4, y - 26, 9, 1);
+      g.fillStyle = glow((SKINS[u.skin] || SKINS.own).coat, 1.5); g.fillRect(x - 4, y - 26, Math.max(1, Math.round(9 * u.hp / u.max)), 1);
     }
   }
   // the captain's order: a ring of gold under the men it is on, and the captain behind the line, his sabre up as he calls it
   const O = b.order, left = O ? b.buffs[O] : undefined;
   if (O && left !== undefined) {
-    g.fillStyle = 'rgba(246,220,151,.75)';
+    g.fillStyle = 'rgba(232,200,116,.8)';
     for (const u of us) if (u.side === 0 && !u.dead && (O === 'rally' || (O === 'volley' ? u.cls === 'shot' : O === 'stand' ? u.cls === 'pike' : u.cls === 'sabre'))) g.fillRect(Math.round(u.x) - 6, FY + Math.round(u.y) + 1, 13, 1);
   }
   if (v.captain && b.order) {
     const C = CAPTAINS[v.captain.type], cx = 11, cy = FY + 30, calling = O && left !== undefined && left > ORDERS[O].secs - 0.7;
-    g.fillStyle = '#4b3420'; g.fillRect(cx - 9, cy - 38, 1, 38); g.fillStyle = PAL.red; g.fillRect(cx - 8, cy - 38, 8, 5); g.fillStyle = PAL.ochre; g.fillRect(cx - 5, cy - 37, 2, 3);
+    g.fillStyle = '#4e3d2c'; g.fillRect(cx - 9, cy - 38, 1, 38); g.fillStyle = PAL.red; g.fillRect(cx - 8, cy - 38, 8, 5); g.fillStyle = '#cba34f'; g.fillRect(cx - 5, cy - 37, 2, 3);
     drawCamper(g, cx, cy, { cls: C.cls, skin: 'own', face: 1, mode: calling ? 'fight' : 'idle', swing: calling ? 1 : 0, wpn: 2, arm: 2, man: v.captain.name.length, nation: C.origin, rank: 'captain' });
   }
   for (const p of v.parts) {
@@ -135,24 +139,24 @@ function drawField(v: FieldView, b: Battle, t: number) {
     if (p.k === 's') {
       const fr = p.life / p.max, s = 2 + Math.floor(fr * 4);
       g.globalAlpha = fr > 0.65 ? Math.max(0, 1 - (fr - 0.65) / 0.35) : 1;
-      g.fillStyle = PAL.white; g.fillRect(px - (s >> 1), py - (s >> 1), s, s);
+      g.fillStyle = '#d1c5a1'; g.fillRect(px - (s >> 1), py - (s >> 1), s, s);
       g.fillStyle = PAL.smoke; g.fillRect(px - (s >> 1), py - (s >> 1) + s - 1, s, 1);
       g.globalAlpha = 1;
-    } else { g.fillStyle = p.k === 'b' ? PAL.red : p.k === 'p' ? PAL.white : INK; g.fillRect(px, py, 1, 1); }
+    } else { g.fillStyle = p.k === 'b' ? PAL.red : p.k === 'p' ? '#fcdc7c' : '#b3a784'; g.fillRect(px, py, 1, 1); }
   }
   if (v.weather === 'rain') {
-    g.fillStyle = 'rgba(28,26,23,.5)';
+    g.fillStyle = 'rgba(157,186,208,.5)';
     for (let i = 0; i < 54; i++) { const x = ((i * 37 + t * 95 + i * i * 13) % (LW + 20)) - 10, y = (i * 53 + t * 190) % LH; g.fillRect(x | 0, y | 0, 1, 2); g.fillRect((x | 0) - 1, (y | 0) + 2, 1, 2); }
   } else if (v.weather === 'fog') {
-    g.fillStyle = 'rgba(244,240,228,.26)';
+    g.fillStyle = 'rgba(184,202,200,.24)';
     for (let i = 0; i < 2; i++) g.fillRect(-30 + Math.sin(t * 0.17 + i * 2.3) * 26, 84 + i * 21, LW + 60, 4);
   }
   present(v.ctx, v.buf, v.cv.width, v.cv.height);
   const c = v.ctx;
   if (v.names && v.css >= 1.5) {
     const sc = v.cv.width / LW;
-    c.font = Math.round(clamp(v.css * 4.5, 10, 15) * v.dpr) + "px 'Alegreya SC', Georgia, serif";
-    c.textAlign = 'center'; c.lineJoin = 'round'; c.lineWidth = 3 * v.dpr; c.strokeStyle = PAL.paper; c.fillStyle = INK;
+    c.font = Math.round(clamp(v.css * 4.5, 10, 15) * v.dpr) + "px 'IM Fell English SC', Georgia, serif";
+    c.textAlign = 'center'; c.lineJoin = 'round'; c.lineWidth = 3 * v.dpr; c.strokeStyle = INK; c.fillStyle = '#f4edd6'; // light on a dark halo, to read on dusk ground
     for (const u of b.units) {
       if (u.side !== 0 || !alive(u) || u.routing) continue;
       const n = u.name.split(' ')[0], X = u.x * sc, Y = (FY + u.y - 30) * sc;
@@ -161,7 +165,7 @@ function drawField(v: FieldView, b: Battle, t: number) {
   }
 }
 
-/* ---------- the map: a plain working map of the real lands, to be dressed in the period style later ---------- */
+/* ---------- the map: a document, so it stays on paper ---------- */
 const MAP_K = Math.cos(50 * Math.PI / 180);
 const MAP_ASPECT = (MAP_BOX.e - MAP_BOX.w) * MAP_K / (MAP_BOX.n - MAP_BOX.s);
 /** The name of a sea, and the lon, lat it is written at. */
@@ -192,24 +196,24 @@ function drawMap(cv: HTMLCanvasElement | null, st: Campaign | null, plan: RouteL
   const X = (lon: number) => (lon - MAP_BOX.w) * MAP_K * s, Y = (lat: number) => (MAP_BOX.n - lat) * s;
   const at = (id: PlaceId): [number, number] => [X(PLACES[id].lon), Y(PLACES[id].lat)];
   const line = (pts: number[]) => { g.beginPath(); for (let i = 0; i < pts.length; i += 2) { if (i) g.lineTo(X(pts[i]), Y(pts[i + 1])); else g.moveTo(X(pts[i]), Y(pts[i + 1])); } };
-  // sea, then the land over it
-  g.fillStyle = '#bcbdb3'; g.fillRect(0, 0, w, h);
+  // a map is a document, and stays on paper: the sea in woad, the land in the paper ramp with a wash that darkens towards the coast, the coast and the roads in soot ink
+  g.fillStyle = '#6f94b4'; g.fillRect(0, 0, w, h);
   g.beginPath();
   for (const ring of COAST) { for (let i = 0; i < ring.length; i += 2) { if (i) g.lineTo(X(ring[i]), Y(ring[i + 1])); else g.moveTo(X(ring[i]), Y(ring[i + 1])); } g.closePath(); }
-  g.fillStyle = PAL.paper; g.fill('evenodd');
-  g.strokeStyle = PAL.ink; g.lineWidth = 1; g.stroke();
+  g.fillStyle = '#bfae82'; g.fill('evenodd');
+  g.save(); g.clip('evenodd'); g.lineJoin = 'round'; g.strokeStyle = '#a8976a'; g.lineWidth = 9; g.globalAlpha = 0.6; g.stroke(); g.restore();
+  g.strokeStyle = PAL.ink; g.lineWidth = 1.2; g.stroke();
   g.lineJoin = 'round'; g.lineCap = 'round';
-  g.strokeStyle = PAL.blue; g.globalAlpha = 0.5; g.lineWidth = 1.4;
+  g.strokeStyle = '#4b6f98'; g.lineWidth = 1.5;
   for (const k in RIVERS) { line(RIVERS[k]); g.stroke(); }
-  g.globalAlpha = 1;
   // every road, then the roads open from here, then the road travelled
-  g.setLineDash([2, 3]); g.strokeStyle = 'rgba(28,26,23,.45)'; g.lineWidth = 1;
+  g.setLineDash([2, 3]); g.strokeStyle = 'rgba(20,16,12,.55)'; g.lineWidth = 1;
   for (const r of ROADS) { if (r.river) continue; const a = at(r.a), b = at(r.b); g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); }
   g.setLineDash([]);
   const here0 = at(st.at), out = st.over ? [] : roadsFrom(st);
   g.strokeStyle = PAL.ink; g.lineWidth = 2;
   for (const r of out) { const b = at(r.to); g.beginPath(); g.moveTo(here0[0], here0[1]); g.lineTo(b[0], b[1]); g.stroke(); }
-  g.strokeStyle = PAL.red; g.lineWidth = 3;
+  g.strokeStyle = '#8f3328'; g.lineWidth = 3;
   g.beginPath(); st.path.forEach((id, i) => { const p = at(id); if (i) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]); }); g.stroke();
   // a course set from here, dashed in weld
   const target = plan && plan.length ? plan[plan.length - 1].to : null;
@@ -224,20 +228,22 @@ function drawMap(cv: HTMLCanvasElement | null, st: Campaign | null, plan: RouteL
   for (const id in PLACES) {
     const p = PLACES[id as PlaceId], xy = at(id as PlaceId), shop = (SERVICES[p.kind] || {}).market;
     g.beginPath(); g.arc(xy[0], xy[1], 2.6, 0, Math.PI * 2);
-    g.fillStyle = shop ? PAL.ink : PAL.paper; g.fill(); g.strokeStyle = PAL.ink; g.lineWidth = 1.2; g.stroke();
+    g.fillStyle = shop ? PAL.ink : PAL.paperHi; g.fill(); g.strokeStyle = PAL.ink; g.lineWidth = 1.2; g.stroke();
     if (p.major) named.add(id as PlaceId);
   }
+  // the destination, ringed in bronze with an ink edge, and the course's own stopping place in a smaller ring
+  const ring = (x: number, y: number, r: number, lw: number) => { g.strokeStyle = PAL.ink; g.lineWidth = lw + 2.4; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke(); g.strokeStyle = '#cba34f'; g.lineWidth = lw; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke(); };
   const dest = at(q.to);
-  g.strokeStyle = PAL.ochre; g.lineWidth = 3; g.beginPath(); g.arc(dest[0], dest[1], 7.5, 0, Math.PI * 2); g.stroke();
-  if (target && target !== q.to) { const t = at(target); g.lineWidth = 2; g.beginPath(); g.arc(t[0], t[1], 5.5, 0, Math.PI * 2); g.stroke(); }
+  ring(dest[0], dest[1], 7.5, 3);
+  if (target && target !== q.to) { const t = at(target); ring(t[0], t[1], 5.5, 2); }
   g.fillStyle = PAL.ink; g.fillRect(here0[0] - 1, here0[1] - 19, 2, 19);
   g.fillStyle = PAL.red; g.beginPath(); g.moveTo(here0[0] + 1, here0[1] - 19); g.lineTo(here0[0] + 13, here0[1] - 15); g.lineTo(here0[0] + 1, here0[1] - 11); g.closePath(); g.fill();
   // names, with a paper halo so they read over roads and rivers
   const fs = Math.round(clamp(w / 82, 10, 14));
   g.textBaseline = 'middle'; g.lineJoin = 'round';
-  g.font = 'italic ' + Math.round(fs * 1.1) + "px 'Alegreya', Georgia, serif"; g.fillStyle = PAL.blue; g.textAlign = 'center';
+  g.font = 'italic ' + Math.round(fs * 1.1) + "px 'IM Fell DW Pica', Georgia, serif"; g.fillStyle = '#17233a'; g.textAlign = 'center';
   for (const m of MAP_SEAS) g.fillText(m[0], X(m[1]), Y(m[2]));
-  g.font = fs + "px 'Alegreya SC', Georgia, serif";
+  g.font = fs + "px 'IM Fell English SC', Georgia, serif";
   const boxes: LabelBox[] = [], hit = (b: LabelBox) => boxes.some(o => o[0] < b[0] + b[2] && b[0] < o[0] + o[2] && o[1] < b[1] + b[3] && b[1] < o[1] + o[3]);
   for (const id of named) {
     const xy = at(id), name = cap1(PLACES[id].name), tw = g.measureText(name).width, x = xy[0], y = xy[1];
@@ -246,8 +252,8 @@ function drawMap(cv: HTMLCanvasElement | null, st: Campaign | null, plan: RouteL
       const bx = t[2] === 'left' ? t[0] : t[0] - tw, box: LabelBox = [bx - 2, t[1] - fs / 2 - 1, tw + 4, fs + 2];
       if (box[0] < 1 || box[0] + box[2] > w - 1 || box[1] < 1 || box[1] + box[3] > h - 1 || hit(box)) continue;
       boxes.push(box);
-      g.textAlign = t[2]; g.lineWidth = 3.5; g.strokeStyle = PAL.paper; g.strokeText(name, t[0], t[1]);
-      g.fillStyle = id === st.at ? PAL.red : PAL.ink; g.fillText(name, t[0], t[1]);
+      g.textAlign = t[2]; g.lineWidth = 3.5; g.strokeStyle = PAL.paperHi; g.strokeText(name, t[0], t[1]);
+      g.fillStyle = id === st.at ? '#8f3328' : PAL.ink; g.fillText(name, t[0], t[1]);
       break;
     }
   }
@@ -302,45 +308,57 @@ const RETAINER_LOOK: Record<RetainerId, PersonLook> = {
   kobzar: { coat: '#cfc8b4', trim: PAL.white, hat: 'cap', hatCol: '#4b3524', prop: 'bandura', grey: true, beard: true, blind: true },
   merchant: { coat: '#7a2230', trim: PAL.ochre, hat: 'turban', hatCol: '#d9d1bc', prop: 'bales', long: true }
 };
-// An ox, standing or lying, in the colour it should have by day or by firelight.
-function drawOx(g: CanvasRenderingContext2D, x: number, y: number, f: 1 | -1, lying: boolean, hide: string) {
-  const R: Painter = (dx, dy, w, h, c) => { g.fillStyle = c; g.fillRect(f > 0 ? x + dx : x - dx - w + 1, y + dy, w, h); };
-  const dark = '#3a2a1a', horn = PAL.paperHi;
-  if (lying) { R(-6, -5, 12, 5, hide); R(5, -7, 4, 4, hide); R(6, -9, 1, 2, horn); R(8, -9, 1, 2, horn); R(7, -6, 1, 1, INK); R(-7, -3, 1, 2, dark); return; }
-  R(-6, -9, 12, 5, hide); R(-5, -4, 1, 4, dark); R(-3, -4, 1, 4, dark); R(3, -4, 1, 4, dark); R(5, -4, 1, 4, dark);
-  R(6, -10, 4, 4, hide); R(7, -12, 1, 2, horn); R(9, -12, 1, 2, horn); R(8, -9, 1, 1, INK); R(-7, -9, 1, 4, dark);
+/* ---------- goods and cargo for the cards: painted once on rasters in the dyes, graded for the hour of the picture, and drawn as images ---------- */
+const gradeLuts: Record<string, Lut> = {};
+/** The grade of an hour as a lut, kept: the night, the clear day, or the low sun of dusk, which is what the cards' landscapes are lit by. */
+const gradeOf = (name: 'night' | 'day' | 'dusk') => gradeLuts[name] || (gradeLuts[name] = gradeLut(name === 'night' ? GRADE_NIGHT : name === 'day' ? GRADE_DAY : GRADE_DUSK));
+const goodsCache: Record<string, HTMLCanvasElement> = {};
+/** A thing painted on a raster over the box x0, y0, x1, y1 (fine pixels, in the coordinates its painter uses), turned to the dyes of the hour (if one is given) and made an image. Kept. */
+function goodsImage(key: string, box: readonly [number, number, number, number], grade: 'night' | 'day' | 'dusk' | null, paint: (b: Pen) => void) {
+  const k = key + (grade || '');
+  if (goodsCache[k]) return goodsCache[k];
+  const p = newPix(box[2] - box[0], box[3] - box[1], box[0], box[1]);
+  paint(penOf(p));
+  if (grade) {
+    const lut = gradeOf(grade);
+    for (let i = 0; i < p.d.length; i += 4) if (p.d[i + 3]) { const c = lut.get(keyAt(p.d, i)); if (c !== undefined) setAt(p, i, c); }
+  }
+  return (goodsCache[k] = pixCanvas(p));
 }
-// The cargo of the quest, by how it travels. x,y is the foot of its left end; load runs from 0 to 1.
+/** A hard-edged shadow on a raster that has nothing painted yet: a solid core and a rim of every other pixel. */
+function groundShadow(p: Pix, cx: number, cy: number, rx: number, ry: number, c: number | string = 'soot1', solid = 0.5) {
+  for (let y = Math.floor(cy - ry) - 1; y <= Math.ceil(cy + ry) + 1; y++) for (let x = Math.floor(cx - rx) - 1; x <= Math.ceil(cx + rx) + 1; x++) {
+    const d = ((x + 0.5 - cx) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2;
+    if (d <= solid || (d <= 1 && (x + y) % 2 === 0)) putPix(p, x, y, c);
+  }
+}
+// An ox, standing or lying, its feet at x, y (its middle at x), facing right (f is 1) or left, its hide of the colour given: the five shades of it run from that darkened to that lightened.
+function drawOx(g: CanvasRenderingContext2D, x: number, y: number, f: 1 | -1, lying: boolean, hide: string) {
+  const h = packN(hide), key = 'ox' + (lying ? 'l' : 's') + f + hide;
+  const img = goodsCache[key] || (goodsCache[key] = pixCanvas(oxPix(lying, f, [mixN(h, 0x14100c, 0.38), mixN(h, 0x14100c, 0.14), h, mixN(h, 0xe7ddbf, 0.18), mixN(h, 0xe7ddbf, 0.38)])));
+  const sh = goodsCache.oxshadow || (goodsCache.oxshadow = (() => { const p = newPix(56, 10); groundShadow(p, 28, 5, 24, 3.4); return pixCanvas(p); })());
+  g.drawImage(sh, x - 14, y - 2.5, 28, 5);
+  g.drawImage(img, x - (f > 0 ? 11.5 : 12), y - (lying ? 14 : 15.5), 24, 18);
+}
+// The cargo of the quest, by how it travels. x,y is the foot of its left end; load runs from 0 to 1. A cart is the cart of the camp (see paintCart) in the light of the cards.
 function drawCargo(g: CanvasRenderingContext2D, kind: TransportId, x: number, y: number, load: number, night: boolean) {
-  const F: Painter = (a, b, w, h, c) => { g.fillStyle = c; g.fillRect(x + a, y + b, w, h); };
-  const wood = night ? '#4b3420' : PAL.wood, wood2 = night ? '#6a4a2c' : '#8a6440', keg = night ? '#5a3f27' : '#7a5a3a';
-  const wheel = (a: number) => { g.strokeStyle = night ? '#2e2116' : INK; g.lineWidth = 2; g.beginPath(); g.arc(x + a, y + 4, 5.5, 0, Math.PI * 2); g.stroke(); F(a - 1, -1, 2, 10, night ? '#2e2116' : INK); F(a - 5, 3, 10, 2, night ? '#2e2116' : INK); };
-  const wagon = () => { F(0, -6, 50, 6, wood); F(0, -6, 50, 1, wood2); F(-14, -3, 14, 1.5, wood); wheel(9); wheel(40); };
+  const grade = night ? 'night' : 'dusk';
   if (kind === 'oxcart' || kind === 'chest') {
+    const n = Math.max(1, Math.round(5 * load));
     drawOx(g, x - 10, y + 8, 1, true, night ? '#4a3c2f' : '#6b5338');
-    wagon();
-    if (kind === 'chest') {
-      F(8, -15, 22, 9, night ? '#2e2116' : '#3b2a1c'); F(8, -12, 22, 1, PAL.steel); F(8, -8, 22, 1, PAL.steel); F(18, -14, 2, 3, PAL.ochre);
-      F(33, -14, 13, 8, night ? '#a89f8a' : PAL.paper);
-    } else {
-      const n = Math.max(1, Math.round(5 * load)), spots = [[3, -16], [14, -16], [25, -16], [8, -25], [19, -25]];
-      for (let i = 0; i < n; i++) { const s = spots[i]; F(s[0], s[1], 9, 10, keg); F(s[0], s[1] + 2, 9, 1, INK); F(s[0], s[1] + 7, 9, 1, INK); F(s[0] + 1, s[1] - 1, 7, 1, night ? '#a89f8a' : PAL.white); }
-      F(36, -14, 11, 8, night ? '#a89f8a' : PAL.paper); F(38, -16, 7, 2, night ? '#a89f8a' : PAL.paper);
-    }
+    const img = goodsImage('cart' + kind + n, [0, 134, 142, 212], grade, b => { groundShadow(b.p, 88, 205, 58, 5, 'soot1', 0.6); cartPainter(b, kind, n / 5); });
+    g.drawImage(img, x - 17, y - 27.5, 71, 39);
   } else if (kind === 'herd') {
     const hide = night ? '#4a3c2f' : '#6b5338', hide2 = night ? '#5b4a3a' : '#8a6c4a';
-    drawOx(g, x + 6, y - 2, 1, true, hide); drawOx(g, x + 30, y + 2, -1, true, hide2); drawOx(g, x + 50, y - 4, 1, false, hide); drawOx(g, x + 18, y + 10, 1, true, hide2);
+    drawOx(g, x + 14, y - 3, 1, true, hide); drawOx(g, x + 46, y + 2, -1, true, hide2); drawOx(g, x + 34, y - 9, 1, false, hide); drawOx(g, x + 2, y + 3, -1, true, hide2);
   } else {
-    F(-20, -8, 92, 16, night ? '#17222f' : '#9fb0b8');
-    for (let i = 0; i < 9; i++) F(-16 + i * 10, -4 + (i % 3) * 4, 5, 1, night ? '#2d4b70' : PAL.white);
-    F(0, -4, 48, 5, wood); for (let i = 0; i < 6; i++) F(i * 8, -4, 1, 5, INK);
-    const n = Math.max(1, Math.round(4 * load));
-    for (let i = 0; i < n; i++) { F(4 + i * 10, -10, 8, 6, night ? '#a89f8a' : PAL.paper); F(6 + i * 10, -11, 4, 1, night ? '#a89f8a' : PAL.paper); F(4 + i * 10, -7, 8, 1, PAL.drab); }
-    F(44, -20, 1, 16, wood); F(36, -18, 8, 1, wood);
+    const n = Math.max(1, Math.round(5 * load));
+    const img = goodsImage('raft' + n, [0, 150, 160, 214], grade, b => { paintWater(b.p, 70, 192, 78, 15, () => true, ['woad4', 'woad5', 'sky3']); groundShadow(b.p, 70, 203, 52, 3.4, 'night0', 0.6); raftPainter(b, n / 5); });
+    g.drawImage(img, x - 9, y - 21, 80, 32);
   }
 }
 
-/* ---------- card art: small woodcut pictures for the cards, drawn once and kept ---------- */
+/* ---------- card art: small pictures for the cards, drawn once and kept ---------- */
 const artCache: Record<string, string> = {};
 function artURL(key: string, W: number, H: number, fn: (g: CanvasRenderingContext2D, W: number, H: number) => void) {
   if (artCache[key]) return artCache[key];
@@ -403,16 +421,87 @@ function stanceArt(s: Stance, land: LandId = landNow()) {
     else { o('pike', 8, { moving: true, anim: 1, level: true, nation: 'german' }); o('sabre', 36, { mode: 'fight', moving: true, anim: 0, nation: 'cossack' }); o('sabre', 51, { mode: 'fight', moving: true, anim: 1, swing: 1, nation: 'tatar' }); }
   });
 }
+/** A round loaf, shaded as the light from the upper left would: scored across the top, floured, its outline dark. */
+function loaf(b: Pen, cx: number, cy: number, rx: number, ry: number) {
+  const { m, shade } = volume([[cx, cy, rx, ry, ry * 1.2]]), tones = ['ochre1', 'ochre2', 'ochre3', 'ochre4', 'bronze5'];
+  b.fill(m, (x, y) => tones[banded(shade(x, y), [0.3, 0.5, 0.68, 0.84], x, y, 0.08)]);
+  for (let i = -1; i <= 1; i++) { const x = Math.round(cx + i * rx * 0.5); b.line(x - 2, Math.round(cy - ry * 0.55), x + 1, Math.round(cy + ry * 0.05), 'ochre1'); b.px(x - 3, Math.round(cy - ry * 0.6), 'bronze6'); b.px(x, Math.round(cy - ry * 0.45), 'bronze5'); }
+  b.fill(mWhere(mEdgeUL(m), (x, y) => y < cy), 'bronze5');
+  b.fill(mRing(m), (x, y) => (y > cy ? 'soot1' : 'ochre0'));
+}
+/** A powder horn: a curve of bone, wide at the stopper and thin at the tip, shaded across as a cone is, capped in bronze, from (x0, y0) to (x1, y1), bowed sideways by bow. */
+function horn(b: Pen, x0: number, y0: number, x1: number, y1: number, w0: number, bow: number) {
+  const mx = Math.floor(Math.min(x0, x1) - w0 - Math.abs(bow) - 4), my = Math.floor(Math.min(y0, y1) - w0 - 4), s = newPix(Math.ceil(Math.abs(x1 - x0) + 2 * w0 + 2 * Math.abs(bow) + 10), Math.ceil(Math.abs(y1 - y0) + 2 * w0 + 10), mx, my), n = 80;
+  const at = (t: number) => [x0 + (x1 - x0) * t + bow * Math.sin(Math.PI * t), y0 + (y1 - y0) * t];
+  const tones = ['bone0', 'bone1', 'bone2', 'bone3', 'bone4'], lx = -0.5, ly = -0.62, lz = 0.6, ln = Math.hypot(lx, ly, lz);
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, [x, y] = at(t), [x2, y2] = at(Math.min(1, t + 1 / n)), len = Math.hypot(x2 - x, y2 - y) || 1, nx = -(y2 - y) / len, ny = (x2 - x) / len, hw = (w0 * (1 - t) ** 0.75 + 0.8) / 2;
+    for (let u = -hw; u <= hw + 0.01; u += 0.4) {
+      const sh = u / hw, lit = (nx * sh * lx + ny * sh * ly + Math.sqrt(Math.max(0, 1 - sh * sh)) * lz) / ln;
+      let c = tones[clamp(Math.floor(lit * 5 + 0.2), 0, 4)];
+      if (t > 0.9) c = lit > 0.5 ? 'bone1' : 'bone0'; else if (Math.abs(t - 0.3) < 0.012 || Math.abs(t - 0.56) < 0.012) c = 'bone0';
+      if (t < 0.09) c = lit > 0.6 ? 'bronze5' : lit > 0.3 ? 'bronze4' : 'bronze2';
+      putPix(s, Math.round(x + nx * u), Math.round(y + ny * u), c);
+    }
+  }
+  outlinePix(s, 'soot1');
+  blitPix(b.p, s);
+}
+/** A pouch of leather with a flap, tied at the neck, hanging from a cord. */
+function pouch(b: Pen, cx: number, cy: number, w: number, h: number) {
+  const { m, shade } = volume([[cx, cy, w / 2, h / 2, h * 0.9]]), tones = ['skin0', 'skin1', 'skin2', 'skin3'];
+  b.fill(m, (x, y) => tones[banded(shade(x, y), [0.35, 0.58, 0.8], x, y, 0.08)]);
+  b.fill(mWhere(m, (x, y) => y < cy - h * 0.1 && y > cy - h * 0.25 && Math.abs(x - cx) < w * 0.45), 'skin0');
+  b.rect(cx - 1, cy - Math.round(h * 0.35), 3, 3, 'bronze3'); b.px(cx - 1, cy - Math.round(h * 0.35), 'bronze5');
+  b.fill(mWhere(mEdgeUL(m), (x, y) => y < cy), 'skin4'); b.fill(mRing(m), 'soot1');
+  b.line(cx - 1, cy - Math.round(h * 0.5), cx - 5, cy - Math.round(h * 0.5) - 6, 'skin1'); b.line(cx + 1, cy - Math.round(h * 0.5), cx + 4, cy - Math.round(h * 0.5) - 6, 'skin1');
+}
+/** A rolled cloth of linen, tied: the cloth in the middle of the bread. */
+function linenBundle(b: Pen, cx: number, cy: number, rx: number, ry: number) {
+  const { m, shade } = volume([[cx, cy, rx, ry, ry * 1.1]]), tones = ['bone0', 'bone1', 'bone2', 'bone3', 'bone4'];
+  b.fill(m, (x, y) => tones[banded(shade(x, y), [0.3, 0.5, 0.68, 0.84], x, y, 0.08)]);
+  b.line(cx - rx * 0.5, cy - ry * 0.2, cx + rx * 0.3, cy + ry * 0.5, 'bone0'); b.line(cx - rx * 0.2, cy - ry * 0.6, cx + rx * 0.5, cy + ry * 0.1, 'bone1');
+  b.fill(mRing(m), 'soot1');
+}
+/** The wall and the floor of a picture of goods: dusk-dark, a warm glow behind the goods, a floor of planks, painted in the dithered steps of the camp. */
+function goodsBackdrop(p: Pix, glowX: number, glowY: number) {
+  const W = p.w, H = p.h, floor = Math.round(H * 0.78);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const b = bayer(x, y);
+    let c: string;
+    if (y < floor) {
+      c = (y / floor) ** 1.3 > b ? 'soot3' : 'soot2';
+      const d = Math.hypot((x - glowX) / (W * 0.5), (y - glowY) / (H * 0.42)), a = clamp(1 - d, 0, 1) ** 1.2;
+      if (a * 0.8 > b) c = 'soot4'; if (a * 0.5 > bayer(x + 2, y + 2)) c = 'bronze1';
+      if (y >= floor - 2) c = b < 0.5 ? 'soot2' : 'soot1';
+    } else {
+      c = 'soot4';
+      if ((x + (((y - floor) >> 2) % 2) * 11) % 22 === 0) c = 'soot3';
+      if (y === floor) c = 'soot2'; else if (y === floor + 1) c = 'soot5';
+      const d = Math.hypot((x - glowX) / (W * 0.55), (y - floor) / (H * 0.3));
+      if (clamp(1 - d, 0, 1) * 0.6 > b) c = 'soot5';
+      if (y > H - 7 && 0.7 * ((y - (H - 7)) / 7) > b) c = 'soot3';
+    }
+    putPix(p, x, y, c);
+  }
+}
 function supplyArt(k: Supply) {
   return artURL('u' + k, 48, 36, (g, W, H) => {
-    g.fillStyle = PAL.paperHi; g.fillRect(0, 0, W, H); g.fillStyle = PAL.ground; g.fillRect(0, H - 9, W, 9); g.fillStyle = INK; g.fillRect(0, H - 9, W, 1);
-    const F: Painter = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
+    const p = newPix(W * SS, H * SS), b = penOf(p);
+    goodsBackdrop(p, 48, 38);
     if (k === 'bread') {
-      [[8, 20], [24, 20], [16, 12]].forEach(([x, y]) => { F(x, y, 14, 7, PAL.ochre); F(x + 1, y - 1, 12, 1, PAL.ochre); F(x, y + 7, 14, 1, INK); F(x + 3, y + 1, 2, 1, '#e6c47a'); F(x + 7, y + 1, 2, 1, '#e6c47a'); F(x + 11, y + 2, 1, 1, '#e6c47a'); });
+      shadowPix(p, 48, 62, 38, 4, 'soot1', 0.6);
+      for (const [x, y, rx, ry] of [[24, 40, 13, 9], [47, 33, 14, 10], [70, 40, 13, 9]]) loaf(b, x, y, rx, ry);
+      loaf(b, 21, 54, 13, 8); loaf(b, 74, 54, 13, 8);
+      linenBundle(b, 47, 53, 11, 8);
+      b.px(43, 49, 'bone5'); b.px(44, 49, 'bone5');
     } else {
-      F(9, 10, 16, 18, '#4b3420'); F(10, 9, 14, 1, '#4b3420'); F(9, 13, 16, 1, INK); F(9, 24, 16, 1, INK); F(15, 17, 4, 4, INK);
-      F(28, 18, 11, 4, PAL.paper); F(26, 20, 4, 3, PAL.paper); F(38, 16, 3, 3, PAL.wood); F(28, 22, 11, 1, INK);
+      shadowPix(p, 46, 63, 40, 4, 'soot1', 0.6);
+      barrel(b, 48, 56, 24, 30); barrel(b, 23, 60, 24, 30);
+      horn(b, 58, 64, 86, 38, 11, 7); pouch(b, 74, 56, 14, 11);
+      b.line(30, 63, 36, 68, 'soot5'); b.line(31, 63, 37, 68, 'soot3'); b.px(30, 62, 'fire4'); b.px(30, 61, 'fire3'); b.px(29, 62, 'fire2');
     }
+    g.drawImage(pixCanvas(p), 0, 0, W, H);
   });
 }
 // The quest's cargo (and, but for the raft, the man who guards it) for its card. frac is not used.
@@ -421,7 +510,7 @@ function questArt(q: Quest, frac?: number) {
     landscape(g, W, H, q.id.length, PLACES[q.from].land);
     if (q.transport === 'raft') { drawCargo(g, 'raft', 16, H - 6, 1, false); return; }
     if (q.transport === 'herd') { drawCargo(g, 'herd', 6, H - 6, 1, false); drawSoldier(g, 66, H - 3, { cls: 'sabre', skin: 'own', face: -1, mode: 'idle', anim: 0, nation: 'cossack' }); return; }
-    drawCargo(g, q.transport, 22, H - 8, 0.8, false);
+    drawCargo(g, q.transport, 19, H - 9, 0.8, false);
     drawSoldier(g, 8, H - 3, { cls: q.transport === 'chest' ? 'shot' : 'pike', skin: 'own', face: 1, mode: 'idle', anim: 0, nation: q.transport === 'chest' ? 'pole' : 'german' });
   });
 }
@@ -466,18 +555,48 @@ function peopleArt(skin: Skin, classes: readonly TroopClass[], tier: number, lan
   return squadArt('cp' + skin + classes.join('') + tier, 72, skin.length, land, classes.map((cls, i): [number, SoldierLook] => [at[i], { cls, skin, face: -1, mode: 'idle', anim: 0, wpn: gear, arm: gear, man: 2 + i * 3 }]));
 }
 
-// A corner of the camp at night, for the cards of camp events.
+/** A small fire for a picture of a corner of the camp: a ring of stones, two crossed logs and three tongues of flame, at cx, cy (the middle of its foot). */
+function miniFire(b: Pen, cx: number, cy: number) {
+  for (const [dx, dy, front] of [[-9, -2, 0], [-6, -3, 0], [0, -4, 0], [6, -3, 0], [9, -2, 0], [-8, 2, 1], [-3, 3, 1], [3, 3, 1], [8, 2, 1]] as const) {
+    const x = cx + dx, y = cy + dy;
+    if (front) { b.rect(x - 1, y - 1, 3, 1, 'ochre3'); b.rect(x - 1, y, 3, 1, 'iron2'); b.rect(x - 1, y + 1, 3, 1, 'soot1'); } else { b.rect(x - 1, y - 1, 3, 1, 'iron2'); b.rect(x - 1, y, 3, 1, 'bronze3'); }
+  }
+  b.line(cx - 6, cy + 1, cx + 6, cy - 2, 'soot3'); b.line(cx + 6, cy + 1, cx - 6, cy - 2, 'soot3'); b.line(cx - 6, cy, cx + 6, cy - 3, 'soot2');
+  flamePix(b, cx - 3, cy, 12, 6, -1.2, 0.3); flamePix(b, cx + 3, cy, 14, 6, 1.6, 0.4); flamePix(b, cx, cy + 1, 9, 8, 0.4);
+  b.rect(cx - 3, cy - 2, 7, 2, 'fire5'); b.rect(cx - 2, cy - 3, 5, 1, 'fire6');
+}
+// A corner of the camp at night, for the cards of camp events: a dithered sky with its stars and a moon, pines against it, the earth lit by a small fire, and two men on logs.
 function eventArt() {
   return artURL('night', 96, 32, (g, W, H) => {
-    const F: Painter = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
-    F(0, 0, W, H, '#1f2a3e'); F(0, 12, W, 6, '#26324a');
-    [[9, 3], [22, 6], [47, 2], [74, 5], [60, 8], [88, 4]].forEach(p => F(p[0], p[1], 1, 1, PAL.paperHi));
-    F(0, 18, W, 14, '#2b3446'); F(0, 23, W, 9, '#3b3325');
-    const gr = g.createRadialGradient(48, 24, 2, 48, 24, 26); gr.addColorStop(0, 'rgba(240,170,60,.55)'); gr.addColorStop(1, 'rgba(240,170,60,0)'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
-    F(40, 21, 4, 1, '#d8642a'); F(52, 21, 4, 1, '#d8642a');
-    drawCamper(g, 36, 27, { cls: 'sabre', skin: 'own', pose: 'sit', face: 1, prop: 'bandura', nation: 'cossack' });
-    drawCamper(g, 61, 27, { cls: 'pike', skin: 'own', pose: 'sit', face: -1, nation: 'scot' });
-    F(46, 26, 6, 2, '#4b3420'); F(46, 22, 6, 4, '#c2412b'); F(47, 20, 4, 4, PAL.flash); F(48, 18, 2, 2, PAL.flash); F(48, 23, 2, 2, '#fff3c4');
+    const w = W * SS, h = H * SS, p = newPix(w, h), b = penOf(p), horizon = 35, fx = 97, fy = 53;
+    const stops = ['night0', 'night1', 'night2', 'night3', 'night4', 'night5'];
+    for (let y = 0; y < horizon + 6; y++) for (let x = 0; x < w; x++) { const t = Math.min(1, y / (horizon + 2)) ** 1.5 * 5, i = Math.min(4, Math.floor(t)); putPix(p, x, y, stops[i + (t - i > bayer(x, y) ? 1 : 0)]); }
+    const r = mulberry(4);
+    for (let i = 0; i < 26; i++) { const x = Math.floor(r() * w), y = Math.floor(r() * 22); putPix(p, x, y, r() < 0.25 ? 'bone4' : r() < 0.5 ? 'woad6' : 'woad4'); }
+    for (const [cx, cy] of [[22, 12], [150, 9]]) { putPix(p, cx, cy, 'bone5'); putPix(p, cx - 1, cy, 'woad5'); putPix(p, cx + 1, cy, 'woad5'); putPix(p, cx, cy - 1, 'woad5'); putPix(p, cx, cy + 1, 'woad5'); }
+    for (let y = 2; y < 24; y++) for (let x = 164; x < 190; x++) {
+      const d = Math.hypot(x + 0.5 - 177, y + 0.5 - 12);
+      if (d <= 6 && Math.hypot(x + 0.5 - 179.6, y + 0.5 - 10.2) > 5.2) putPix(p, x, y, d > 5 ? 'bone3' : 'bone4'); else if (d < 12 && clamp((12 - d) / 12, 0, 1) ** 0.8 * 0.6 > bayer(x, y)) putPix(p, x, y, 'night3');
+    }
+    pine(p, 8, horizon + 4, 6, 20, 5, 5, ['night1', 'night2', 'night3']); pine(p, 36, horizon + 4, 14, 22, 6, 5, ['night1', 'night2', 'night3']);
+    pine(p, 150, horizon + 4, 8, 22, 7, 5, ['night1', 'night2', 'night3']); pine(p, 184, horizon + 4, 12, 20, 8, 5, ['night1', 'night2', 'night3']);
+    for (let x = 0; x < w; x++) for (let y = horizon + 2; y < horizon + 6; y++) putPix(p, x, y, 'night1');
+    const luts = lutsFor('night', true), pool = (x: number, y: number) => clamp(1 - Math.hypot((x - fx) / 84, (y - fy) / 40), 0, 1) ** 1.05;
+    for (let y = horizon + 3; y < h; y++) for (let x = 0; x < w; x++) {
+      const bb = bayer(x, y), n = fbm(x, y, 5, 6, 3, 2);
+      let c = 'soot3';
+      if (n < 0.4 && 0.5 > bb) c = 'soot2'; else if (n > 0.62 && 0.5 > bb) c = 'soot4';
+      if (y < horizon + 6) c = 'soot1';
+      const lvl = levelOf(pool(x, y) * 0.95, luts.length - 1, x, y, 1);
+      putPix(p, x, y, luts[lvl].get(D(c)) ?? D(c));
+    }
+    for (const lx of [72, 122]) { b.rect(lx - 10, 50, 20, 5, 'soot5'); b.rect(lx - 10, 50, 20, 1, 'soot7'); b.rect(lx - 10, 54, 20, 1, 'soot2'); b.rect(lx - 11, 51, 1, 3, 'soot7'); b.fill(mRing(mRect(lx - 10, 50, 20, 5)), 'soot1'); }
+    for (let i = 0; i < 18; i++) { const a = r() * 2 * Math.PI, rr = 7 + r() * 11; putPix(p, Math.floor(fx + Math.cos(a) * rr), Math.floor(fy + 1 + Math.sin(a) * rr * 0.4), r() < 0.6 ? 'fire1' : 'fire2'); }
+    miniFire(b, fx, fy);
+    g.drawImage(pixCanvas(p), 0, 0, W, H);
+    const lit = (foot: number) => firelit(g, foot, 1, (x, y) => pool(x, y));
+    drawCamper(lit(27), 36, 27, { cls: 'sabre', skin: 'own', pose: 'sit', face: 1, prop: 'bandura', nation: 'cossack' });
+    drawCamper(lit(27), 61, 27, { cls: 'pike', skin: 'own', pose: 'sit', face: -1, nation: 'scot' });
   });
 }
 
@@ -835,20 +954,47 @@ function outlinePix(p: Pix, pick: number | string | ((x: number, y: number) => n
 }
 
 /* ----- noise, seeded: the camp's ground is not random, it is the same earth every time ----- */
-/** Value noise at x, y (0 to 1): a lattice of seeded values, smoothly joined, its features sx across and sy down. */
-function vnoise(x: number, y: number, seed: number, sx: number, sy: number) {
-  const gx = x / sx, gy = y / sy, ix = Math.floor(gx), iy = Math.floor(gy), fx = gx - ix, fy = gy - iy;
-  const h = (a: number, b: number) => { let n = Math.imul(a + 374761393, 668265263) ^ Math.imul(b + 1274126177, 2246822519) ^ Math.imul(seed + 1013904223, 3266489917); n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
-  const sm = (t: number) => t * t * (3 - 2 * t), u = sm(fx), v = sm(fy);
-  const a = h(ix, iy) * (1 - u) + h(ix + 1, iy) * u, b = h(ix, iy + 1) * (1 - u) + h(ix + 1, iy + 1) * u;
-  return a * (1 - v) + b * v;
+/** A lattice of seeded values in 0 to 1, cols by rows of them, for value noise (the hash of a cell, not of a point, so that it is done once for each cell). */
+function noiseLattice(seed: number, cols: number, rows: number) {
+  const t = new Float32Array(cols * rows);
+  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+    let n = Math.imul(i + 374761393, 668265263) ^ Math.imul(j + 1274126177, 2246822519) ^ Math.imul(seed + 1013904223, 3266489917);
+    n = Math.imul(n ^ (n >>> 13), 1274126177);
+    t[j * cols + i] = ((n ^ (n >>> 16)) >>> 0) / 4294967296;
+  }
+  return t;
 }
+/**
+ * Seeded value noise as a function of x, y (0 to 1) over a picture up to 704 by 320 fine pixels, and 64 beyond its top and left: a lattice of seeded values smoothly joined, its features sx across and sy
+ * down, at octaves scales, each half the size and half the weight of the one before. It has all it needs inside it, so that a painter may ask for it at every pixel.
+ */
+function noiseOf(seed: number, sx: number, sy: number, octaves = 3): (x: number, y: number) => number {
+  const lat: { t: Float32Array; cols: number; k: number }[] = [];
+  for (let o = 0; o < octaves; o++) { const k = 2 ** o, cols = Math.ceil((704 + 64) * k / sx) + 3, rows = Math.ceil((320 + 64) * k / sy) + 3; lat.push({ t: noiseLattice(seed + o * 17, cols, rows), cols, k }); }
+  let tot = 0, amp = 1;
+  for (let o = 0; o < octaves; o++) { tot += amp; amp *= 0.5; }
+  const floor = Math.floor;
+  return (x, y) => {
+    let n = 0, amp = 1;
+    for (let o = 0; o < octaves; o++) {
+      const { t, cols, k } = lat[o], gx = (x + 64) * k / sx, gy = (y + 64) * k / sy, ix = floor(gx), iy = floor(gy), fx = gx - ix, fy = gy - iy, u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy), i = iy * cols + ix;
+      n += ((t[i] * (1 - u) + t[i + 1] * u) * (1 - v) + (t[i + cols] * (1 - u) + t[i + cols + 1] * u) * v) * amp; amp *= 0.5;
+    }
+    return n / tot;
+  };
+}
+const noises = new Map<string, (x: number, y: number) => number>();
+/** The noise of these features, kept. */
+function noiseFor(seed: number, sx: number, sy: number, octaves: number) {
+  const key = seed + ',' + sx + ',' + sy + ',' + octaves;
+  let f = noises.get(key);
+  if (!f) noises.set(key, f = noiseOf(seed, sx, sy, octaves));
+  return f;
+}
+/** Value noise at x, y (0 to 1): its features sx across and sy down. */
+function vnoise(x: number, y: number, seed: number, sx: number, sy: number) { return noiseFor(seed, sx, sy, 1)(x, y); }
 /** The same at several scales, each half the size and half the weight of the one before. */
-function fbm(x: number, y: number, seed: number, sx: number, sy: number, octaves = 3) {
-  let tot = 0, amp = 1, n = 0;
-  for (let o = 0; o < octaves; o++) { n += vnoise(x, y, seed + o * 17, sx / 2 ** o, sy / 2 ** o) * amp; tot += amp; amp *= 0.5; }
-  return n / tot;
-}
+function fbm(x: number, y: number, seed: number, sx: number, sy: number, octaves = 3) { return noiseFor(seed, sx, sy, octaves)(x, y); }
 /* ---------- the light of a day, and the sky it falls on ---------- */
 /**
  * The light of a day passing over the camp, at q from 0 (the night the camp is drawn at) round to 1 (the next): d is how much daylight there is,
@@ -887,9 +1033,9 @@ function skyMaps() {
   }
   const streak = (y0: number, x0: number, x1: number, thick: number, seed: number, tilt: number) => {
     for (let x = x0; x < x1; x++) {
-      const env = Math.sin(Math.PI * (x - x0) / (x1 - x0)) ** 0.8, th = thick * env * (0.35 + fbm(x, 0, seed, 38, 1, 3));
+      const env = Math.sin(Math.PI * (x - x0) / (x1 - x0)) ** 0.8, th = thick * env * (0.35 + fbm(x, 0, seed, 38, 1e4, 3));
       if (th < 0.7) continue;
-      const yc = y0 + tilt * (x - x0) + 2.2 * Math.sin(x / 31 + seed), top = yc - th * 0.42 - 0.8 * fbm(x, 0, seed + 5, 12, 1, 2), bot = yc + th * 0.58;
+      const yc = y0 + tilt * (x - x0) + 2.2 * Math.sin(x / 31 + seed), top = yc - th * 0.42 - 0.8 * fbm(x, 0, seed + 5, 12, 1e4, 2), bot = yc + th * 0.58;
       for (let y = Math.round(top); y <= Math.round(bot); y++) {
         if (y < 14 || y >= 118) continue;
         const rel = (y - top) / Math.max(1, bot - top), lit = clamp(1 - Math.hypot(x - MOON_X, y - MOON_Y) / 230, 0, 1), b = bayer(x, y);
@@ -1003,7 +1149,7 @@ interface CampDoor { m: Mk; top: number; base: number; cx: number }
 /** Where the fire is on the ground, and how the light falls off from it: an ellipse a little over half as tall as it is wide, as ground goes into the distance. */
 const FIRE_X = 320, FIRE_Y = 200, R_GROUND = 180, R_RATIO = 0.55, R_POW = 1.05;
 /** The firelight on the ground at x, y of the picture, from 0 to 1. */
-const falloff = (x: number, y: number) => Math.max(0, 1 - Math.hypot((x + 0.5 - FIRE_X) / R_GROUND, (y + 0.5 - FIRE_Y) / (R_GROUND * R_RATIO))) ** R_POW;
+const falloff = (x: number, y: number) => { const d = (((x + 0.5 - FIRE_X) / R_GROUND) ** 2 + ((y + 0.5 - FIRE_Y) / (R_GROUND * R_RATIO)) ** 2) ** 0.5; return d >= 1 ? 0 : (1 - d) ** R_POW; };
 /** How a thing is painted: a pen with the painters of a raster. */
 function penOf(p: Pix) {
   return {
@@ -1030,7 +1176,7 @@ function standProp(L: CampLayers, box: readonly [number, number, number, number]
     if (X < 0 || Y < 0 || X >= FW || Y >= FH) continue;
     const j = Y * FW + X, f = clamp(typeof face === 'number' ? face : face(X + 0.5), 0, 1.5);
     L.props.d[j * 4] = s.d[i]; L.props.d[j * 4 + 1] = s.d[i + 1]; L.props.d[j * 4 + 2] = s.d[i + 2]; L.props.d[j * 4 + 3] = 255;
-    L.pl[j] = clamp((falloff(X, baseY) * clamp(1 - Math.max(baseY - Y, 0) / hmax, 0, 1) ** 0.8 * f - 0.1) / 0.9, 0, 1);
+    L.pl[j] = clamp((falloff(X, baseY) * clamp(1 - (baseY > Y ? baseY - Y : 0) / hmax, 0, 1) ** 0.8 * f - 0.1) / 0.9, 0, 1);
   }
 }
 
@@ -1056,13 +1202,13 @@ function trackField(f: Float32Array, pts: readonly (readonly [number, number, nu
 function earthFields() {
   if (groundFields) return groundFields;
   const rows = FH - GY0, size = FW * rows, n = new Float32Array(size), n2 = new Float32Array(size), wob = new Float32Array(size), gcov = new Float32Array(size), path = new Float32Array(size).fill(9), rut = new Uint8Array(size);
-  const top = new Int16Array(FW);
-  for (let x = 0; x < FW; x++) top[x] = Math.round(148.5 + 2.6 * 2 * (fbm(x, 0, 9, 90, 1, 3) - 0.5));
+  const top = new Int16Array(FW), ridge = noiseOf(9, 90, 1e4, 3), nGrain = noiseOf(5, 9, 3.2, 3), nDrift = noiseOf(8, 90, 26, 2), nWob = noiseOf(21, 16, 7, 2), nCover = noiseOf(33, 38, 12, 3);
+  for (let x = 0; x < FW; x++) top[x] = Math.round(148.5 + 2.6 * 2 * (ridge(x, 0) - 0.5));
   for (let y = 0; y < rows; y++) for (let x = 0; x < FW; x++) {
     const i = y * FW + x, Y = y + GY0;
-    n[i] = fbm(x, Y, 5, 9, 3.2, 3); n2[i] = fbm(x, Y, 8, 90, 26, 2); wob[i] = (fbm(x, Y, 21, 16, 7, 2) - 0.5) * 0.3;
-    const away = clamp((Math.hypot((x - 320) / 150, (Y - 205) / 70) - 0.9) / 1.2, 0, 1);
-    gcov[i] = fbm(x, Y, 33, 38, 12, 3) * 0.55 + away * 0.55;
+    n[i] = nGrain(x, Y); n2[i] = nDrift(x, Y); wob[i] = (nWob(x, Y) - 0.5) * 0.3;
+    const away = clamp(((((x - 320) / 150) ** 2 + ((Y - 205) / 70) ** 2) ** 0.5 - 0.9) / 1.2, 0, 1);
+    gcov[i] = nCover(x, Y) * 0.55 + away * 0.55;
   }
   // the tracks: door to fire, fire to the forage ground, the road to the signpost and the right edge, the way out to the left
   const tracks: (readonly [number, number, number])[][] = [
@@ -1079,11 +1225,11 @@ function earthFields() {
   return (groundFields = { n, n2, wob, gcov, path, rut, top });
 }
 /** The beaten circle round the fire, and the drill ground at the right: the ellipses of bare earth. */
-const beatenAt = (x: number, y: number, wob: number) => Math.hypot((x + 0.5 - 322) / 112, (y + 0.5 - 207) / 49) + wob;
-const drillAt = (x: number, y: number, wob: number) => Math.hypot((x + 0.5 - 424) / 62, (y + 0.5 - 262) / 30) + wob;
+const beatenAt = (x: number, y: number, wob: number) => (((x + 0.5 - 322) / 112) ** 2 + ((y + 0.5 - 207) / 49) ** 2) ** 0.5 + wob;
+const drillAt = (x: number, y: number, wob: number) => (((x + 0.5 - 424) / 62) ** 2 + ((y + 0.5 - 262) / 30) ** 2) ** 0.5 + wob;
 /** Paints the ground: trampled earth, the beaten circle round the fire, tracks and ruts, grass that thickens away from the fire, tufts and pebbles. */
 function paintGround(L: CampLayers, land: LandId) {
-  const F = earthFields(), g = L.gnd, tone = LAND_EARTH[land];
+  const F = earthFields(), g = L.gnd, tone = LAND_EARTH[land], put = putPix;
   const soot3 = D('soot3'), soot2 = D('soot2'), soot4 = D('soot4'), soot5 = D('soot5'), iron1 = D('iron1'), iron2 = D('iron2'), moss1 = D('moss1'), moss2 = D('moss2');
   const grass1 = tone.dry ? D('ochre0') : moss1, grass2 = tone.dry ? D('ochre1') : moss2;
   for (let Y = GY0; Y < FH; Y++) for (let x = 0; x < FW; x++) {
@@ -1110,7 +1256,7 @@ function paintGround(L: CampLayers, land: LandId) {
       if (gc > 0.66 && clamp((gc - 0.66) * 4, 0, 0.55) * tone.grass > b) c = grass2;
       if (gc < 0.3 && 0.35 > b) c = soot2;
     }
-    putPix(g, x, Y, c);
+    put(g, x, Y, c);
   }
   // single tufts and pebbles, by perspective
   const r = mulberry(1633 + land.length), placed: number[][] = [], pen = penOf(g);
@@ -1406,10 +1552,9 @@ function chest(b: Pen, x: number, y: number, w: number, h: number) {
 /** The kinds of cargo a camp may have by it, as the quest names them. */
 type CargoKind = TransportId;
 /** The ox-cart and its load, at the left of the camp. The cargo is what the quest carries (kind); load, from 0 to 1, is how much of it is left. */
-function paintCart(L: CampLayers, kind: CargoKind, load: number) {
+function cartPainter(b: Pen, kind: CargoKind, load: number) {
   const wl: [number, number] = [54, 196], wr: [number, number] = [116, 196], r = 11;
-  shadowPix(L.gnd, 88, 205, 58, 5, 'soot1', 0.62);
-  standProp(L, [0, 130, 148, 212], 206, 100, (x: number) => clamp(0.18 + (x - 20) / 190, 0.15, 0.7), b => {
+  {
     b.line(36, 186, 4, 190, 'soot4'); b.line(36, 187, 4, 191, 'soot3'); b.line(36, 185, 6, 188, 'soot6'); b.rect(2, 190, 3, 2, 'soot3');
     const bed = mRect(34, 176, 104, 13);
     b.fill(bed, (x, y) => {
@@ -1430,7 +1575,12 @@ function paintCart(L: CampLayers, kind: CargoKind, load: number) {
     }
     [[0, 0], [1, 1], [1, 2], [0, 3], [-1, 3], [-2, 2], [-2, 1], [-1, 0]].forEach(([dx, dy], k) => b.px(137 + dx, 168 + dy, k % 2 ? 'soot7' : 'soot6'));
     wheel(b, wl[0], wl[1], r); wheel(b, wr[0], wr[1], r);
-  });
+  }
+}
+/** The cart on the ground of the camp, with its shadow, lit by the fire; the lantern hangs at its tail. */
+function paintCart(L: CampLayers, kind: CargoKind, load: number) {
+  shadowPix(L.gnd, 88, 205, 58, 5, 'soot1', 0.62);
+  standProp(L, [0, 130, 148, 212], 206, 100, (x: number) => clamp(0.18 + (x - 20) / 190, 0.15, 0.7), b => cartPainter(b, kind, load));
   L.lantern = [141, 171];
 }
 
@@ -1713,28 +1863,33 @@ function paintBannerGilt(f: Pix) {
   b.stamp(['.a.', 'aab', 'aab', '.ab', 'ccc', '.b.'], { a: 'bronze5', b: 'bronze3', c: 'bronze4' }, px - 2, top - 6); b.px(px - 1, top - 7, 'bronze6');
   for (const dx of [-3, 3]) { b.line(px - 1 + (dx > 0 ? 1 : 0), top + 1, px - 1 + dx, top + 8, 'madder3'); b.rect(px - 1 + dx, top + 8, 1, 3, 'bronze3'); }
 }
+/** Dark water in an ellipse, its edge ragged and ripples dithered over it, on the pixels of a raster where there is ground to take it. tones are the deep water, the middle and the lights. */
+function paintWater(p: Pix, cx: number, cy: number, rx: number, ry: number, where: (x: number, y: number) => boolean, tones: readonly [string, string, string] = ['woad2', 'woad3', 'woad4']) {
+  for (let y = Math.floor(cy - ry) - 4; y < Math.ceil(cy + ry) + 4; y++) for (let x = Math.floor(cx - rx) - 4; x < Math.ceil(cx + rx) + 4; x++) {
+    const d = ((x + 0.5 - cx) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2 + (fbm(x, y, 77, 8, 4, 2) - 0.5) * 0.35;
+    if (d > 1 || !where(x, y)) continue;
+    const nn = fbm(x, y, 78, 14, 2.2, 2), b = bayer(x, y);
+    let c = d > 0.86 ? 'soot2' : tones[0];
+    if (d <= 0.86 && nn > 0.58 && (nn - 0.5) * 2 > b) c = tones[1];
+    if (d <= 0.8 && nn > 0.7 && (nn - 0.62) * 3 > b && y % 2 === 0) c = tones[2];
+    if (d > 0.9 && b < 0.5) c = 'soot3';
+    putPix(p, x, y, c);
+  }
+}
+/** The raft of rye: lashed logs under planks, a post at each end, and sacks of grain on it. */
+function raftPainter(b: Pen, load: number) {
+  const n = Math.max(1, Math.round(5 * load));
+  for (let k = 0; k < 4; k++) { const y = 190 + k * 3; b.rect(18, y, 104, 3, k % 2 ? 'soot4' : 'soot5'); b.rect(18, y, 104, 1, 'soot6'); b.rect(18, y + 2, 104, 1, 'soot3'); for (let x = 22 + k * 5; x < 120; x += 17) b.px(x, y + 1, 'soot2'); }
+  b.rect(16, 188, 3, 15, 'soot3'); b.rect(121, 188, 3, 15, 'soot3'); b.rect(16, 188, 3, 1, 'soot6');
+  for (let i = 0; i < n; i++) sack(b, 24 + i * 19, 191 - (i % 2) * 6, i % 2 === 1, i % 2 ? LINEN : JUTE);
+  b.fill(mRing(mRect(18, 190, 104, 12)), 'soot1');
+  b.rect(18, 202, 104, 1, 'soot1');
+}
 /** The raft of rye, moored at the left of the camp: dark water, planks, and sacks of grain. */
 function paintRaft(L: CampLayers, load: number) {
-  const water = (x: number, y: number) => ((x + 0.5 - 62) / 92) ** 2 + ((y + 0.5 - 192) / 17) ** 2;
-  for (let y = 168; y < 214; y++) for (let x = 0; x < 160; x++) {
-    const d = water(x, y) + (fbm(x, y, 77, 8, 4, 2) - 0.5) * 0.35;
-    if (d > 1 || getPix(L.gnd, x, y) < 0) continue;
-    const nn = fbm(x, y, 78, 14, 2.2, 2), b = bayer(x, y);
-    let c = d > 0.86 ? 'soot2' : 'woad2';
-    if (d <= 0.86 && nn > 0.58 && (nn - 0.5) * 2 > b) c = 'woad3';
-    if (d <= 0.8 && nn > 0.7 && (nn - 0.62) * 3 > b && y % 2 === 0) c = 'woad4';
-    if (d > 0.9 && b < 0.5) c = 'soot3';
-    putPix(L.gnd, x, y, c);
-  }
+  paintWater(L.gnd, 62, 192, 92, 17, (x, y) => getPix(L.gnd, x, y) >= 0);
   shadowPix(L.gnd, 70, 204, 52, 3.4, 'night0', 0.6);
-  standProp(L, [10, 150, 150, 214], 204, 70, 0.3, b => {
-    const n = Math.max(1, Math.round(5 * load));
-    for (let k = 0; k < 4; k++) { const y = 190 + k * 3; b.rect(18, y, 104, 3, k % 2 ? 'soot4' : 'soot5'); b.rect(18, y, 104, 1, 'soot6'); b.rect(18, y + 2, 104, 1, 'soot3'); for (let x = 22 + k * 5; x < 120; x += 17) b.px(x, y + 1, 'soot2'); }
-    b.rect(16, 188, 3, 15, 'soot3'); b.rect(121, 188, 3, 15, 'soot3'); b.rect(16, 188, 3, 1, 'soot6');
-    for (let i = 0; i < n; i++) sack(b, 24 + i * 19, 191 - (i % 2) * 6, i % 2 === 1, i % 2 ? LINEN : JUTE);
-    b.fill(mRing(mRect(18, 190, 104, 12)), 'soot1');
-    b.rect(18, 202, 104, 1, 'soot1');
-  });
+  standProp(L, [10, 150, 150, 214], 204, 70, 0.3, b => raftPainter(b, load));
 }
 /* ---------- the camp composed: the layers lit by the hour, and the camp's own canvas ---------- */
 /** The hours the camp is lit for: the night it is drawn at, the glow of dawn and dusk, and the day. */
@@ -1748,7 +1903,7 @@ function lutsFor(mode: CampMode, ground: boolean): Lut[] {
   return modeLuts[key] || (modeLuts[key] = lightLuts(gradeLut(mode === 'night' ? GRADE_NIGHT : mode === 'day' ? GRADE_DAY : GRADE_DUSK), ground ? GROUND_LEVELS : FIRE_LEVELS));
 }
 /** The level of light a pixel gets from how much light falls on it (0 to 1), n levels, the steps between them dithered by an ordered pattern (jw is how wide the dither is). */
-const levelOf = (I: number, n: number, x: number, y: number, jw: number) => clamp(Math.floor(clamp(I, 0, 1) * n + 0.5 + (bayer(x, y) - 0.5) * jw), 0, n);
+const levelOf = (I: number, n: number, x: number, y: number, jw: number) => { const v = (I < 0 ? 0 : I > 1 ? 1 : I) * n + 0.5 + (bayer(x, y) - 0.5) * jw, l = v < 0 ? 0 : v | 0; return l > n ? n : l; };
 const keyAt = (d: Uint8ClampedArray, i: number) => (d[i] << 16) | (d[i + 1] << 8) | d[i + 2];
 function setAt(p: Pix, i: number, c: number) { p.d[i] = (c >> 16) & 255; p.d[i + 1] = (c >> 8) & 255; p.d[i + 2] = c & 255; p.d[i + 3] = 255; }
 /** A small pool of warm light laid on the finished picture: the dyes under it go up the levels of firelight, thinning towards its edge. */
@@ -1799,22 +1954,22 @@ function paintLantern(out: Pix, luts: readonly Lut[], lx: number, ly: number, li
  * steps that are dithered into one another; then what is painted after the light.
  */
 function composeCamp(L: CampLayers, mode: CampMode): Pix {
-  const out = newPix(FW, FH), fire = MODE_FIRE[mode], lutG = lutsFor(mode, true), lutP = lutsFor(mode, false), amb = lutG[0], ng = lutG.length - 1, np = lutP.length - 1;
-  for (let p = 0; p < FW * FH; p++) { const i = p * 4; if (L.far.d[i + 3]) { const k = keyAt(L.far.d, i); setAt(out, i, amb.get(k) ?? k); } }
+  const set = setAt, out = newPix(FW, FH), fire = MODE_FIRE[mode], lutG = lutsFor(mode, true), lutP = lutsFor(mode, false), amb = lutG[0], ng = lutG.length - 1, np = lutP.length - 1;
+  for (let p = 0; p < FW * FH; p++) { const i = p * 4; if (L.far.d[i + 3]) { const k = keyAt(L.far.d, i); set(out, i, amb.get(k) ?? k); } }
   for (let y = GY0; y < FH; y++) for (let x = 0; x < FW; x++) {
     const i = (y * FW + x) * 4;
     if (!L.gnd.d[i + 3]) continue;
     const I = fire ? clamp((falloff(x, y) - 0.05) / 0.95, 0, 1) * 0.95 * clamp(1 - (y - 236) / 120, 0.55, 1) * fire : 0, k = keyAt(L.gnd.d, i);
-    setAt(out, i, lutG[levelOf(I, ng, x, y, 1)].get(k) ?? k);
+    set(out, i, lutG[levelOf(I, ng, x, y, 1)].get(k) ?? k);
   }
   for (let p = 0; p < FW * FH; p++) {
     const i = p * 4;
     if (!L.props.d[i + 3]) continue;
     const k = keyAt(L.props.d, i);
-    setAt(out, i, lutP[levelOf(L.pl[p] * fire, np, p % FW, (p / FW) | 0, 0.62)].get(k) ?? k);
+    set(out, i, lutP[levelOf(L.pl[p] * fire, np, p % FW, (p / FW) | 0, 0.62)].get(k) ?? k);
   }
   const lit = fire > 0.9 ? 1 : fire > 0.3 ? 0.6 : 0, glow = [new Map() as Lut, ...lutP.slice(1)];
-  for (let p = 0; p < FW * FH; p++) { const i = p * 4; if (L.fin.d[i + 3]) setAt(out, i, keyAt(L.fin.d, i)); }
+  for (let p = 0; p < FW * FH; p++) { const i = p * 4; if (L.fin.d[i + 3]) set(out, i, keyAt(L.fin.d, i)); }
   for (const d of L.doors) paintDoor(out, d, glow, lit);
   if (L.lantern) paintLantern(out, glow, L.lantern[0], L.lantern[1], lit);
   for (const late of L.late) late(out, mode);
@@ -1830,13 +1985,35 @@ function tintedSkyline(sk: HTMLCanvasElement, mode: CampMode) {
   return c;
 }
 /** The camp's layers, and the skyline behind them, kept with the canvas that is drawn from them so that the same camp can be had at another hour. */
-interface CampBake { layers: CampLayers; skyline: HTMLCanvasElement; made: Partial<Record<CampMode, HTMLCanvasElement>> }
+interface CampBake { layers: CampLayers; skyline: HTMLCanvasElement; made: Partial<Record<CampMode, HTMLCanvasElement>>; flare?: HTMLCanvasElement }
 /** The camp's ground, and all that stands on it, as one hour sees them (the sky is left clear, and is campSky's). */
 function bakeCanvas(L: CampLayers, skyline: HTMLCanvasElement, mode: CampMode) {
   const c = sceneCanvas(CW, CH), g = c.getContext('2d')!;
   g.drawImage(tintedSkyline(skyline, mode), 0, 81 - HZ, CW, HZ);
   g.drawImage(pixCanvas(composeCamp(L, mode)), 0, 0, CW, CH);
   return c;
+}
+/**
+ * The pixels of the night's camp that a brighter fire would light one level more. Laid over the camp at the moments the fire flares, they make the edge of its
+ * pool of light shimmer, as a flame does. Made on the first moment it is wanted.
+ */
+function campFlare(back: HTMLCanvasElement) {
+  const b = back.bake;
+  if (!b) return null;
+  if (b.flare) return b.flare;
+  const L = b.layers, out = newPix(FW, FH), lutG = lutsFor('night', true), lutP = lutsFor('night', false), ng = lutG.length - 1, np = lutP.length - 1, set = setAt;
+  for (let y = 90; y < FH; y++) for (let x = 100; x < 540; x++) {
+    const i = (y * FW + x) * 4;
+    if (L.gnd.d[i + 3]) {
+      const I = clamp((falloff(x, y) - 0.05) / 0.95, 0, 1) * 0.95 * clamp(1 - (y - 236) / 120, 0.55, 1), k = keyAt(L.gnd.d, i), a = levelOf(I, ng, x, y, 1), c = levelOf(I * 1.05 + 0.012, ng, x, y, 1);
+      if (c > a) set(out, i, lutG[c].get(k) ?? k);
+    }
+    if (L.props.d[i + 3]) {
+      const I = L.pl[y * FW + x], k = keyAt(L.props.d, i), a = levelOf(I, np, x, y, 0.62), c = levelOf(I * 1.05 + 0.012, np, x, y, 0.62);
+      if (c > a) set(out, i, lutP[c].get(k) ?? k);
+    }
+  }
+  return (b.flare = pixCanvas(out));
 }
 /** The back of the camp as another hour has it: made once from the same layers. */
 function campVariant(back: HTMLCanvasElement, mode: CampMode) {
@@ -1994,6 +2171,13 @@ function fireFrames() {
     return pixCanvas(p);
   }));
 }
+const campShadows: Record<string, HTMLCanvasElement> = {};
+/** The hard-edged shadow a man casts on the ground, as the ground's own shadows are (a solid core and a rim of every other pixel); a man lying has a longer one. Kept. */
+function campShadow(lying: boolean) {
+  const key = lying ? 'lying' : 'standing';
+  if (!campShadows[key]) { const p = newPix(lying ? 40 : 30, 8); groundShadow(p, p.w / 2, 4, p.w / 2 - 2, 2.6, 'soot0', 0.5); campShadows[key] = pixCanvas(p); }
+  return campShadows[key];
+}
 /** The fire of the camp, in the frame of the moment: still, it is the first. */
 function campFire(g: CanvasRenderingContext2D, t: number, still: boolean) {
   const f = fireFrames()[still ? 0 : [0, 1, 2, 1, 0, 2][Math.floor(t * 7) % 6]];
@@ -2049,9 +2233,9 @@ function warmHex(hex: string, level: number) {
 /**
  * A painter for a man by the fire, to hand to the figures in place of the canvas: it paints on g, but each colour is the one the fire's light makes of it at that pixel
  * (stronger the nearer the fire his feet are, less on his head than his boots), the levels of light dithered into one another as the ground's are. strength is how bright the
- * fire is (0 by day).
+ * fire is (0 by day); pool is how much light the fire throws at a fine pixel of the picture (the camp's own fire by default).
  */
-function firelit(g: CanvasRenderingContext2D, footY: number, strength: number): CanvasRenderingContext2D {
+function firelit(g: CanvasRenderingContext2D, footY: number, strength: number, pool: (fx: number, fy: number) => number = falloff): CanvasRenderingContext2D {
   let fill = '#000000';
   const sink = {
     get fillStyle() { return fill; }, set fillStyle(c: string) { fill = c; },
@@ -2059,7 +2243,7 @@ function firelit(g: CanvasRenderingContext2D, footY: number, strength: number): 
       let c = fill;
       if (strength > 0.02 && c.length === 7 && c[0] === '#') {
         const fx = Math.floor((x + w / 2) * SS), fy = Math.floor((y + h / 2) * SS), fo = footY * SS;
-        const I = falloff(fx, fo) * clamp(1 - Math.max(fo - fy, 0) / 80, 0, 1) ** 0.8 * strength, lvl = Math.min(4, Math.floor(clamp(I, 0, 1) * 4 + bayer(fx, fy)));
+        const I = pool(fx, fo) * clamp(1 - Math.max(fo - fy, 0) / 80, 0, 1) ** 0.8 * strength, lvl = Math.min(4, Math.floor(clamp(I, 0, 1) * 4 + bayer(fx, fy)));
         if (lvl > 0) c = warmHex(c, lvl);
       }
       g.fillStyle = c; g.fillRect(x, y, w, h);
@@ -2091,6 +2275,8 @@ function drawCamp(v: CampView | null, st: Campaign | null, sel: number | null, d
   else if (!pass && v.key !== key) { v.back = campBack(st); v.key = key; }
   campSky(g, v.back.stars!, L);
   g.globalAlpha = 1; g.drawImage(v.back, 0, 0, CW, CH);
+  // the fire flares now and then, and lights its pool a level further for a moment
+  if (!still && L.d < 0.5 && Math.sin(t * 5.3) + 0.7 * Math.sin(t * 11.1 + 1) + 0.5 * Math.sin(t * 2.1) > 0.3) { const fl = campFlare(v.back); if (fl) g.drawImage(fl, 0, 0, CW, CH); }
   // the light of the day lays the camp as the day sees it over the camp as the night does, and the glow of dawn and dusk lays its own
   if (L.d > 0.01) { g.globalAlpha = clamp(L.d, 0, 1); g.drawImage(campVariant(v.back, 'day'), 0, 0, CW, CH); }
   if (L.w > 0.01) { g.globalAlpha = clamp(L.w * 0.85, 0, 1); g.drawImage(campVariant(v.back, 'warm'), 0, 0, CW, CH); }
@@ -2133,6 +2319,7 @@ function drawCamp(v: CampView | null, st: Campaign | null, sel: number | null, d
           sg.globalCompositeOperation = 'source-in'; sg.fillStyle = hexN(D('bronze5')); sg.fillRect(0, 0, 44, 44); sg.globalCompositeOperation = 'source-over';
           for (const o of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) g.drawImage(v.sel, x - 22 + o[0] / SS, y - 40 + o[1] / SS, 44, 44);
         }
+        if (p.k !== 'rest') { const sh = campShadow(p.k === 'abed'); g.drawImage(sh, x - sh.width / SS / 2, y - 1.5, sh.width / SS, sh.height / SS); }
         draw(firelit(g, y, strength), p, x, y);
       }
     });
