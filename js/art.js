@@ -2,7 +2,7 @@
 /* ===== SOTNIA interface: drawing (palette, pixel sprites, the woodcut backdrop, the field) ===== */
 const LW = BW, LH = 124, FY = 72, HZ = 56;
 const PAL = {
-    paper: '#d9d1bc', hill: '#d0c7ae', ground: '#cbc2a8', paperHi: '#e6dfcc', ink: '#1c1a17', red: '#b2493a', blue: '#33507a',
+    paper: '#d9d1bc', hill: '#d0c7ae', ground: '#cbc2a8', paperHi: '#e6dfcc', ink: '#14100c', red: '#b2493a', blue: '#33507a',
     ochre: '#a67a27', green: '#587030', drab: '#77705a', grey: '#8b877c', plum: '#5e3158', black: '#2a2018', skin: '#cd9a73',
     wood: '#6a4a2c', fur: '#4b3524', steel: '#3d4144', helm: '#7e8284', white: '#e7ddbf', flash: '#f0b93a', smoke: '#a9a498', russet: '#6e2420'
 };
