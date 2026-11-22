@@ -352,7 +352,7 @@ function sun(s: Scene, sx: number, sy: number, k = 1) {
   });
 }
 /** The sky: ordered dither from the deep air overhead to the glow at the horizon, brightest by the sun, then the sun if it is out and the clouds. */
-function skyArt(s: Scene, o: { clouds: number; sun?: [number, number]; sunK?: number }) {
+function skyArt(s: Scene, o: { clouds: number; veil?: number; sun?: [number, number]; sunK?: number }) {
   if (!s.sky) return;
   const { W, HZ, T, r } = s, clear = s.weather === 'clear', p1 = r() * 6.28, p2 = r() * 6.28, sx = o.sun ? o.sun[0] + ((r() * 80) | 0) - 40 : -999;
   s.plain(() => {
@@ -366,6 +366,7 @@ function skyArt(s: Scene, o: { clouds: number; sun?: [number, number]; sunK?: nu
     s.run(0, 0, W, HZ, (x, y) => ramp.at(((along[y + wob[x] + 8] + lit[x] * low[y]) * levels + 0.5) | 0));
     if (clear && o.sun) sun(s, sx, o.sun[1], o.sunK || 1);
     if (clear) {
+      for (let i = 0; i < (o.veil || 0); i++) { const w = 320 + r() * 260; cloud(s, w / 2 + r() * (W - w), 8 + r() * 26, w, 5 + r() * 4, true); } // a high veil of cloud, thin and long, that the sun shows through
       for (let i = 0; i < o.clouds; i++) {
         const low = i % 3 === 2, w = (low ? 90 : 120) + r() * 100, h = low ? 4 + r() * 3 : 8 + r() * 8;
         cloud(s, w / 2 + r() * (W - w), low ? 66 + r() * 32 : 10 + r() * 40, w, h, low);
@@ -669,6 +670,7 @@ const PROPS: Record<PropName, Prop> = {
     s.rect(x - 7 * k, y - h * 0.78 - 1, 14 * k, 4, LAND_EDGE); s.rect(x - 6 * k, y - h * 0.78, 12 * k, 2, b.lit);
     const r = s.poly([x - 5 * k, y - h * 0.78, x, y - h, x + 5 * k, y - h * 0.78], STUFF.shingle.mid, LAND_EDGE); s.split(r, x, STUFF.shingle.lit, STUFF.shingle.mid);
     s.rect(x + 10 * k, y - h * 0.9, 1, h * 0.9, b.mid); s.rect(x + 8 * k - 1, y - h * 0.96 - 1, 5 * k + 2, 5 * k + 2, LAND_EDGE); s.rect(x + 8 * k, y - h * 0.96, 5 * k, 5 * k, rMadder[3]); s.rect(x + 8 * k, y - h * 0.96, 5 * k, 1, rMadder[5]);
+    if (s.night) { s.rect(x + 9 * k, y - h * 0.96 - 2, 3 * k, 2, rFire[4]); s.rect(x + 10 * k, y - h * 0.96 - 4, Math.max(1, k), 2, rFire[5]); } // the tar in the barrel is lit
   },
   /* houses and churches */
   khata(s, x, y, k) {
@@ -1054,7 +1056,7 @@ const LAND_ART: Record<LandId, LandArt> = {
   },
   poland(s) {
     const T = s.T, r = s.r;
-    skyArt(s, { clouds: 4, sun: [270, 78] });
+    skyArt(s, { clouds: 3, veil: 3, sun: [270, 78] });
     birds(s, 3);
     const far = hillsArt(s, 94, [[0.008, 4], [0.025, 2]], { pal: T.far, haze: 12, jag: 1 });
     farLandmark(s, far, 'manor', 40 + (r() * 520 | 0), 0.55);
@@ -1072,7 +1074,7 @@ const LAND_ART: Record<LandId, LandArt> = {
   },
   prussia(s) {
     const T = s.T, r = s.r;
-    skyArt(s, { clouds: 4, sun: [290, 74], sunK: 0.8 });
+    skyArt(s, { clouds: 3, veil: 2, sun: [290, 74], sunK: 0.8 });
     birds(s, 5);
     s.ridge = hillsArt(s, 104, [[0.006, 2.4], [0.03, 1.3]], { pal: T.hill });
     const left = r() < 0.5, sea = left ? [0, 230] : [370, 600];

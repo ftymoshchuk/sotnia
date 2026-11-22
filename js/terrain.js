@@ -449,6 +449,10 @@ function skyArt(s, o) {
         if (clear && o.sun)
             sun(s, sx, o.sun[1], o.sunK || 1);
         if (clear) {
+            for (let i = 0; i < (o.veil || 0); i++) {
+                const w = 320 + r() * 260;
+                cloud(s, w / 2 + r() * (W - w), 8 + r() * 26, w, 5 + r() * 4, true);
+            } // a high veil of cloud, thin and long, that the sun shows through
             for (let i = 0; i < o.clouds; i++) {
                 const low = i % 3 === 2, w = (low ? 90 : 120) + r() * 100, h = low ? 4 + r() * 3 : 8 + r() * 8;
                 cloud(s, w / 2 + r() * (W - w), low ? 66 + r() * 32 : 10 + r() * 40, w, h, low);
@@ -882,6 +886,10 @@ const PROPS = {
         s.rect(x + 8 * k - 1, y - h * 0.96 - 1, 5 * k + 2, 5 * k + 2, LAND_EDGE);
         s.rect(x + 8 * k, y - h * 0.96, 5 * k, 5 * k, rMadder[3]);
         s.rect(x + 8 * k, y - h * 0.96, 5 * k, 1, rMadder[5]);
+        if (s.night) {
+            s.rect(x + 9 * k, y - h * 0.96 - 2, 3 * k, 2, rFire[4]);
+            s.rect(x + 10 * k, y - h * 0.96 - 4, Math.max(1, k), 2, rFire[5]);
+        } // the tar in the barrel is lit
     },
     /* houses and churches */
     khata(s, x, y, k) {
@@ -1473,7 +1481,7 @@ const LAND_ART = {
     },
     poland(s) {
         const T = s.T, r = s.r;
-        skyArt(s, { clouds: 4, sun: [270, 78] });
+        skyArt(s, { clouds: 3, veil: 3, sun: [270, 78] });
         birds(s, 3);
         const far = hillsArt(s, 94, [[0.008, 4], [0.025, 2]], { pal: T.far, haze: 12, jag: 1 });
         farLandmark(s, far, 'manor', 40 + (r() * 520 | 0), 0.55);
@@ -1491,7 +1499,7 @@ const LAND_ART = {
     },
     prussia(s) {
         const T = s.T, r = s.r;
-        skyArt(s, { clouds: 4, sun: [290, 74], sunK: 0.8 });
+        skyArt(s, { clouds: 3, veil: 2, sun: [290, 74], sunK: 0.8 });
         birds(s, 5);
         s.ridge = hillsArt(s, 104, [[0.006, 2.4], [0.03, 1.3]], { pal: T.hill });
         const left = r() < 0.5, sea = left ? [0, 230] : [370, 600];
