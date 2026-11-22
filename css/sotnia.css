@@ -490,7 +490,8 @@ button.token:disabled { opacity: .45; cursor: not-allowed; }
 .tokens.still .tbars .i { color: var(--ink-soft); }
 
 /* ---------- the fight ---------- */
-.fight { display: grid; gap: 14px; }
+/* The column is the window's, and not whatever its widest child asks for: left to size itself (auto) it took the width of the orders and carried the whole fight past the edge of a phone. */
+.fight { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
 .plate.field { position: relative; border-radius: 10px; overflow: hidden; line-height: 0; background: var(--paper); box-shadow: 0 0 0 3px var(--ink), 0 0 0 4px var(--gilt-lo), 0 14px 30px rgba(0, 0, 0, .5); margin: 4px; }
 .plate.field canvas { display: block; width: 100%; aspect-ratio: 300 / 124; image-rendering: pixelated; image-rendering: crisp-edges; }
 .cmd { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; padding: 12px 14px; background: var(--walnut); border: 1px solid var(--walnut-line); border-radius: 12px; }
@@ -674,6 +675,20 @@ kbd { font: 11px/1 var(--body); padding: 2px 4px; border: 1px solid currentColor
   .cards { grid-template-columns: repeat(auto-fill, minmax(min(100%, 170px), 1fr)); }
   .log .d { width: 76px; }
   .dialog .banner { font-size: 25px; }
+}
+/* A phone's fight. The three orders, with an icon, a word and a key side by side, come to nearly 400 px, which is more than a phone has (it was the width of the whole
+   fight): they are three equal buttons, the icon over the word, and the keys, which a phone has not got, are left out. The field is then as wide as the window, which
+   makes it only 100 to 185 px high, so the verdict laid over it is made to fit: the ribbon is sized to the field (its longest wording, "The company is beaten", is
+   8.8 em) and so is kept to one line, and the button under it is smaller. */
+@media (max-width: 480px) {
+  .cmd .seg.big { flex: 1 1 100%; }
+  .seg.big button { flex: 1 1 0; min-width: 0; flex-direction: column; justify-content: center; gap: 3px; padding: 8px 4px 9px; font-size: 15px; }
+  .seg.big button .i { font-size: 19px; }
+  .cmd kbd { display: none; }
+  .plate.field { container-type: inline-size; }
+  .verdict { gap: 6px; padding: 6px; }
+  .verdict .ribbon-word { font-size: clamp(16px, calc((100cqw - 48px) / 9.4), 32px); padding: 5px clamp(14px, 6cqw, 24px) 9px; }
+  .verdict .btn.big { font-size: 15px; padding: 8px 14px 9px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 
