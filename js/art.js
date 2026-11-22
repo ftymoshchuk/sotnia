@@ -3,7 +3,7 @@
 const LW = BW, LH = 124, FY = 72, HZ = 56;
 /**
  * The colours the pictures name by what they are: the dyes of the men (red is madder, blue woad, ochre weld, green moss), and the paper family (paper, paperHi, hill,
- * ground, drab, grey, steel, helm, smoke, flash), which is the ramps of the paper of a document, of dusk earth and of iron. All of them are steps of the ramps in RAMPS.
+ * ground, drab, grey, steel, helm, smoke, flash), which is the ramps of the paper of a document, of dusk earth and of iron. Every one but wood and fur is a step of a ramp in RAMPS.
  */
 const PAL = {
     paper: '#bfae82', hill: '#8d7b52', ground: '#4e3d2c', paperHi: '#d3c498', ink: '#14100c', red: '#b2493a', blue: '#33507a',
@@ -3206,6 +3206,11 @@ function drawCamp(v, st, sel, dt, still, pass) {
     else if (!pass && v.key !== key) {
         v.back = campBack(st);
         v.key = key;
+    }
+    // the camp as the day and the dusk have it is made as a day begins to pass (or while a march is in the dark), not in the middle of it
+    if (pass && v.back.bake && !v.back.bake.made.day) {
+        campVariant(v.back, 'day');
+        campVariant(v.back, 'warm');
     }
     campSky(g, v.back.stars, L);
     g.globalAlpha = 1;
