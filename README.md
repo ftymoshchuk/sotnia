@@ -54,6 +54,7 @@ npm run typecheck   # check the types without writing anything
 | `.github/` | CI, which ends in the `ci-passed` check, and Dependabot for the action pins and TypeScript |
 | `docs/figures.html` | A sheet of every figure, weapon and piece of armour, drawn by the game's own scripts: open it after `npm run build`, or with `?zoom=6` for larger pixels |
 | `docs/lands.html` | A sheet of every land in every weather, the sites a fight can be fought at, and the camp's skylines by night, drawn the same way; `?zoom=2` for larger |
+| `docs/style.html` | The style sheet: the palette ramps, the four typefaces, a card, a notice, tags, buttons, meters and every icon, drawn with the game's own stylesheet and `js/icons.js` |
 | `docs/default-branch.ruleset.json` | The branch rules for `main` |
 | `scripts/apply-ruleset.sh` | Puts those rules on the repository, and checks them |
 
