@@ -104,9 +104,15 @@ function landPattern(g, a, b, n) {
                 }
             }
         p = g.createPattern(tile, 'repeat');
-        if (p)
-            p.setTransform({ a: 1 / SS, b: 0, c: 0, d: 1 / SS, e: 0, f: 0 }); // the picture's context is scaled SS times: this undoes it
-        else
+        if (p) {
+            try {
+                p.setTransform({ a: 1 / SS, b: 0, c: 0, d: 1 / SS, e: 0, f: 0 });
+            }
+            catch (e) {
+                p = null;
+            }
+        } // the picture's context is scaled SS times: this undoes it
+        if (!p)
             p = a === null ? null : mixHex(a, b, n / 16);
         landPatterns.set(key, p);
     }
@@ -488,7 +494,7 @@ function hillsArt(s, base, waves, o) {
             sum += raw[clamp(x + k, 0, W - 1)];
         lie.push(clamp(Math.round(sum / 17 * 3.6), -3, 3));
     }
-    const paints = [lee, s.dither(mid, lee, 11), s.dither(mid, lee, 5), mid, s.dither(mid, lit, 5), s.dither(mid, lit, 11), lit], inLee = s.dither(mid, lee, 10), inSun = s.dither(mid, lit, 3);
+    const paints = [lee, s.dither(mid, lee, 11), s.dither(mid, lee, 5), s.dither(mid, lit, 3), s.dither(mid, lit, 7), s.dither(mid, lit, 12), lit], inLee = s.dither(mid, lee, 10), inSun = s.dither(mid, lit, 3);
     s.run(0, top, W, HZ, (x, y) => {
         const t = Y(x);
         if (y < t)
@@ -500,6 +506,12 @@ function hillsArt(s, base, waves, o) {
             return paints[c + 3];
         return c <= -2 ? inLee : c >= 2 ? inSun : mid;
     });
+    // a few small marks of the grass and the earth on the slopes, a step lighter on the lit ones and darker in the lee
+    for (let i = 0; i < (o.marks || 0); i++) {
+        const x = s.r() * W | 0, t = Y(x), y = t + 3 + (s.r() * Math.max(1, HZ - t - 8) | 0), c = lie[x];
+        if (y < HZ - 3)
+            s.rect(x, y, 2 + (s.r() * 2 | 0), 1, c >= 0 ? lit : lee);
+    }
     const hz = o.haze === undefined ? 10 : o.haze;
     if (hz)
         s.run(0, HZ - 14, W, HZ, (x, y) => (y >= Y(x) ? s.dither(null, T.haze, Math.round((y - (HZ - 14)) / 14 * hz)) : undefined));
@@ -519,6 +531,21 @@ function patches(s, count, kind, y0, y1, rx, nMax = 6) {
         const u = s.r(), cy = s.HZ + y0 + u * u * (y1 - y0), k = 0.35 + 0.65 * (cy - s.HZ) / (s.H - s.HZ), w = (0.5 + s.r()) * rx * k, h = Math.max(2, w * 0.1), cx = s.r() * s.W;
         const c = kind === 'dry' ? s.T.dry : kind === 'green' ? s.T.leaf[1] : groundTone(s, cy, kind === 'dark' ? 1 : -1), m = nMax - ((s.r() * 2) | 0);
         s.run(cx - w, cy - h, cx + w, cy + h + 1, (x, y) => { const d = ((x - cx) / w) ** 2 + ((y - cy) / h) ** 2; return d >= 1 ? undefined : s.dither(null, c, Math.round((1 - d) * m * 1.3)); });
+    }
+}
+/** The swell of the ground: n low rises between the rows y0 and y1 below the horizon, each lit on its upper left by the ground's lighter step and shadowed along its foot by the darker, so that the plain is not flat. */
+function hummocks(s, n, y0, y1) {
+    for (let i = 0; i < n; i++) {
+        const y = s.HZ + y0 + Math.floor(s.r() * (y1 - y0)), k = 0.5 + 0.8 * (y - s.HZ) / (s.H - s.HZ), w = Math.round((24 + s.r() * 40) * k), h = Math.max(2, Math.round((2 + s.r() * 2) * k)), x = Math.round(s.r() * s.W);
+        const lit = groundTone(s, y, -1), dark = groundTone(s, y, 1), body = s.dither(null, lit, 6);
+        s.run(x - w / 2, y - h, x + w / 2 + 1, y + 2, (px, py) => {
+            const u = (px - x) / (w / 2), top = y - h * Math.sqrt(Math.max(0, 1 - u * u));
+            if (py < top || Math.abs(u) > 1)
+                return undefined;
+            if (py >= y)
+                return u > -0.5 ? s.dither(null, dark, 7) : undefined; // the shadow at its foot, on the side away from the sun
+            return py < top + 1.5 && u < 0.35 ? lit : u < 0.1 ? body : undefined;
+        });
     }
 }
 /** The small marks that make a meadow: dashes and blades a step darker and lighter than the ground they lie on, a fleck of dry grass, denser and larger towards the foot of the picture. */
@@ -570,6 +597,7 @@ function groundArt(s, o = {}) {
     patches(s, o.dry === undefined ? 3 : o.dry, 'dry', 10, H - HZ - 14, 70, 5);
     if (o.green)
         patches(s, o.green, 'green', 8, H - HZ - 30, 90, 9);
+    hummocks(s, o.humps === undefined ? 16 : o.humps, 8, 70);
     grassMarks(s, o.marks === undefined ? 1500 : o.marks);
 }
 /** A window or a door: dark by day, and by night, in some, the warm light of a fire in the room. */
@@ -1385,6 +1413,8 @@ function place(s, items, x0 = 24, x1 = s.W - 24) {
         x += items[i][0] + gap;
     }
 }
+/** A landmark far off on the far hills, k times its size, gone blue and pale in the haze. */
+function distant(s, far, prop, x, k) { s.fade(0.58, () => PROPS[prop](s, x, far(x) + 2, k)); }
 /** A hamlet at x: houses of this kind at these offsets along the skyline, and a tree of the kind given at each end. */
 function hamlet(s, x, house, offs, k, tree) {
     offs.forEach((dx, i) => PROPS[house](s, x + dx, s.ridge(x + dx) + 2, k + (i % 2) * 0.1));
@@ -1400,7 +1430,7 @@ const LAND_ART = {
         skyArt(s, { clouds: 3, sun: [300, 78], sunK: 1.2 });
         birds(s, 2);
         hillsArt(s, 108, [[0.006, 2], [0.02, 1]], { pal: T.far, haze: 12, jag: 1 });
-        s.ridge = hillsArt(s, 106, [[0.0105, 2.4], [0.034, 1.2]], { pal: T.hill });
+        s.ridge = hillsArt(s, 106, [[0.0105, 2.4], [0.034, 1.2]], { pal: T.hill, marks: 60 });
         place(s, [
             [120, x => { const t = mound(s, x, 90 + (r() * 30 | 0), 12); PROPS.baba(s, x + 6, t + 2, 1); }],
             [110, x => { const t = mound(s, x, 70 + (r() * 30 | 0), 9); PROPS.beacon(s, x - 4, t + 1, 0.95); }],
@@ -1417,8 +1447,9 @@ const LAND_ART = {
         const T = s.T, r = s.r, church = r() < 0.55, mill = !church || r() < 0.5;
         skyArt(s, { clouds: 3, sun: [250, 76] });
         birds(s, 4);
-        hillsArt(s, 90, [[0.007, 7], [0.021, 3.5]], { pal: T.far, haze: 12, jag: 1 });
-        s.ridge = hillsArt(s, 100, [[0.013, 6], [0.04, 2.5]], { pal: T.hill });
+        const far = hillsArt(s, 90, [[0.007, 7], [0.021, 3.5]], { pal: T.far, haze: 12, jag: 1 });
+        distant(s, far, 'windmill', 40 + (r() * 520 | 0), 0.5);
+        s.ridge = hillsArt(s, 100, [[0.013, 6], [0.04, 2.5]], { pal: T.hill, marks: 120 });
         const items = [[150, x => hamlet(s, x, 'khata', [-42, -14, 14, 42], 0.82, 'willow')], [76, x => along(s, 'poplar', x - 30, 5, 14, 0.75)]];
         if (church)
             items.push([52, x => PROPS.orthodox(s, x, s.ridge(x) + 2, 0.95)]);
@@ -1434,8 +1465,9 @@ const LAND_ART = {
         const T = s.T, r = s.r;
         skyArt(s, { clouds: 4, sun: [270, 78] });
         birds(s, 3);
-        hillsArt(s, 94, [[0.008, 4], [0.025, 2]], { pal: T.far, haze: 12, jag: 1 });
-        s.ridge = hillsArt(s, 102, [[0.012, 4], [0.036, 2]], { pal: T.hill });
+        const far = hillsArt(s, 94, [[0.008, 4], [0.025, 2]], { pal: T.far, haze: 12, jag: 1 });
+        distant(s, far, 'manor', 40 + (r() * 520 | 0), 0.55);
+        s.ridge = hillsArt(s, 102, [[0.012, 4], [0.036, 2]], { pal: T.hill, marks: 90 });
         place(s, [
             [170, x => { PROPS.church(s, x, s.ridge(x) + 2, 0.9); [-48, 40, 68].forEach((dx, i) => PROPS.cottage(s, x + dx, s.ridge(x + dx) + 2, 0.76 + (i % 2) * 0.1)); PROPS.nest(s, x - 78, s.ridge(x - 78) + 2, 0.75); }],
             [70, x => (r() < 0.6 ? PROPS.windmill(s, x, s.ridge(x) + 2, 0.85) : PROPS.manor(s, x, s.ridge(x) + 2, 0.85))],
@@ -1511,7 +1543,7 @@ const LAND_ART = {
         const T = s.T, r = s.r;
         skyArt(s, { clouds: 3, sun: [280, 72] });
         hillsArt(s, 78, [[0.01, 9], [0.045, 5], [0.11, 2]], { pal: T.far, haze: 12 });
-        s.ridge = hillsArt(s, 98, [[0.012, 8], [0.03, 3]], { pal: T.hill });
+        s.ridge = hillsArt(s, 98, [[0.012, 8], [0.03, 3]], { pal: T.hill, marks: 160 });
         place(s, [
             [140, x => { const t = mound(s, x, 130, 16); PROPS.castle(s, x, t + 3, 0.8); }],
             [170, x => { PROPS.church(s, x, s.ridge(x) + 2, 0.8); [-44, 38, 66].forEach((dx, i) => (i === 1 ? PROPS.ruin : PROPS.halfTimber)(s, x + dx, s.ridge(x + dx) + 2, 0.66 + (i % 2) * 0.1)); PROPS.smoke(s, x + 44, s.ridge(x + 38) - 8, 0.7); }],
@@ -1526,8 +1558,9 @@ const LAND_ART = {
     saxony(s) {
         const T = s.T, r = s.r, castle = r() < 0.5;
         skyArt(s, { clouds: 3, sun: [300, 76] });
-        hillsArt(s, 82, [[0.009, 7], [0.03, 3]], { pal: T.far, haze: 12 });
-        s.ridge = hillsArt(s, 96, [[0.014, 7], [0.04, 3]], { pal: T.hill });
+        const far = hillsArt(s, 82, [[0.009, 7], [0.03, 3]], { pal: T.far, haze: 12 });
+        distant(s, far, 'church', 40 + (r() * 520 | 0), 0.5);
+        s.ridge = hillsArt(s, 96, [[0.014, 7], [0.04, 3]], { pal: T.hill, marks: 140 });
         const items = [
             [190, x => { hamlet(s, x - 14, 'halfTimber', [-52, -24, 12, 38], 0.66); PROPS.church(s, x + 72, s.ridge(x + 72) + 2, 0.8); }],
             [120, x => { vines(s, x - 55, x + 55); }]
