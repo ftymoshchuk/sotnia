@@ -152,7 +152,7 @@ test('every colour a backdrop is painted in is a step of the master palette, how
 });
 
 test('the dither is the ordered one of a Bayer matrix, so that it is a pattern and never speckle', () => {
-  const r = game(), bayer = plain(r, 'BAYER');
+  const r = game(), bayer = plain(r, 'LAND_BAYER');
   assert.deepEqual(bayer.flat().sort((a, b) => a - b), [...Array(16).keys()], 'each of sixteen levels once');
   for (let n = 0; n <= 16; n++) assert.equal(bayer.flat().filter(v => v < n).length, n, `level ${n} sets ${n} of the sixteen pixels`);
   for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) assert.equal(bayer[y][x] < 8, (x + y) % 2 === 0, 'half-way is a checkerboard');

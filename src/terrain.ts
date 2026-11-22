@@ -32,7 +32,7 @@ const rSky = ['#4a6a82', '#6c8fa4', '#92b0bb', '#b8cac8', '#d6dccb', '#ece8cf'] 
 /** Every step of every ramp: what a colour moved off the palette is brought back to. */
 const LAND_DYES: readonly string[] = [...rSoot, ...rBone, ...rPaper, ...rBronze, ...rMadder, ...rWoad, ...rMoss, ...rOchre, ...rIron, ...rSkin, ...rNight, ...rFire, ...rTeal, ...rPlum, ...rSky];
 /** The dark that edges what stands, and the dark of a window and a door. */
-const OUT = rSoot[1], DARK = rSoot[2];
+const LAND_EDGE = rSoot[1], DARK = rSoot[2];
 
 /** A colour (#rrggbb) moved the part t of the way, from 0 to 1, towards another. */
 function mixHex(a: string, b: string, t: number) {
@@ -54,25 +54,25 @@ function dyeGrade(f: LandGrade): LandGrade {
   return c => { let o = memo.get(c); if (o === undefined) memo.set(c, o = f(c)); return o; };
 }
 /** A grade that takes each colour the part k of the way to another, then a part dark of the way to soot, and back to the nearest dye (a far hill goes blue this way). */
-const towards = (to: string, k: number, dark = 0) => dyeGrade(c => nearDye(mixHex(mixHex(c, to, k), rSoot[1], dark)));
+const dyeTowards = (to: string, k: number, dark = 0) => dyeGrade(c => nearDye(mixHex(mixHex(c, to, k), rSoot[1], dark)));
 /** Where each dye stands: its ramp, and its step on it. */
 const dyeAt = new Map<string, readonly [ramp: readonly string[], step: number]>();
 for (const ramp of [rSoot, rBone, rPaper, rBronze, rMadder, rWoad, rMoss, rOchre, rIron, rSkin, rNight, rFire, rTeal, rPlum, rSky]) ramp.forEach((h, i) => dyeAt.set(h, [ramp, i]));
 /** A dye moved d steps along its own ramp, so that it keeps its hue as it darkens or pales. */
-const stepped = (c: string, d: number) => { const at = dyeAt.get(c); return at ? at[0][clamp(at[1] + d, 0, at[0].length - 1)] : c; };
-const brightness = (h: string) => { const n = parseInt(h.slice(1), 16); return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255); };
+const dyeStepped = (c: string, d: number) => { const at = dyeAt.get(c); return at ? at[0][clamp(at[1] + d, 0, at[0].length - 1)] : c; };
+const dyeBrightness = (h: string) => { const n = parseInt(h.slice(1), 16); return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255); };
 /** The dye of another ramp whose brightness is nearest to k times this one's. */
-const viaRamp = (c: string, to: readonly string[], k = 1) => { const L = brightness(c) * k; return to.reduce((a, b) => (Math.abs(brightness(b) - L) < Math.abs(brightness(a) - L) ? b : a)); };
+const dyeVia = (c: string, to: readonly string[], k = 1) => { const L = dyeBrightness(c) * k; return to.reduce((a, b) => (Math.abs(dyeBrightness(b) - L) < Math.abs(dyeBrightness(a) - L) ? b : a)); };
 /** Rain: whitewash goes the grey of wet lime and thatch the drab of wet straw, the rest a step darker on its own ramp; fire and skin are left alone. */
 const RAIN_GRADE = dyeGrade(c => {
   const at = dyeAt.get(c); if (!at) return c;
   const ramp = at[0];
-  if (ramp === rBone) return viaRamp(c, rIron, 0.95);
-  if (ramp === rOchre || ramp === rBronze) return viaRamp(c, rPaper, 0.92);
-  return ramp === rSoot || ramp === rFire || ramp === rSkin || ramp === rNight || ramp === rPlum || ramp === rTeal ? c : stepped(c, brightness(c) > 70 ? -1 : 0); // the darks are dark enough
+  if (ramp === rBone) return dyeVia(c, rIron, 0.95);
+  if (ramp === rOchre || ramp === rBronze) return dyeVia(c, rPaper, 0.92);
+  return ramp === rSoot || ramp === rFire || ramp === rSkin || ramp === rNight || ramp === rPlum || ramp === rTeal ? c : dyeStepped(c, dyeBrightness(c) > 70 ? -1 : 0); // the darks are dark enough
 });
 /** Fog: every dye a step paler on its own ramp (the soot of an outline two), the rest is done by the haze laid over the picture. */
-const FOG_GRADE = dyeGrade(c => stepped(c, dyeAt.get(c)?.[0] === rSoot ? 2 : 1));
+const FOG_GRADE = dyeGrade(c => dyeStepped(c, dyeAt.get(c)?.[0] === rSoot ? 2 : 1));
 /** The moon's grade: every dye becomes a step of the night ramp by its brightness, but fire and gold, which keep their light. */
 const MOON_GRADE = dyeGrade(c => {
   if (c === rFire[3] || c === rFire[4] || c === rFire[5] || c === rBronze[5] || c === rBronze[6]) return c;
@@ -129,7 +129,7 @@ interface Scene {
   plain<R>(draw: () => R): R; // draws with the palette as it stands, the weather leaving it alone (a skyline by night is still moonlit)
 }
 
-const BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+const LAND_BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
 /** The patterns made so far, by their two colours and level: each a 4 by 4 tile of the Bayer matrix, drawn one tile pixel to a pixel of the picture. */
 const landPatterns = new Map<string, CanvasPattern | string | null>();
 /** The fill that stands for a dither of a and b at level n: its pattern, or where the canvas can make none, the two blended (a stipple, which has no a to blend, is left out). */
@@ -139,7 +139,7 @@ function landPattern(g: CanvasRenderingContext2D, a: string | null, b: string, n
   if (p === undefined) {
     const tile = document.createElement('canvas'); tile.width = tile.height = 4;
     const t = tile.getContext('2d')!;
-    for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) { const c = BAYER[y][x] < n ? b : a; if (c) { t.fillStyle = c; t.fillRect(x, y, 1, 1); } }
+    for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) { const c = LAND_BAYER[y][x] < n ? b : a; if (c) { t.fillStyle = c; t.fillRect(x, y, 1, 1); } }
     p = g.createPattern(tile, 'repeat');
     if (p) { try { p.setTransform({ a: 1 / SS, b: 0, c: 0, d: 1 / SS, e: 0, f: 0 }); } catch (e) { p = null; } } // the picture's context is scaled SS times: this undoes it
     if (!p) p = a === null ? null : mixHex(a, b, n / 16);
@@ -226,7 +226,7 @@ function makeScene(g: CanvasRenderingContext2D, seed: number, weather: Weather, 
   const rims = (sh: LandShape, c: LandPaint, w: number, right: boolean) => sh.runs.forEach((row, i) => { for (let k = 0; k < row.length; k += 2) { const a = row[k], b = row[k + 1], ww = Math.min(w, b - a); if (right) rect(b - ww, sh.y0 + i, ww, 1, c); else rect(a, sh.y0 + i, ww, 1, c); } });
   const fadeGrade = (t: number) => {
     let f = fades.get(t);
-    if (!f) { const to = towards(baseGrade ? baseGrade(T.haze) : T.haze, t); f = baseGrade ? (night ? (c => MOON_GRADE(to(baseGrade(c)))) : (c => to(baseGrade(c)))) : to; fades.set(t, f); } // by night the far country is brought back to the night's blues
+    if (!f) { const to = dyeTowards(baseGrade ? baseGrade(T.haze) : T.haze, t); f = baseGrade ? (night ? (c => MOON_GRADE(to(baseGrade(c)))) : (c => to(baseGrade(c)))) : to; fades.set(t, f); } // by night the far country is brought back to the night's blues
     return f;
   };
   return {
@@ -302,23 +302,23 @@ function weatherTone(T: Tone, weather: Weather): Tone {
 
 /* ---------- what buildings, roofs and water are made of, whatever the land ---------- */
 /** A material in five lights, dark to light: in deep shade, in its lee, in the middle, in the sun, and where the sun strikes it. */
-interface Mat { dk: string; lo: string; mid: string; lit: string; hi: string }
-const mat = (dk: string, lo: string, mid: string, lit: string, hi: string): Mat => ({ dk, lo, mid, lit, hi });
+interface LandMat { dk: string; lo: string; mid: string; lit: string; hi: string }
+const landMat = (dk: string, lo: string, mid: string, lit: string, hi: string): LandMat => ({ dk, lo, mid, lit, hi });
 const STUFF = {
-  wall: mat(rIron[4], rIron[5], rBone[3], rBone[4], rBone[5]), // whitewash, warm in the light and cool in its lee
-  thatch: mat(rOchre[1], rOchre[3], rOchre[4], rOchre[5], rOchre[6]),
-  tile: mat(rMadder[1], rMadder[2], rMadder[3], rMadder[4], rMadder[5]),
-  brick: mat(rMadder[1], rMadder[2], rMadder[2], rMadder[3], rMadder[4]), // brick walls: the face is the darker madder, so that a church of it does not shout
-  shingle: mat(rIron[1], rIron[2], rIron[3], rIron[4], rIron[5]), // slate and weathered shingle
-  timber: mat(rSoot[2], rSoot[4], rSoot[5], rSoot[6], rSoot[7]),
-  stone: mat(rIron[2], rIron[3], rIron[4], rIron[5], rIron[6]),
-  lime: mat(rIron[3], rIron[4], rBone[2], rBone[3], rBone[4]), // limewashed stone and plaster
-  water: mat(rWoad[3], rWoad[4], rSky[1], rSky[2], rSky[4]),
-  smoke: mat(rIron[2], rIron[3], rIron[4], rIron[5], rIron[6]),
-  straw: mat(rOchre[2], rOchre[3], rOchre[4], rOchre[5], rOchre[6]),
-  earth: mat(rSoot[3], rSoot[4], rSoot[5], rSoot[6], rSoot[7]),
-  bark: mat(rSoot[2], rSoot[3], rSoot[4], rSoot[5], rSoot[6]),
-  birch: mat(rBone[1], rBone[2], rBone[3], rBone[4], rBone[5])
+  wall: landMat(rIron[4], rIron[5], rBone[3], rBone[4], rBone[5]), // whitewash, warm in the light and cool in its lee
+  thatch: landMat(rOchre[1], rOchre[3], rOchre[4], rOchre[5], rOchre[6]),
+  tile: landMat(rMadder[1], rMadder[2], rMadder[3], rMadder[4], rMadder[5]),
+  brick: landMat(rMadder[1], rMadder[2], rMadder[2], rMadder[3], rMadder[4]), // brick walls: the face is the darker madder, so that a church of it does not shout
+  shingle: landMat(rIron[1], rIron[2], rIron[3], rIron[4], rIron[5]), // slate and weathered shingle
+  timber: landMat(rSoot[2], rSoot[4], rSoot[5], rSoot[6], rSoot[7]),
+  stone: landMat(rIron[2], rIron[3], rIron[4], rIron[5], rIron[6]),
+  lime: landMat(rIron[3], rIron[4], rBone[2], rBone[3], rBone[4]), // limewashed stone and plaster
+  water: landMat(rWoad[3], rWoad[4], rSky[1], rSky[2], rSky[4]),
+  smoke: landMat(rIron[2], rIron[3], rIron[4], rIron[5], rIron[6]),
+  straw: landMat(rOchre[2], rOchre[3], rOchre[4], rOchre[5], rOchre[6]),
+  earth: landMat(rSoot[3], rSoot[4], rSoot[5], rSoot[6], rSoot[7]),
+  bark: landMat(rSoot[2], rSoot[3], rSoot[4], rSoot[5], rSoot[6]),
+  birch: landMat(rBone[1], rBone[2], rBone[3], rBone[4], rBone[5])
 } as const;
 
 /* ---------- the sky ---------- */
@@ -425,7 +425,7 @@ function groundTone(s: Scene, y: number, d = 0) {
   return G[clamp(Math.round(Math.pow(Math.max(0, y - s.HZ) / (s.H - s.HZ), GROUND_CURVE) * (K - 1)) + d, 0, K - 1)];
 }
 /** Blobs of ordered dither on the ground, flat as the ground lies and softer at their edges: count of them, within the rows y0 to y1 below the horizon, up to rx wide, in the ground's own colour a step darker or lighter, or in its dry grass. */
-function patches(s: Scene, count: number, kind: 'dark' | 'light' | 'dry' | 'green', y0: number, y1: number, rx: number, nMax = 6) {
+function groundPatches(s: Scene, count: number, kind: 'dark' | 'light' | 'dry' | 'green', y0: number, y1: number, rx: number, nMax = 6) {
   for (let i = 0; i < count; i++) {
     const u = s.r(), cy = s.HZ + y0 + u * u * (y1 - y0), k = 0.35 + 0.65 * (cy - s.HZ) / (s.H - s.HZ), w = (0.5 + s.r()) * rx * k, h = Math.max(2, w * 0.1), cx = s.r() * s.W;
     const c = kind === 'dry' ? s.T.dry : kind === 'green' ? s.T.leaf[1] : groundTone(s, cy, kind === 'dark' ? 1 : -1), m = nMax - ((s.r() * 2) | 0);
@@ -433,7 +433,7 @@ function patches(s: Scene, count: number, kind: 'dark' | 'light' | 'dry' | 'gree
   }
 }
 /** The swell of the ground: n low rises between the rows y0 and y1 below the horizon, each lit on its upper left by the ground's lighter step and shadowed along its foot by the darker, so that the plain is not flat. */
-function hummocks(s: Scene, n: number, y0: number, y1: number) {
+function groundRises(s: Scene, n: number, y0: number, y1: number) {
   for (let i = 0; i < n; i++) {
     const y = s.HZ + y0 + Math.floor(s.r() * (y1 - y0)), k = 0.5 + 0.8 * (y - s.HZ) / (s.H - s.HZ), w = Math.round((24 + s.r() * 40) * k), h = Math.max(2, Math.round((2 + s.r() * 2) * k)), x = Math.round(s.r() * s.W);
     const lit = groundTone(s, y, -1), dark = groundTone(s, y, 1), body = s.dither(null, lit, 6);
@@ -446,7 +446,7 @@ function hummocks(s: Scene, n: number, y0: number, y1: number) {
   }
 }
 /** The small marks that make a meadow: dashes and blades a step darker and lighter than the ground they lie on, a fleck of dry grass, denser and larger towards the foot of the picture. */
-function grassMarks(s: Scene, n: number) {
+function groundMarks(s: Scene, n: number) {
   const { W, H, HZ, T } = s;
   for (let i = 0; i < n; i++) {
     const y = HZ + 4 + Math.floor(Math.sqrt(s.r()) * (H - HZ - 6)), x = Math.floor(s.r() * W), t = (y - HZ) / (H - HZ), k = 1 + Math.floor(t * 2.2), c = s.r();
@@ -456,7 +456,7 @@ function grassMarks(s: Scene, n: number) {
   }
 }
 /** The grass at the foot of the picture, dark blades with the sun on their tips, which the men never reach. */
-function fringe(s: Scene) {
+function groundFringe(s: Scene) {
   const { W, H, T } = s, L = T.leaf;
   for (let x = 0; x < W; x += 3 + (s.r() * 4 | 0)) {
     const h = 4 + (s.r() * 9 | 0), lean = s.r() < 0.5 ? -1 : 1, lo = h >> 1;
@@ -472,10 +472,10 @@ function groundArt(s: Scene, o: { dark?: number; light?: number; dry?: number; g
   for (let i = 0; i < 9; i++) veil.push(s.dither(null, T.haze, Math.round(15 * Math.pow(1 - i / 9, 1.3))));
   s.run(0, HZ, W, H, (x, y) => ramp.at(lvl[y - HZ + wob[x] + 8]));
   s.run(0, HZ, W, HZ + 9, (x, y) => veil[y - HZ]); // the haze of the horizon lying on the far ground
-  patches(s, o.dark === undefined ? 7 : o.dark, 'dark', 6, H - HZ - 6, 80); patches(s, o.light === undefined ? 7 : o.light, 'light', 6, H - HZ - 6, 80); patches(s, o.dry === undefined ? 3 : o.dry, 'dry', 10, H - HZ - 14, 70, 5);
-  if (o.green) patches(s, o.green, 'green', 8, H - HZ - 30, 90, 9);
-  hummocks(s, o.humps === undefined ? 16 : o.humps, 8, 70);
-  grassMarks(s, o.marks === undefined ? 1500 : o.marks);
+  groundPatches(s, o.dark === undefined ? 7 : o.dark, 'dark', 6, H - HZ - 6, 80); groundPatches(s, o.light === undefined ? 7 : o.light, 'light', 6, H - HZ - 6, 80); groundPatches(s, o.dry === undefined ? 3 : o.dry, 'dry', 10, H - HZ - 14, 70, 5);
+  if (o.green) groundPatches(s, o.green, 'green', 8, H - HZ - 30, 90, 9);
+  groundRises(s, o.humps === undefined ? 16 : o.humps, 8, 70);
+  groundMarks(s, o.marks === undefined ? 1500 : o.marks);
 }
 
 /* ---------- props: the things that stand in a land ---------- */
@@ -486,21 +486,21 @@ type PropName = 'pine' | 'spruce' | 'birch' | 'willow' | 'poplar' | 'oak' | 'orc
   | 'tent' | 'cannon' | 'gabions' | 'gallows' | 'boulder' | 'fern' | 'nest' | 'ship' | 'barge' | 'smoke' | 'hops' | 'sheaf' | 'blockhouse' | 'tollHouse' | 'wagon'
   | 'raft' | 'millRuin' | 'watermill' | 'signpost' | 'barn' | 'flame' | 'cow';
 /** A window or a door: dark by day, and by night, in some, the warm light of a fire in the room. */
-function win(s: Scene, x: number, y: number, w: number, h: number, door = false) {
+function windowAt(s: Scene, x: number, y: number, w: number, h: number, door = false) {
   const lit = s.night && !door && ((Math.round(x) * 7 + Math.round(y) * 13) % 5) < 3;
   s.rect(x, y, w, h, lit ? rFire[3] : DARK);
   if (!lit && !door && w >= 2) s.rect(x, y, w, 1, rIron[3]);
 }
 /** A plain wall, edged in soot: x0 its left, y its foot, w by h, lit on the left and, if side is given, shaded for that many pixels at its right end. */
-function wall(s: Scene, x0: number, y: number, w: number, h: number, m: Mat, side = 0) {
+function walls(s: Scene, x0: number, y: number, w: number, h: number, m: LandMat, side = 0) {
   x0 = Math.round(x0); y = Math.round(y); w = Math.round(w); h = Math.round(h);
-  s.rect(x0 - 1, y - h - 1, w + 2, h + 2, OUT); s.rect(x0, y - h, w, h, m.lit);
+  s.rect(x0 - 1, y - h - 1, w + 2, h + 2, LAND_EDGE); s.rect(x0, y - h, w, h, m.lit);
   s.rect(x0, y - h, 1, h, m.hi); s.rect(x0, y - 1, w, 1, m.mid); s.rect(x0, y - h, w, 1, m.mid);
   if (side) s.rect(x0 + w - side, y - h, side, h, m.lo);
 }
 /** A roof over the polygon pts, edged in soot, lit along its left and top and shaded in its lee, with the rows of thatch or shingle across it. */
-function roof(s: Scene, pts: readonly number[], m: Mat, o: { course?: number; lw?: number; sw?: number; split?: number } = {}) {
-  const sh = s.poly(pts, m.mid, OUT);
+function roofOver(s: Scene, pts: readonly number[], m: LandMat, o: { course?: number; lw?: number; sw?: number; split?: number } = {}) {
+  const sh = s.poly(pts, m.mid, LAND_EDGE);
   if (o.split !== undefined) s.split(sh, o.split, m.lit, m.mid);
   else s.cap(sh, m.lit, 1);
   s.lit(sh, m.hi, o.lw === undefined ? 1 : o.lw); s.shade(sh, m.lo, o.sw === undefined ? 2 : o.sw);
@@ -509,7 +509,7 @@ function roof(s: Scene, pts: readonly number[], m: Mat, o: { course?: number; lw
   return sh;
 }
 /** A mass of leaves: shade underneath, the body, and the sun on its upper left. */
-function ball(s: Scene, cx: number, cy: number, rx: number, ry: number, p: readonly [string, string, string], edge?: string) {
+function foliage(s: Scene, cx: number, cy: number, rx: number, ry: number, p: readonly [string, string, string], edge?: string) {
   s.disc(cx, cy, rx, ry, p[0], edge);
   s.disc(cx - rx * 0.12, cy - ry * 0.18, rx * 0.84, ry * 0.8, p[1]);
   s.disc(cx - rx * 0.3, cy - ry * 0.4, rx * 0.5, ry * 0.42, p[2]);
@@ -523,22 +523,22 @@ function sails(s: Scene, hx: number, hy: number, len: number, k: number, turn: n
     s.line(hx + ux * len * 0.25 + nx * 4 * k, hy + uy * len * 0.25 + ny * 4 * k, hx + ux * len + nx * 4 * k, hy + uy * len + ny * 4 * k, STUFF.timber.lo);
     for (let d = 0.3; d < 1; d += 0.14) s.line(hx + ux * len * d, hy + uy * len * d, hx + ux * len * d + nx * 4 * k, hy + uy * len * d + ny * 4 * k, rPaper[1]);
   }
-  s.rect(hx - 1, hy - 1, 3, 3, OUT);
+  s.rect(hx - 1, hy - 1, 3, 3, LAND_EDGE);
 }
 /** A gold cross, as high as h, with its top at x, y. */
-function crossAt(s: Scene, x: number, y: number, h: number, c: string = rBronze[5]) { s.rect(x, y, 1, h, c); s.rect(x - 1, y + 1, 3, 1, c); }
+function goldCross(s: Scene, x: number, y: number, h: number, c: string = rBronze[5]) { s.rect(x, y, 1, h, c); s.rect(x - 1, y + 1, 3, 1, c); }
 /** An onion dome of width w and height h on its drum at the foot (x, y): iron-blue, lit on the left, with its gold cross. */
-function dome(s: Scene, x: number, y: number, w: number, h: number, m: Mat = STUFF.shingle) {
-  const sh = s.poly([x, y - h, x + w * 0.3, y - h * 0.78, x + w * 0.5, y - h * 0.42, x + w * 0.36, y - h * 0.12, x + w * 0.22, y, x - w * 0.22, y, x - w * 0.36, y - h * 0.12, x - w * 0.5, y - h * 0.42, x - w * 0.3, y - h * 0.78], m.mid, OUT);
+function onionDome(s: Scene, x: number, y: number, w: number, h: number, m: LandMat = STUFF.shingle) {
+  const sh = s.poly([x, y - h, x + w * 0.3, y - h * 0.78, x + w * 0.5, y - h * 0.42, x + w * 0.36, y - h * 0.12, x + w * 0.22, y, x - w * 0.22, y, x - w * 0.36, y - h * 0.12, x - w * 0.5, y - h * 0.42, x - w * 0.3, y - h * 0.78], m.mid, LAND_EDGE);
   s.split(sh, x, m.lit, m.mid); s.shade(sh, m.lo, 1); s.rect(x - w * 0.28, y - h * 0.58, 1, 2, m.hi);
-  crossAt(s, x, y - h - 5, 5);
+  goldCross(s, x, y - h - 5, 5);
 }
 const PROPS: Record<PropName, Prop> = {
   /* trees */
   pine(s, x, y, k) {
     const h = 38 * k, L = s.T.leaf;
     s.rect(x - 1, y - h * 0.8, 2, h * 0.8, STUFF.bark.lo); s.rect(x - 1, y - h * 0.8, 1, h * 0.8, STUFF.bark.mid);
-    for (const [dx, dy, rx, ry] of [[-7, 9, 8, 4], [7, 6, 9, 4], [0, 0, 9, 4]]) ball(s, x + dx * k, y - h + dy * k, rx * k, ry * k, L);
+    for (const [dx, dy, rx, ry] of [[-7, 9, 8, 4], [7, 6, 9, 4], [0, 0, 9, 4]]) foliage(s, x + dx * k, y - h + dy * k, rx * k, ry * k, L);
   },
   spruce(s, x, y, k) {
     const h = 36 * k, L = s.T.leaf, n = 5, step = (h - 4 * k) / n, right: number[] = [], left: number[] = [];
@@ -555,12 +555,12 @@ const PROPS: Record<PropName, Prop> = {
     const h = 32 * k, L = s.T.leaf, top = y - h * 0.72;
     s.rect(x - 1, top, 2, h * 0.72, STUFF.birch.lit); s.rect(x, top, 1, h * 0.72, STUFF.birch.lo);
     for (let i = 0; i < 5; i++) s.rect(x - 1 + (i % 2), top + 3 + i * 4 * k, 1, 1, rSoot[2]);
-    for (const [dx, dy, rx, ry] of [[-5, -2, 5, 5], [5, -4, 5, 6], [0, -9, 6, 6], [-3, 3, 4, 4], [4, 4, 4, 4]]) ball(s, x + dx * k, top + dy * k + 2, rx * k, ry * k, L);
+    for (const [dx, dy, rx, ry] of [[-5, -2, 5, 5], [5, -4, 5, 6], [0, -9, 6, 6], [-3, 3, 4, 4], [4, 4, 4, 4]]) foliage(s, x + dx * k, top + dy * k + 2, rx * k, ry * k, L);
   },
   willow(s, x, y, k) {
     const L = s.T.leaf, top = y - 24 * k, rx = 13 * k, ry = 8 * k;
     s.rect(x - 2 * k, y - 14 * k, 4 * k, 14 * k, STUFF.bark.mid); s.rect(x - 2 * k, y - 14 * k, 1, 14 * k, STUFF.bark.lit);
-    ball(s, x, top + 6 * k, rx, ry, L);
+    foliage(s, x, top + 6 * k, rx, ry, L);
     for (let dx = -rx + 1; dx < rx; dx += 2) {
       const yy = top + 6 * k + ry * Math.sqrt(1 - (dx / rx) ** 2), len = (5 + ((dx * 7 + 91) % 5) + (Math.abs(dx) < rx * 0.6 ? 4 : 0)) * k;
       s.rect(x + dx, yy, 1, len, dx < -rx * 0.2 ? L[1] : L[0]); s.rect(x + dx, yy, 1, 1, L[2]);
@@ -575,32 +575,32 @@ const PROPS: Record<PropName, Prop> = {
   oak(s, x, y, k) {
     const L = s.T.leaf;
     s.rect(x - 2 * k, y - 12 * k, 4 * k, 12 * k, STUFF.bark.mid); s.rect(x - 2 * k, y - 12 * k, 1, 12 * k, STUFF.bark.lit);
-    for (const [dx, dy, rx, ry] of [[-8, -14, 9, 7], [8, -15, 9, 7], [0, -21, 10, 8]]) ball(s, x + dx * k, y + dy * k, rx * k, ry * k, L);
+    for (const [dx, dy, rx, ry] of [[-8, -14, 9, 7], [8, -15, 9, 7], [0, -21, 10, 8]]) foliage(s, x + dx * k, y + dy * k, rx * k, ry * k, L);
   },
   orchard(s, x, y, k) {
     const L = s.T.leaf;
-    s.rect(x - 1, y - 6 * k, 2, 6 * k, STUFF.bark.mid); ball(s, x, y - 11 * k, 6 * k, 6 * k, L);
+    s.rect(x - 1, y - 6 * k, 2, 6 * k, STUFF.bark.mid); foliage(s, x, y - 11 * k, 6 * k, 6 * k, L);
     for (let i = 0; i < 5; i++) s.rect(x - 4 * k + ((i * 5) % 9) * k, y - 15 * k + ((i * 7) % 8) * k, 1, 1, i % 2 ? rBone[5] : rMadder[6]);
   },
   thorn(s, x, y, k) {
     const L = s.T.leaf, bark = STUFF.bark.mid, pts = [[0, 0], [1, -5], [3, -10], [6, -14], [9, -17]];
     for (let i = 1; i < pts.length; i++) for (const o of [0, 1]) s.line(x + pts[i - 1][0] * k + o, y + pts[i - 1][1] * k, x + pts[i][0] * k + o, y + pts[i][1] * k, bark);
     s.line(x + 3 * k, y - 10 * k, x - 3 * k, y - 15 * k, bark); s.line(x + 6 * k, y - 14 * k, x + 13 * k, y - 16 * k, bark);
-    for (const [dx, dy, rx, ry] of [[-3, -17, 4, 3], [4, -20, 5, 3], [11, -18, 6, 3], [17, -16, 4, 2]]) ball(s, x + dx * k, y + dy * k, rx * k, ry * k, L);
+    for (const [dx, dy, rx, ry] of [[-3, -17, 4, 3], [4, -20, 5, 3], [11, -18, 6, 3], [17, -16, 4, 2]]) foliage(s, x + dx * k, y + dy * k, rx * k, ry * k, L);
   },
   dead(s, x, y, k) {
     const c = STUFF.bark.lo;
     s.rect(x - 1, y - 22 * k, 2, 22 * k, c); s.rect(x - 1, y - 22 * k, 1, 22 * k, STUFF.bark.mid);
     for (const [a, b, d, e] of [[0, -14, -7, -21], [0, -17, 6, -23], [0, -9, 6, -13], [0, -12, -5, -14], [-5, -18, -8, -17]]) s.line(x + a * k, y + b * k, x + d * k, y + e * k, c);
   },
-  bush(s, x, y, k) { ball(s, x, y - 3 * k, 5 * k, 3 * k, s.T.leaf); },
+  bush(s, x, y, k) { foliage(s, x, y - 3 * k, 5 * k, 3 * k, s.T.leaf); },
   /* what lies on the ground */
   rock(s, x, y, k) {
-    const sh = s.poly([x - 6 * k, y, x - 5 * k, y - 4 * k, x - 1 * k, y - 6 * k, x + 4 * k, y - 5 * k, x + 7 * k, y], STUFF.stone.lit, OUT);
+    const sh = s.poly([x - 6 * k, y, x - 5 * k, y - 4 * k, x - 1 * k, y - 6 * k, x + 4 * k, y - 5 * k, x + 7 * k, y], STUFF.stone.lit, LAND_EDGE);
     s.shade(sh, STUFF.stone.mid, 3); s.cap(sh, rBone[3], 1); s.rect(x - 4 * k, y - 1, 8 * k, 1, STUFF.stone.mid);
   },
   boulder(s, x, y, k) {
-    const sh = s.poly([x - 11 * k, y, x - 9 * k, y - 7 * k, x - 3 * k, y - 11 * k, x + 5 * k, y - 10 * k, x + 11 * k, y - 4 * k, x + 12 * k, y], STUFF.stone.mid, OUT);
+    const sh = s.poly([x - 11 * k, y, x - 9 * k, y - 7 * k, x - 3 * k, y - 11 * k, x + 5 * k, y - 10 * k, x + 11 * k, y - 4 * k, x + 12 * k, y], STUFF.stone.mid, LAND_EDGE);
     s.split(sh, x, STUFF.stone.lit, STUFF.stone.mid); s.shade(sh, STUFF.stone.lo, 3); s.cap(sh, STUFF.stone.hi, 1);
   },
   tuft(s, x, y, k) {
@@ -621,7 +621,7 @@ const PROPS: Record<PropName, Prop> = {
     for (let i = -3; i <= 3; i++) { const h = (12 + ((i * 5 + 21) % 6)) * k; s.line(x + i * 2, y, x + i * 2 + (i % 2), y - h, i < 0 ? L[1] : L[0]); if (i % 2 === 0) s.rect(x + i * 2 + (i % 2) - 1, y - h - 1, 2, 4 * k, STUFF.earth.lit); }
   },
   hay(s, x, y, k) {
-    const m = STUFF.straw, sh = s.poly([x - 8 * k, y, x - 7 * k, y - 5 * k, x - 3 * k, y - 11 * k, x, y - 15 * k, x + 3 * k, y - 11 * k, x + 7 * k, y - 5 * k, x + 8 * k, y], m.mid, OUT);
+    const m = STUFF.straw, sh = s.poly([x - 8 * k, y, x - 7 * k, y - 5 * k, x - 3 * k, y - 11 * k, x, y - 15 * k, x + 3 * k, y - 11 * k, x + 7 * k, y - 5 * k, x + 8 * k, y], m.mid, LAND_EDGE);
     s.split(sh, x - k, m.lit, m.mid); s.shade(sh, m.lo, 3); s.lit(sh, m.hi, 1); s.cap(sh, m.hi, 2);
     for (let dy = 4; dy < 14; dy += 3) s.rect(x - 7 * k + dy * 0.3, y - dy * k, 14 * k - dy * 0.7, 1, s.dither(null, m.dk, 6));
     s.rect(x - 8 * k, y - 1, 16 * k + 1, 1, m.dk); s.rect(x, y - 19 * k, 1, 5 * k, STUFF.bark.mid);
@@ -633,16 +633,16 @@ const PROPS: Record<PropName, Prop> = {
   },
   well(s, x, y, k) {
     const b = STUFF.timber;
-    s.rect(x - 1, y - 16 * k, 2, 16 * k, b.lit); s.rect(x - 3 * k, y - 1, 7 * k, 1, OUT);
+    s.rect(x - 1, y - 16 * k, 2, 16 * k, b.lit); s.rect(x - 3 * k, y - 1, 7 * k, 1, LAND_EDGE);
     s.line(x - 7 * k, y - 12 * k, x + 13 * k, y - 20 * k, b.mid); s.line(x - 7 * k, y - 13 * k, x + 13 * k, y - 21 * k, b.lit);
     s.rect(x - 9 * k, y - 12 * k, 4 * k, 3 * k, STUFF.stone.mid); s.rect(x - 9 * k, y - 12 * k, 4 * k, 1, STUFF.stone.hi);
     s.line(x + 13 * k, y - 20 * k, x + 13 * k, y - 11 * k, b.dk); s.rect(x + 11 * k, y - 11 * k, 4 * k, 3 * k, b.mid); s.rect(x + 11 * k, y - 11 * k, 4 * k, 1, b.lit);
   },
   cross(s, x, y, k) {
     const b = STUFF.timber;
-    s.rect(x - 2, y - 15 * k, 4, 15 * k + 1, OUT); s.rect(x - 5 * k, y - 12 * k, 10 * k + 1, 4, OUT);
+    s.rect(x - 2, y - 15 * k, 4, 15 * k + 1, LAND_EDGE); s.rect(x - 5 * k, y - 12 * k, 10 * k + 1, 4, LAND_EDGE);
     s.rect(x - 1, y - 14 * k, 2, 14 * k, b.mid); s.rect(x - 4 * k, y - 11 * k, 9 * k, 2, b.mid); s.rect(x - 1, y - 14 * k, 1, 14 * k, b.lit);
-    s.poly([x - 3 * k, y - 14 * k, x, y - 18 * k, x + 3 * k, y - 14 * k], STUFF.shingle.mid, OUT);
+    s.poly([x - 3 * k, y - 14 * k, x, y - 18 * k, x + 3 * k, y - 14 * k], STUFF.shingle.mid, LAND_EDGE);
   },
   gallows(s, x, y, k) {
     const b = STUFF.timber;
@@ -651,182 +651,182 @@ const PROPS: Record<PropName, Prop> = {
   },
   nest(s, x, y, k) {
     const b = STUFF.timber;
-    s.rect(x - 1, y - 26 * k, 2, 26 * k, b.mid); s.rect(x - 1, y - 26 * k, 1, 26 * k, b.lit); ball(s, x, y - 27 * k, 7 * k, 3 * k, [b.lo, b.mid, b.lit], OUT);
-    s.rect(x - 2 * k, y - 36 * k, 4 * k, 7 * k, rBone[5]); s.rect(x - 2 * k, y - 36 * k, 1, 7 * k, rBone[4]); s.rect(x - 2 * k, y - 36 * k - 1, 4 * k + 5 * k, 1, OUT); s.rect(x + 2 * k, y - 35 * k, 4 * k, 1, rMadder[4]); s.rect(x - 4 * k, y - 34 * k, 2 * k, 3 * k, OUT);
+    s.rect(x - 1, y - 26 * k, 2, 26 * k, b.mid); s.rect(x - 1, y - 26 * k, 1, 26 * k, b.lit); foliage(s, x, y - 27 * k, 7 * k, 3 * k, [b.lo, b.mid, b.lit], LAND_EDGE);
+    s.rect(x - 2 * k, y - 36 * k, 4 * k, 7 * k, rBone[5]); s.rect(x - 2 * k, y - 36 * k, 1, 7 * k, rBone[4]); s.rect(x - 2 * k, y - 36 * k - 1, 4 * k + 5 * k, 1, LAND_EDGE); s.rect(x + 2 * k, y - 35 * k, 4 * k, 1, rMadder[4]); s.rect(x - 4 * k, y - 34 * k, 2 * k, 3 * k, LAND_EDGE);
   },
   /* the steppe */
   baba(s, x, y, k) {
     const st = STUFF.stone, a = x - 2 * k, w = 5 * k;
-    s.rect(a - 1, y - 12 * k - 1, w + 2, 9 * k + 2, OUT); s.rect(x - 2 * k, y - 13 * k, 3 * k + 2, 4 * k, OUT);
+    s.rect(a - 1, y - 12 * k - 1, w + 2, 9 * k + 2, LAND_EDGE); s.rect(x - 2 * k, y - 13 * k, 3 * k + 2, 4 * k, LAND_EDGE);
     s.rect(a, y - 9 * k, w, 9 * k, st.lit); s.rect(x - 1 * k, y - 12 * k, 3 * k, 3 * k, st.hi);
     s.rect(a + w - 2, y - 9 * k, 2, 9 * k, st.mid); s.rect(x + 1 * k, y - 12 * k, 1, 3 * k, st.mid); s.rect(a, y - 5 * k, w, 1, st.mid);
-    s.rect(x - 1 * k, y - 11 * k, 1, 1, OUT); s.rect(x + 1 * k, y - 11 * k, 1, 1, OUT);
+    s.rect(x - 1 * k, y - 11 * k, 1, 1, LAND_EDGE); s.rect(x + 1 * k, y - 11 * k, 1, 1, LAND_EDGE);
   },
   beacon(s, x, y, k) {
     const h = 32 * k, b = STUFF.timber;
     for (const o of [0, 1]) { s.line(x - 7 * k + o, y, x - 3 * k + o, y - h * 0.78, o ? b.mid : b.lit); s.line(x + 7 * k - o, y, x + 3 * k - o, y - h * 0.78, b.dk); }
     s.line(x - 6 * k, y - 4 * k, x + 4 * k, y - 15 * k, b.mid); s.line(x + 6 * k, y - 4 * k, x - 4 * k, y - 15 * k, b.mid); s.line(x - 5 * k, y - 16 * k, x + 4 * k, y - 25 * k, b.mid); s.line(x + 5 * k, y - 16 * k, x - 4 * k, y - 25 * k, b.mid);
-    s.rect(x - 7 * k, y - h * 0.78 - 1, 14 * k, 4, OUT); s.rect(x - 6 * k, y - h * 0.78, 12 * k, 2, b.lit);
-    const r = s.poly([x - 5 * k, y - h * 0.78, x, y - h, x + 5 * k, y - h * 0.78], STUFF.shingle.mid, OUT); s.split(r, x, STUFF.shingle.lit, STUFF.shingle.mid);
-    s.rect(x + 10 * k, y - h * 0.9, 1, h * 0.9, b.mid); s.rect(x + 8 * k - 1, y - h * 0.96 - 1, 5 * k + 2, 5 * k + 2, OUT); s.rect(x + 8 * k, y - h * 0.96, 5 * k, 5 * k, rMadder[3]); s.rect(x + 8 * k, y - h * 0.96, 5 * k, 1, rMadder[5]);
+    s.rect(x - 7 * k, y - h * 0.78 - 1, 14 * k, 4, LAND_EDGE); s.rect(x - 6 * k, y - h * 0.78, 12 * k, 2, b.lit);
+    const r = s.poly([x - 5 * k, y - h * 0.78, x, y - h, x + 5 * k, y - h * 0.78], STUFF.shingle.mid, LAND_EDGE); s.split(r, x, STUFF.shingle.lit, STUFF.shingle.mid);
+    s.rect(x + 10 * k, y - h * 0.9, 1, h * 0.9, b.mid); s.rect(x + 8 * k - 1, y - h * 0.96 - 1, 5 * k + 2, 5 * k + 2, LAND_EDGE); s.rect(x + 8 * k, y - h * 0.96, 5 * k, 5 * k, rMadder[3]); s.rect(x + 8 * k, y - h * 0.96, 5 * k, 1, rMadder[5]);
   },
   /* houses and churches */
   khata(s, x, y, k) {
     const w = 24 * k, h = 9 * k, rh = 8 * k, x0 = x - w / 2, m = STUFF.wall, t = STUFF.thatch;
-    wall(s, x0, y, w, h, m, 4 * k); s.rect(x0 + w - 4 * k - 1, y - h, 1, h, m.mid);
-    roof(s, [x0 - 3 * k, y - h + 1, x0 + 5 * k, y - h - rh, x0 + w - 5 * k, y - h - rh, x0 + w + 3 * k, y - h + 1], t, { course: 3, lw: 2, sw: 3 });
-    win(s, x - 2 * k, y - 6 * k, 4 * k, 6 * k - 1, true); win(s, x + 6 * k, y - 7 * k, 3 * k, 3 * k); s.rect(x + 6 * k, y - 4 * k, 3 * k, 1, m.hi);
-    s.rect(x - 8 * k - 1, y - h - rh - 2 * k - 1, 3 * k + 2, 4 * k + 1, OUT); s.rect(x - 8 * k, y - h - rh - 2 * k, 3 * k, 4 * k, m.lit); s.rect(x - 8 * k + 3 * k - 1, y - h - rh - 2 * k, 1, 4 * k, m.lo);
+    walls(s, x0, y, w, h, m, 4 * k); s.rect(x0 + w - 4 * k - 1, y - h, 1, h, m.mid);
+    roofOver(s, [x0 - 3 * k, y - h + 1, x0 + 5 * k, y - h - rh, x0 + w - 5 * k, y - h - rh, x0 + w + 3 * k, y - h + 1], t, { course: 3, lw: 2, sw: 3 });
+    windowAt(s, x - 2 * k, y - 6 * k, 4 * k, 6 * k - 1, true); windowAt(s, x + 6 * k, y - 7 * k, 3 * k, 3 * k); s.rect(x + 6 * k, y - 4 * k, 3 * k, 1, m.hi);
+    s.rect(x - 8 * k - 1, y - h - rh - 2 * k - 1, 3 * k + 2, 4 * k + 1, LAND_EDGE); s.rect(x - 8 * k, y - h - rh - 2 * k, 3 * k, 4 * k, m.lit); s.rect(x - 8 * k + 3 * k - 1, y - h - rh - 2 * k, 1, 4 * k, m.lo);
   },
   cottage(s, x, y, k) {
     const w = 18 * k, h = 8 * k, rh = 10 * k, x0 = x - w / 2, m = STUFF.wall;
-    wall(s, x0, y, w, h, m, 3 * k);
-    roof(s, [x0 - 2 * k, y - h + 1, x, y - h - rh, x0 + w + 2 * k, y - h + 1], STUFF.thatch, { course: 3, lw: 1, sw: 3, split: x });
-    win(s, x - 2 * k, y - 6 * k, 4 * k, 5 * k, true); win(s, x + 4 * k, y - 6 * k, 3 * k, 3 * k);
-    s.rect(x + 6 * k - 1, y - h - rh + 3 * k - 1, 3 * k + 2, 5 * k + 1, OUT); s.rect(x + 6 * k, y - h - rh + 3 * k, 3 * k, 5 * k, m.lit); s.rect(x + 8 * k, y - h - rh + 3 * k, 1, 5 * k, m.lo);
+    walls(s, x0, y, w, h, m, 3 * k);
+    roofOver(s, [x0 - 2 * k, y - h + 1, x, y - h - rh, x0 + w + 2 * k, y - h + 1], STUFF.thatch, { course: 3, lw: 1, sw: 3, split: x });
+    windowAt(s, x - 2 * k, y - 6 * k, 4 * k, 5 * k, true); windowAt(s, x + 4 * k, y - 6 * k, 3 * k, 3 * k);
+    s.rect(x + 6 * k - 1, y - h - rh + 3 * k - 1, 3 * k + 2, 5 * k + 1, LAND_EDGE); s.rect(x + 6 * k, y - h - rh + 3 * k, 3 * k, 5 * k, m.lit); s.rect(x + 8 * k, y - h - rh + 3 * k, 1, 5 * k, m.lo);
   },
   logHut(s, x, y, k) {
     const w = 18 * k, h = 8 * k, rh = 11 * k, x0 = x - w / 2, b = STUFF.timber;
-    wall(s, x0, y, w, h, b, 3 * k); for (let ly = y - h + 2; ly < y - 1; ly += 2) s.rect(x0 + 1, ly, w - 2, 1, b.lo);
-    roof(s, [x0 - 2 * k, y - h + 1, x, y - h - rh, x0 + w + 2 * k, y - h + 1], STUFF.thatch, { course: 3, lw: 1, sw: 3, split: x });
-    win(s, x - 2 * k, y - 6 * k, 4 * k, 5 * k, true); win(s, x + 4 * k, y - 6 * k, 3 * k, 3 * k);
+    walls(s, x0, y, w, h, b, 3 * k); for (let ly = y - h + 2; ly < y - 1; ly += 2) s.rect(x0 + 1, ly, w - 2, 1, b.lo);
+    roofOver(s, [x0 - 2 * k, y - h + 1, x, y - h - rh, x0 + w + 2 * k, y - h + 1], STUFF.thatch, { course: 3, lw: 1, sw: 3, split: x });
+    windowAt(s, x - 2 * k, y - 6 * k, 4 * k, 5 * k, true); windowAt(s, x + 4 * k, y - 6 * k, 3 * k, 3 * k);
   },
   halfTimber(s, x, y, k) {
     const w = 22 * k, h = 13 * k, x0 = x - w / 2, t = STUFF.timber.mid, m = STUFF.wall;
-    wall(s, x0, y, w, h, m, 4 * k);
+    walls(s, x0, y, w, h, m, 4 * k);
     for (const px of [0, w / 3, 2 * w / 3, w - 1]) s.rect(x0 + px, y - h, 1, h, t);
     for (const py of [h, h / 2, 1]) s.rect(x0, y - py, w, 1, t);
     s.line(x0, y - h / 2, x0 + w / 3, y - h, t); s.line(x0 + w, y - h / 2, x0 + 2 * w / 3, y - h, t); s.line(x0 + w / 3, y - 1, x0 + 2 * w / 3, y - h / 2, t);
-    s.rect(x + 6 * k - 1, y - h - 11 * k - 1, 3 * k + 2, 6 * k + 1, OUT); s.rect(x + 6 * k, y - h - 11 * k, 3 * k, 6 * k, STUFF.brick.mid); s.rect(x + 6 * k, y - h - 11 * k, 1, 6 * k, STUFF.brick.lit);
-    roof(s, [x0 - 2 * k, y - h + 1, x, y - h - 13 * k, x0 + w + 2 * k, y - h + 1], STUFF.tile, { course: 2, lw: 1, sw: 2, split: x });
-    win(s, x - 2 * k, y - 6 * k, 4 * k, 5 * k, true); win(s, x - 8 * k, y - 10 * k, 3 * k, 3 * k); win(s, x + 5 * k, y - 10 * k, 3 * k, 3 * k); win(s, x - 1 * k, y - h - 7 * k, 3 * k, 3 * k);
+    s.rect(x + 6 * k - 1, y - h - 11 * k - 1, 3 * k + 2, 6 * k + 1, LAND_EDGE); s.rect(x + 6 * k, y - h - 11 * k, 3 * k, 6 * k, STUFF.brick.mid); s.rect(x + 6 * k, y - h - 11 * k, 1, 6 * k, STUFF.brick.lit);
+    roofOver(s, [x0 - 2 * k, y - h + 1, x, y - h - 13 * k, x0 + w + 2 * k, y - h + 1], STUFF.tile, { course: 2, lw: 1, sw: 2, split: x });
+    windowAt(s, x - 2 * k, y - 6 * k, 4 * k, 5 * k, true); windowAt(s, x - 8 * k, y - 10 * k, 3 * k, 3 * k); windowAt(s, x + 5 * k, y - 10 * k, 3 * k, 3 * k); windowAt(s, x - 1 * k, y - h - 7 * k, 3 * k, 3 * k);
   },
   manor(s, x, y, k) {
     const w = 38 * k, h = 11 * k, x0 = x - w / 2, m = STUFF.wall;
-    wall(s, x0, y, w, h, m, 4 * k);
-    roof(s, [x0 - 2 * k, y - h + 1, x0 + 6 * k, y - h - 9 * k, x0 + w - 6 * k, y - h - 9 * k, x0 + w + 2 * k, y - h + 1], STUFF.tile, { course: 3, lw: 1, sw: 3, split: x });
-    for (const dx of [-14, -8, 8, 14]) win(s, x + dx * k - k, y - 8 * k, 3 * k, 4 * k);
+    walls(s, x0, y, w, h, m, 4 * k);
+    roofOver(s, [x0 - 2 * k, y - h + 1, x0 + 6 * k, y - h - 9 * k, x0 + w - 6 * k, y - h - 9 * k, x0 + w + 2 * k, y - h + 1], STUFF.tile, { course: 3, lw: 1, sw: 3, split: x });
+    for (const dx of [-14, -8, 8, 14]) windowAt(s, x + dx * k - k, y - 8 * k, 3 * k, 4 * k);
     for (const dx of [-4, -1, 2, 5]) s.rect(x + dx * k, y - 7 * k, 1, 6 * k, m.mid);
-    const g = s.poly([x - 6 * k, y - h, x, y - h - 6 * k, x + 6 * k, y - h], m.lit, OUT); s.shade(g, m.lo, 2); win(s, x - 1 * k, y - 6 * k, 3 * k, 5 * k, true);
-    s.rect(x + 10 * k - 1, y - h - 11 * k - 1, 3 * k + 2, 4 * k + 1, OUT); s.rect(x + 10 * k, y - h - 11 * k, 3 * k, 4 * k, m.lit); s.rect(x + 12 * k, y - h - 11 * k, 1, 4 * k, m.lo);
+    const g = s.poly([x - 6 * k, y - h, x, y - h - 6 * k, x + 6 * k, y - h], m.lit, LAND_EDGE); s.shade(g, m.lo, 2); windowAt(s, x - 1 * k, y - 6 * k, 3 * k, 5 * k, true);
+    s.rect(x + 10 * k - 1, y - h - 11 * k - 1, 3 * k + 2, 4 * k + 1, LAND_EDGE); s.rect(x + 10 * k, y - h - 11 * k, 3 * k, 4 * k, m.lit); s.rect(x + 12 * k, y - h - 11 * k, 1, 4 * k, m.lo);
   },
   church(s, x, y, k) {
     const m = STUFF.wall;
-    wall(s, x - 20 * k, y, 25 * k, 11 * k, m, 3 * k);
-    roof(s, [x - 22 * k, y - 11 * k, x - 17 * k, y - 17 * k, x + 2 * k, y - 17 * k, x + 7 * k, y - 11 * k], STUFF.tile, { course: 3, lw: 1, sw: 2, split: x - 10 * k });
-    for (const dx of [-16, -11, -6]) win(s, x + dx * k, y - 8 * k, 2 * k, 5 * k);
-    wall(s, x + 5 * k, y, 9 * k, 26 * k, m, 3 * k); win(s, x + 8 * k, y - 22 * k, 3 * k, 5 * k);
-    s.disc(x + 9.5 * k, y - 12 * k, 2 * k, 2 * k, m.hi, OUT);
-    const sp = s.poly([x + 4 * k, y - 26 * k, x + 9.5 * k, y - 46 * k, x + 15 * k, y - 26 * k], STUFF.shingle.mid, OUT);
+    walls(s, x - 20 * k, y, 25 * k, 11 * k, m, 3 * k);
+    roofOver(s, [x - 22 * k, y - 11 * k, x - 17 * k, y - 17 * k, x + 2 * k, y - 17 * k, x + 7 * k, y - 11 * k], STUFF.tile, { course: 3, lw: 1, sw: 2, split: x - 10 * k });
+    for (const dx of [-16, -11, -6]) windowAt(s, x + dx * k, y - 8 * k, 2 * k, 5 * k);
+    walls(s, x + 5 * k, y, 9 * k, 26 * k, m, 3 * k); windowAt(s, x + 8 * k, y - 22 * k, 3 * k, 5 * k);
+    s.disc(x + 9.5 * k, y - 12 * k, 2 * k, 2 * k, m.hi, LAND_EDGE);
+    const sp = s.poly([x + 4 * k, y - 26 * k, x + 9.5 * k, y - 46 * k, x + 15 * k, y - 26 * k], STUFF.shingle.mid, LAND_EDGE);
     s.split(sp, x + 9.5 * k, STUFF.shingle.lit, STUFF.shingle.mid); s.shade(sp, STUFF.shingle.lo, 2); s.courses(sp, s.dither(null, STUFF.shingle.lo, 6), 3, 3);
-    crossAt(s, x + 9.5 * k, y - 54 * k, 8);
+    goldCross(s, x + 9.5 * k, y - 54 * k, 8);
   },
   orthodox(s, x, y, k) {
     const log = STUFF.timber, domeM = STUFF.shingle;
     const bay = (cx: number, w: number, h: number, ridge: number) => {
-      wall(s, cx - w / 2, y, w, h, log, 2);
+      walls(s, cx - w / 2, y, w, h, log, 2);
       for (let ly = y - h + 3; ly < y - 1; ly += 3) s.rect(cx - w / 2 + 1, ly, w - 2, 1, log.lo);
-      const r = s.poly([cx - w / 2 - 2, y - h, cx, y - h - ridge, cx + w / 2 + 2, y - h], domeM.mid, OUT); s.split(r, cx, domeM.lit, domeM.mid);
-      dome(s, cx, y - h - ridge + 2 * k, 5 * k + 2, 7 * k, STUFF.shingle);
+      const r = s.poly([cx - w / 2 - 2, y - h, cx, y - h - ridge, cx + w / 2 + 2, y - h], domeM.mid, LAND_EDGE); s.split(r, cx, domeM.lit, domeM.mid);
+      onionDome(s, cx, y - h - ridge + 2 * k, 5 * k + 2, 7 * k, STUFF.shingle);
     };
     bay(x - 12 * k, 8 * k, 9 * k, 6 * k); bay(x + 12 * k, 8 * k, 9 * k, 6 * k); bay(x, 14 * k, 14 * k, 12 * k);
-    win(s, x - 2 * k, y - 6 * k, 4 * k, 6 * k, true);
+    windowAt(s, x - 2 * k, y - 6 * k, 4 * k, 6 * k, true);
   },
   chapel(s, x, y, k) {
     const b = STUFF.timber;
-    wall(s, x - 6 * k, y, 12 * k, 8 * k, b, 2); for (let ly = y - 6 * k; ly < y - 1; ly += 2) s.rect(x - 6 * k + 1, ly, 12 * k - 2, 1, b.lo);
-    roof(s, [x - 8 * k, y - 8 * k, x, y - 17 * k, x + 8 * k, y - 8 * k], STUFF.shingle, { course: 2, lw: 1, sw: 2, split: x });
-    dome(s, x, y - 17 * k + 2, 4 * k + 2, 5 * k, STUFF.shingle); win(s, x - 1 * k, y - 5 * k, 3 * k, 5 * k, true);
+    walls(s, x - 6 * k, y, 12 * k, 8 * k, b, 2); for (let ly = y - 6 * k; ly < y - 1; ly += 2) s.rect(x - 6 * k + 1, ly, 12 * k - 2, 1, b.lo);
+    roofOver(s, [x - 8 * k, y - 8 * k, x, y - 17 * k, x + 8 * k, y - 8 * k], STUFF.shingle, { course: 2, lw: 1, sw: 2, split: x });
+    onionDome(s, x, y - 17 * k + 2, 4 * k + 2, 5 * k, STUFF.shingle); windowAt(s, x - 1 * k, y - 5 * k, 3 * k, 5 * k, true);
   },
   brickChurch(s, x, y, k) {
     const m = STUFF.brick;
-    wall(s, x - 28 * k, y, 26 * k, 14 * k, m, 4 * k);
-    for (let bx = -24; bx < -4; bx += 5) { s.rect(x + bx * k, y - 14 * k, 1, 14 * k, m.lo); win(s, x + (bx + 2) * k, y - 10 * k, 2 * k, 6 * k); }
-    roof(s, [x - 30 * k, y - 14 * k, x - 26 * k, y - 22 * k, x - 6 * k, y - 22 * k, x - 2 * k, y - 14 * k], STUFF.shingle, { course: 3, lw: 1, sw: 2, split: x - 16 * k });
-    wall(s, x - 5 * k, y, 10 * k, 36 * k, m, 3 * k); win(s, x - 2 * k, y - 32 * k, 3 * k, 8 * k); win(s, x - 2 * k, y - 18 * k, 3 * k, 6 * k);
-    const sp = s.poly([x - 7 * k, y - 36 * k, x, y - 56 * k, x + 7 * k, y - 36 * k], STUFF.shingle.mid, OUT);
-    s.split(sp, x, STUFF.shingle.lit, STUFF.shingle.mid); s.shade(sp, STUFF.shingle.lo, 2); s.courses(sp, s.dither(null, STUFF.shingle.lo, 6), 3, 3); crossAt(s, x, y - 64 * k, 8);
+    walls(s, x - 28 * k, y, 26 * k, 14 * k, m, 4 * k);
+    for (let bx = -24; bx < -4; bx += 5) { s.rect(x + bx * k, y - 14 * k, 1, 14 * k, m.lo); windowAt(s, x + (bx + 2) * k, y - 10 * k, 2 * k, 6 * k); }
+    roofOver(s, [x - 30 * k, y - 14 * k, x - 26 * k, y - 22 * k, x - 6 * k, y - 22 * k, x - 2 * k, y - 14 * k], STUFF.shingle, { course: 3, lw: 1, sw: 2, split: x - 16 * k });
+    walls(s, x - 5 * k, y, 10 * k, 36 * k, m, 3 * k); windowAt(s, x - 2 * k, y - 32 * k, 3 * k, 8 * k); windowAt(s, x - 2 * k, y - 18 * k, 3 * k, 6 * k);
+    const sp = s.poly([x - 7 * k, y - 36 * k, x, y - 56 * k, x + 7 * k, y - 36 * k], STUFF.shingle.mid, LAND_EDGE);
+    s.split(sp, x, STUFF.shingle.lit, STUFF.shingle.mid); s.shade(sp, STUFF.shingle.lo, 2); s.courses(sp, s.dither(null, STUFF.shingle.lo, 6), 3, 3); goldCross(s, x, y - 64 * k, 8);
   },
   windmill(s, x, y, k) {
     const my = y - 22 * k, b = STUFF.timber;
     s.rect(x - 1, y - 14 * k, 2, 14 * k, b.lo); s.line(x - 7 * k, y, x - 1, y - 9 * k, b.mid); s.line(x + 7 * k, y, x + 1, y - 9 * k, b.lo);
-    const body = s.poly([x - 6 * k, my + 9 * k, x - 4 * k, my - 6 * k, x + 4 * k, my - 6 * k, x + 6 * k, my + 9 * k], b.mid, OUT); s.split(body, x - k, b.lit, b.mid); s.shade(body, b.lo, 2);
+    const body = s.poly([x - 6 * k, my + 9 * k, x - 4 * k, my - 6 * k, x + 4 * k, my - 6 * k, x + 6 * k, my + 9 * k], b.mid, LAND_EDGE); s.split(body, x - k, b.lit, b.mid); s.shade(body, b.lo, 2);
     for (let ly = my - 3 * k; ly < my + 9 * k; ly += 3) s.rect(x - 4 * k, ly, 8 * k, 1, s.dither(null, b.lo, 5));
-    const cap = s.poly([x - 5 * k, my - 6 * k, x, my - 12 * k, x + 5 * k, my - 6 * k], STUFF.thatch.mid, OUT); s.split(cap, x, STUFF.thatch.lit, STUFF.thatch.mid);
+    const cap = s.poly([x - 5 * k, my - 6 * k, x, my - 12 * k, x + 5 * k, my - 6 * k], STUFF.thatch.mid, LAND_EDGE); s.split(cap, x, STUFF.thatch.lit, STUFF.thatch.mid);
     sails(s, x, my, 26 * k, k, 0.5 + s.r() * 0.5);
   },
   towerMill(s, x, y, k) {
-    const m = STUFF.wall, hy = y - 28 * k, body = s.poly([x - 8 * k, y, x - 5 * k, y - 26 * k, x + 5 * k, y - 26 * k, x + 8 * k, y], m.lit, OUT);
+    const m = STUFF.wall, hy = y - 28 * k, body = s.poly([x - 8 * k, y, x - 5 * k, y - 26 * k, x + 5 * k, y - 26 * k, x + 8 * k, y], m.lit, LAND_EDGE);
     s.shade(body, m.lo, 3 * k); s.lit(body, m.hi, 1);
-    const cap = s.poly([x - 6 * k, y - 26 * k, x - 3 * k, y - 32 * k, x + 3 * k, y - 32 * k, x + 6 * k, y - 26 * k], STUFF.shingle.mid, OUT); s.split(cap, x - k, STUFF.shingle.lit, STUFF.shingle.mid);
-    win(s, x - 1 * k, y - 6 * k, 3 * k, 6 * k, true); win(s, x - 1 * k, y - 18 * k, 2 * k, 3 * k); sails(s, x, hy, 24 * k, k, 0.35 + s.r() * 0.6);
+    const cap = s.poly([x - 6 * k, y - 26 * k, x - 3 * k, y - 32 * k, x + 3 * k, y - 32 * k, x + 6 * k, y - 26 * k], STUFF.shingle.mid, LAND_EDGE); s.split(cap, x - k, STUFF.shingle.lit, STUFF.shingle.mid);
+    windowAt(s, x - 1 * k, y - 6 * k, 3 * k, 6 * k, true); windowAt(s, x - 1 * k, y - 18 * k, 2 * k, 3 * k); sails(s, x, hy, 24 * k, k, 0.35 + s.r() * 0.6);
   },
   castle(s, x, y, k) {
     const m = STUFF.lime;
-    const bat = (x0: number, w: number, h: number) => { for (let mx = x0; mx < x0 + w - 1; mx += 3 * k) { s.rect(mx - 1, y - h - 2 * k - 1, 2 * k + 2, 2 * k + 1, OUT); s.rect(mx, y - h - 2 * k, 2 * k, 2 * k, m.lit); } };
-    const curtain = (x0: number, w: number, h: number) => { bat(x0, w, h); wall(s, x0, y, w, h, m, 0); };
+    const bat = (x0: number, w: number, h: number) => { for (let mx = x0; mx < x0 + w - 1; mx += 3 * k) { s.rect(mx - 1, y - h - 2 * k - 1, 2 * k + 2, 2 * k + 1, LAND_EDGE); s.rect(mx, y - h - 2 * k, 2 * k, 2 * k, m.lit); } };
+    const curtain = (x0: number, w: number, h: number) => { bat(x0, w, h); walls(s, x0, y, w, h, m, 0); };
     const tower = (cx: number, w: number, h: number, cone: number) => {
-      wall(s, cx - w / 2, y, w, h, m, w / 4);
-      roof(s, [cx - w / 2 - 1, y - h, cx, y - h - cone, cx + w / 2 + 1, y - h], STUFF.tile, { course: 2, lw: 1, sw: 2, split: cx }); win(s, cx - 1, y - h + 4 * k, 2, 4 * k);
+      walls(s, cx - w / 2, y, w, h, m, w / 4);
+      roofOver(s, [cx - w / 2 - 1, y - h, cx, y - h - cone, cx + w / 2 + 1, y - h], STUFF.tile, { course: 2, lw: 1, sw: 2, split: cx }); windowAt(s, cx - 1, y - h + 4 * k, 2, 4 * k);
     };
     curtain(x - 30 * k, 60 * k, 12 * k); tower(x - 30 * k, 10 * k, 24 * k, 10 * k); tower(x + 30 * k, 10 * k, 24 * k, 10 * k); tower(x, 14 * k, 32 * k, 14 * k);
-    win(s, x - 14 * k, y - 8 * k, 4 * k, 6 * k, true); win(s, x + 8 * k, y - 8 * k, 4 * k, 6 * k, true);
+    windowAt(s, x - 14 * k, y - 8 * k, 4 * k, 6 * k, true); windowAt(s, x + 8 * k, y - 8 * k, 4 * k, 6 * k, true);
   },
   cityWall(s, x, y, k) {
     const w = 170 * k, x0 = x - w / 2, m = STUFF.lime;
     for (const dx of [-0.3, 0, 0.32]) {
-      const cx = x + dx * w; wall(s, cx - 5 * k, y - 12 * k, 10 * k, 14 * k, m, 3 * k);
-      dome(s, cx, y - 26 * k, 8 * k, 9 * k, STUFF.thatch);
+      const cx = x + dx * w; walls(s, cx - 5 * k, y - 12 * k, 10 * k, 14 * k, m, 3 * k);
+      onionDome(s, cx, y - 26 * k, 8 * k, 9 * k, STUFF.thatch);
     }
-    for (let mx = x0; mx < x0 + w; mx += 4 * k) { s.rect(mx - 1, y - 17 * k - 1, 2 * k + 2, 3 * k + 1, OUT); s.rect(mx, y - 17 * k, 2 * k, 3 * k, m.lit); }
-    wall(s, x0, y, w, 14 * k, m, 0);
+    for (let mx = x0; mx < x0 + w; mx += 4 * k) { s.rect(mx - 1, y - 17 * k - 1, 2 * k + 2, 3 * k + 1, LAND_EDGE); s.rect(mx, y - 17 * k, 2 * k, 3 * k, m.lit); }
+    walls(s, x0, y, w, 14 * k, m, 0);
     for (let i = 0; i <= 6; i++) {
       const cx = x0 + 8 * k + i * (w - 16 * k) / 6, h = (i === 3 ? 34 : 24 + (i % 2) * 4) * k, wd = (i === 3 ? 14 : 10) * k;
-      wall(s, cx - wd / 2, y, wd, h, m, wd / 4);
-      roof(s, [cx - wd / 2 - 1, y - h, cx, y - h - 11 * k, cx + wd / 2 + 1, y - h], i % 2 ? STUFF.tile : STUFF.shingle, { course: 2, lw: 1, sw: 2, split: cx }); win(s, cx - 1, y - h + 4 * k, 2, 5 * k);
+      walls(s, cx - wd / 2, y, wd, h, m, wd / 4);
+      roofOver(s, [cx - wd / 2 - 1, y - h, cx, y - h - 11 * k, cx + wd / 2 + 1, y - h], i % 2 ? STUFF.tile : STUFF.shingle, { course: 2, lw: 1, sw: 2, split: cx }); windowAt(s, cx - 1, y - h + 4 * k, 2, 5 * k);
     }
-    win(s, x - 4 * k, y - 9 * k, 8 * k, 9 * k, true);
+    windowAt(s, x - 4 * k, y - 9 * k, 8 * k, 9 * k, true);
   },
   ruin(s, x, y, k) {
     const m = STUFF.lime, c = STUFF.timber.dk, w = 22 * k;
-    const a = s.poly([x - w / 2, y, x - w / 2, y - 9 * k, x - w / 2 + 4 * k, y - 7 * k, x - w / 2 + 7 * k, y - 11 * k, x - w / 2 + 10 * k, y - 5 * k, x - 1 * k, y - 6 * k, x - 1 * k, y], m.lit, OUT); s.shade(a, m.lo, 3); s.lit(a, m.hi, 1);
-    const b = s.poly([x + 3 * k, y, x + 3 * k, y - 7 * k, x + 8 * k, y - 4 * k, x + 11 * k, y - 8 * k, x + 11 * k, y], m.lit, OUT); s.shade(b, m.lo, 3);
-    s.rect(x + 12 * k - 1, y - 16 * k - 1, 4 * k + 2, 16 * k + 1, OUT); s.rect(x + 12 * k, y - 16 * k, 4 * k, 16 * k, STUFF.brick.mid); s.rect(x + 12 * k, y - 16 * k, 1, 16 * k, STUFF.brick.lit); s.rect(x + 12 * k, y - 16 * k, 4 * k, 1, STUFF.brick.dk);
+    const a = s.poly([x - w / 2, y, x - w / 2, y - 9 * k, x - w / 2 + 4 * k, y - 7 * k, x - w / 2 + 7 * k, y - 11 * k, x - w / 2 + 10 * k, y - 5 * k, x - 1 * k, y - 6 * k, x - 1 * k, y], m.lit, LAND_EDGE); s.shade(a, m.lo, 3); s.lit(a, m.hi, 1);
+    const b = s.poly([x + 3 * k, y, x + 3 * k, y - 7 * k, x + 8 * k, y - 4 * k, x + 11 * k, y - 8 * k, x + 11 * k, y], m.lit, LAND_EDGE); s.shade(b, m.lo, 3);
+    s.rect(x + 12 * k - 1, y - 16 * k - 1, 4 * k + 2, 16 * k + 1, LAND_EDGE); s.rect(x + 12 * k, y - 16 * k, 4 * k, 16 * k, STUFF.brick.mid); s.rect(x + 12 * k, y - 16 * k, 1, 16 * k, STUFF.brick.lit); s.rect(x + 12 * k, y - 16 * k, 4 * k, 1, STUFF.brick.dk);
     s.line(x - 8 * k, y - 8 * k, x + 2 * k, y - 15 * k, c); s.line(x - 4 * k, y - 9 * k, x + 6 * k, y - 13 * k, c); s.line(x + 2 * k, y - 15 * k, x + 7 * k, y - 8 * k, c);
   },
   /* the camp before Smolensk */
   tent(s, x, y, k) {
-    const m = STUFF.wall, sh = s.poly([x - 9 * k, y, x, y - 13 * k, x + 9 * k, y], m.lit, OUT);
+    const m = STUFF.wall, sh = s.poly([x - 9 * k, y, x, y - 13 * k, x + 9 * k, y], m.lit, LAND_EDGE);
     s.split(sh, x, m.lit, m.lo); s.lit(sh, m.hi, 1); s.cap(sh, m.hi, 2);
-    s.poly([x - 2 * k, y, x, y - 7 * k, x + 2 * k, y], DARK); s.rect(x, y - 19 * k, 1, 6 * k, OUT); s.rect(x + 1, y - 19 * k, 5 * k, 3 * k, rMadder[3]); s.rect(x + 1, y - 19 * k, 5 * k, 1, rMadder[5]);
+    s.poly([x - 2 * k, y, x, y - 7 * k, x + 2 * k, y], DARK); s.rect(x, y - 19 * k, 1, 6 * k, LAND_EDGE); s.rect(x + 1, y - 19 * k, 5 * k, 3 * k, rMadder[3]); s.rect(x + 1, y - 19 * k, 5 * k, 1, rMadder[5]);
   },
   cannon(s, x, y, k) {
     const st = STUFF.stone, b = STUFF.timber;
-    s.rect(x - 11 * k - 1, y - 9 * k - 1, 18 * k + 2, 6 * k + 2, OUT); s.rect(x - 9 * k, y - 8 * k, 15 * k, 3 * k, st.lo); s.rect(x - 9 * k, y - 8 * k, 15 * k, 1, st.lit); s.rect(x - 11 * k, y - 9 * k, 3 * k, 5 * k, st.mid);
+    s.rect(x - 11 * k - 1, y - 9 * k - 1, 18 * k + 2, 6 * k + 2, LAND_EDGE); s.rect(x - 9 * k, y - 8 * k, 15 * k, 3 * k, st.lo); s.rect(x - 9 * k, y - 8 * k, 15 * k, 1, st.lit); s.rect(x - 11 * k, y - 9 * k, 3 * k, 5 * k, st.mid);
     s.rect(x - 7 * k, y - 5 * k, 10 * k, 3 * k, b.mid); s.rect(x - 7 * k, y - 5 * k, 10 * k, 1, b.lit);
-    s.disc(x - 2 * k, y - 4 * k, 4 * k, 4 * k, b.lo, OUT); s.disc(x - 2 * k, y - 4 * k, 1 * k, 1 * k, OUT);
+    s.disc(x - 2 * k, y - 4 * k, 4 * k, 4 * k, b.lo, LAND_EDGE); s.disc(x - 2 * k, y - 4 * k, 1 * k, 1 * k, LAND_EDGE);
   },
   gabions(s, x, y, k) {
     const e = STUFF.earth, w = STUFF.straw;
     for (let i = 0; i < 4; i++) {
       const gx = x + i * 7 * k;
-      wall(s, gx, y, 6 * k, 7 * k, w, 1); s.rect(gx, y - 7 * k - 1, 6 * k, 2, e.mid); s.rect(gx, y - 7 * k - 1, 6 * k, 1, e.lit);
+      walls(s, gx, y, 6 * k, 7 * k, w, 1); s.rect(gx, y - 7 * k - 1, 6 * k, 2, e.mid); s.rect(gx, y - 7 * k - 1, 6 * k, 1, e.lit);
       for (let dy = 2; dy < 7; dy += 2) s.rect(gx + 1, y - dy * k, 6 * k - 2, 1, w.lo);
     }
   },
   /* the water, the smoke and the farms */
   ship(s, x, y, k) {
     const b = STUFF.timber, m = STUFF.wall;
-    const hull = s.poly([x - 11 * k, y - 4 * k, x + 11 * k, y - 4 * k, x + 8 * k, y, x - 8 * k, y], b.mid, OUT); s.cap(hull, b.lit, 1); s.shade(hull, b.lo, 2);
+    const hull = s.poly([x - 11 * k, y - 4 * k, x + 11 * k, y - 4 * k, x + 8 * k, y, x - 8 * k, y], b.mid, LAND_EDGE); s.cap(hull, b.lit, 1); s.shade(hull, b.lo, 2);
     for (const dx of [-5, 3]) {
-      s.rect(x + dx * k, y - 22 * k, 1, 18 * k, OUT);
-      const sl = s.poly([x + dx * k + 1, y - 21 * k, x + dx * k + 8 * k, y - 18 * k, x + dx * k + 8 * k, y - 8 * k, x + dx * k + 1, y - 7 * k], m.lit, OUT); s.shade(sl, m.lo, 3);
+      s.rect(x + dx * k, y - 22 * k, 1, 18 * k, LAND_EDGE);
+      const sl = s.poly([x + dx * k + 1, y - 21 * k, x + dx * k + 8 * k, y - 18 * k, x + dx * k + 8 * k, y - 8 * k, x + dx * k + 1, y - 7 * k], m.lit, LAND_EDGE); s.shade(sl, m.lo, 3);
     }
   },
   barge(s, x, y, k) {
-    const b = STUFF.timber, hull = s.poly([x - 14 * k, y - 3 * k, x + 14 * k, y - 3 * k, x + 11 * k, y, x - 11 * k, y], b.lo, OUT); s.cap(hull, b.mid, 1);
-    s.rect(x - 2 * k, y - 18 * k, 1, 15 * k, OUT);
-    const sl = s.poly([x - 1 * k, y - 17 * k, x + 8 * k, y - 15 * k, x + 8 * k, y - 6 * k, x - 1 * k, y - 5 * k], STUFF.straw.mid, OUT); s.shade(sl, STUFF.straw.lo, 3);
+    const b = STUFF.timber, hull = s.poly([x - 14 * k, y - 3 * k, x + 14 * k, y - 3 * k, x + 11 * k, y, x - 11 * k, y], b.lo, LAND_EDGE); s.cap(hull, b.mid, 1);
+    s.rect(x - 2 * k, y - 18 * k, 1, 15 * k, LAND_EDGE);
+    const sl = s.poly([x - 1 * k, y - 17 * k, x + 8 * k, y - 15 * k, x + 8 * k, y - 6 * k, x - 1 * k, y - 5 * k], STUFF.straw.mid, LAND_EDGE); s.shade(sl, STUFF.straw.lo, 3);
   },
   smoke(s, x, y, k) {
     const m = STUFF.smoke;
@@ -842,39 +842,39 @@ const PROPS: Record<PropName, Prop> = {
   },
   blockhouse(s, x, y, k) {
     const b = STUFF.timber;
-    wall(s, x - 14 * k, y, 28 * k, 15 * k, b, 4 * k); for (let ly = y - 13 * k; ly < y - 1; ly += 2) s.rect(x - 14 * k + 1, ly, 28 * k - 2, 1, b.lo);
-    roof(s, [x - 16 * k, y - 15 * k, x - 10 * k, y - 24 * k, x + 10 * k, y - 24 * k, x + 16 * k, y - 15 * k], STUFF.shingle, { course: 2, lw: 1, sw: 3, split: x - 4 * k });
-    for (const dx of [-9, -2, 5, 10]) s.rect(x + dx * k, y - 11 * k, 2 * k, 3 * k, OUT); win(s, x - 2 * k, y - 7 * k, 4 * k, 7 * k, true);
+    walls(s, x - 14 * k, y, 28 * k, 15 * k, b, 4 * k); for (let ly = y - 13 * k; ly < y - 1; ly += 2) s.rect(x - 14 * k + 1, ly, 28 * k - 2, 1, b.lo);
+    roofOver(s, [x - 16 * k, y - 15 * k, x - 10 * k, y - 24 * k, x + 10 * k, y - 24 * k, x + 16 * k, y - 15 * k], STUFF.shingle, { course: 2, lw: 1, sw: 3, split: x - 4 * k });
+    for (const dx of [-9, -2, 5, 10]) s.rect(x + dx * k, y - 11 * k, 2 * k, 3 * k, LAND_EDGE); windowAt(s, x - 2 * k, y - 7 * k, 4 * k, 7 * k, true);
   },
   tollHouse(s, x, y, k) {
     const m = STUFF.wall;
-    wall(s, x - 9 * k, y, 18 * k, 11 * k, m, 3 * k); roof(s, [x - 11 * k, y - 11 * k, x, y - 21 * k, x + 11 * k, y - 11 * k], STUFF.tile, { course: 2, lw: 1, sw: 2, split: x });
-    win(s, x - 2 * k, y - 7 * k, 4 * k, 6 * k, true); win(s, x + 4 * k, y - 8 * k, 3 * k, 3 * k);
-    s.rect(x + 12 * k, y - 10 * k, 1, 10 * k, OUT); s.rect(x + 12 * k, y - 11 * k, 24 * k, 3, OUT); s.rect(x + 12 * k, y - 10 * k, 24 * k, 1, rBone[4]);
+    walls(s, x - 9 * k, y, 18 * k, 11 * k, m, 3 * k); roofOver(s, [x - 11 * k, y - 11 * k, x, y - 21 * k, x + 11 * k, y - 11 * k], STUFF.tile, { course: 2, lw: 1, sw: 2, split: x });
+    windowAt(s, x - 2 * k, y - 7 * k, 4 * k, 6 * k, true); windowAt(s, x + 4 * k, y - 8 * k, 3 * k, 3 * k);
+    s.rect(x + 12 * k, y - 10 * k, 1, 10 * k, LAND_EDGE); s.rect(x + 12 * k, y - 11 * k, 24 * k, 3, LAND_EDGE); s.rect(x + 12 * k, y - 10 * k, 24 * k, 1, rBone[4]);
     for (const dx of [18, 28]) s.rect(x + dx * k, y - 10 * k, 4 * k, 1, rMadder[4]);
   },
   wagon(s, x, y, k) {
     const b = STUFF.timber, m = STUFF.wall;
-    s.rect(x - 11 * k - 1, y - 9 * k - 1, 22 * k + 2, 6 * k + 2, OUT); s.rect(x - 11 * k, y - 9 * k, 22 * k, 5 * k, b.mid); s.rect(x - 11 * k, y - 9 * k, 22 * k, 1, b.lit); s.rect(x - 11 * k, y - 5 * k, 22 * k, 1, b.lo);
-    const cv = s.poly([x - 9 * k, y - 9 * k, x - 6 * k, y - 16 * k, x + 7 * k, y - 16 * k, x + 10 * k, y - 9 * k], m.lit, OUT); s.shade(cv, m.lo, 3 * k); s.cap(cv, m.hi, 1);
-    for (const dx of [-6, 6]) { s.disc(x + dx * k, y - 3 * k, 4 * k, 4 * k, b.lo, OUT); s.disc(x + dx * k, y - 3 * k, 1 * k, 1 * k, OUT); s.rect(x + dx * k - 2 * k, y - 3 * k, 4 * k + 1, 1, b.lit); }
+    s.rect(x - 11 * k - 1, y - 9 * k - 1, 22 * k + 2, 6 * k + 2, LAND_EDGE); s.rect(x - 11 * k, y - 9 * k, 22 * k, 5 * k, b.mid); s.rect(x - 11 * k, y - 9 * k, 22 * k, 1, b.lit); s.rect(x - 11 * k, y - 5 * k, 22 * k, 1, b.lo);
+    const cv = s.poly([x - 9 * k, y - 9 * k, x - 6 * k, y - 16 * k, x + 7 * k, y - 16 * k, x + 10 * k, y - 9 * k], m.lit, LAND_EDGE); s.shade(cv, m.lo, 3 * k); s.cap(cv, m.hi, 1);
+    for (const dx of [-6, 6]) { s.disc(x + dx * k, y - 3 * k, 4 * k, 4 * k, b.lo, LAND_EDGE); s.disc(x + dx * k, y - 3 * k, 1 * k, 1 * k, LAND_EDGE); s.rect(x + dx * k - 2 * k, y - 3 * k, 4 * k + 1, 1, b.lit); }
   },
   raft(s, x, y, k) {
     const b = STUFF.timber, m = STUFF.wall;
-    for (let i = 0; i < 3; i++) { s.rect(x - 14 * k - 1, y - (i + 1) * 3 * k - 1, 28 * k + 2, 3 * k + 1, OUT); s.rect(x - 14 * k, y - (i + 1) * 3 * k, 28 * k, 3 * k, b.mid); s.rect(x - 14 * k, y - (i + 1) * 3 * k, 28 * k, 1, b.lit); s.disc(x + 14 * k, y - (i + 0.5) * 3 * k, 1.5 * k, 1.5 * k, b.lo, OUT); }
-    for (let i = 0; i < 4; i++) { s.disc(x - 9 * k + i * 6 * k, y - 11 * k, 3 * k, 2.5 * k, m.lit, OUT); s.rect(x - 11 * k + i * 6 * k, y - 11 * k, 2, 1, m.hi); }
-    s.disc(x - 6 * k, y - 15 * k, 3 * k, 2.5 * k, m.lit, OUT); s.disc(x + 2 * k, y - 15 * k, 3 * k, 2.5 * k, m.lit, OUT); s.rect(x + 12 * k, y - 20 * k, 1, 17 * k, b.lo);
+    for (let i = 0; i < 3; i++) { s.rect(x - 14 * k - 1, y - (i + 1) * 3 * k - 1, 28 * k + 2, 3 * k + 1, LAND_EDGE); s.rect(x - 14 * k, y - (i + 1) * 3 * k, 28 * k, 3 * k, b.mid); s.rect(x - 14 * k, y - (i + 1) * 3 * k, 28 * k, 1, b.lit); s.disc(x + 14 * k, y - (i + 0.5) * 3 * k, 1.5 * k, 1.5 * k, b.lo, LAND_EDGE); }
+    for (let i = 0; i < 4; i++) { s.disc(x - 9 * k + i * 6 * k, y - 11 * k, 3 * k, 2.5 * k, m.lit, LAND_EDGE); s.rect(x - 11 * k + i * 6 * k, y - 11 * k, 2, 1, m.hi); }
+    s.disc(x - 6 * k, y - 15 * k, 3 * k, 2.5 * k, m.lit, LAND_EDGE); s.disc(x + 2 * k, y - 15 * k, 3 * k, 2.5 * k, m.lit, LAND_EDGE); s.rect(x + 12 * k, y - 20 * k, 1, 17 * k, b.lo);
   },
   millRuin(s, x, y, k) {
     const m = STUFF.lime, c = STUFF.timber.dk;
-    const w = s.poly([x - 8 * k, y, x - 6 * k, y - 22 * k, x - 3 * k, y - 19 * k, x - 1 * k, y - 27 * k, x + 3 * k, y - 20 * k, x + 6 * k, y - 25 * k, x + 8 * k, y], m.lit, OUT); s.shade(w, m.lo, 4 * k); s.lit(w, m.hi, 1);
-    s.rect(x - 2 * k, y - 8 * k, 4 * k, 8 * k, OUT); for (const dx of [-5, 3]) s.rect(x + dx * k, y - 20 * k, 2 * k, 12 * k, m.lo);
+    const w = s.poly([x - 8 * k, y, x - 6 * k, y - 22 * k, x - 3 * k, y - 19 * k, x - 1 * k, y - 27 * k, x + 3 * k, y - 20 * k, x + 6 * k, y - 25 * k, x + 8 * k, y], m.lit, LAND_EDGE); s.shade(w, m.lo, 4 * k); s.lit(w, m.hi, 1);
+    s.rect(x - 2 * k, y - 8 * k, 4 * k, 8 * k, LAND_EDGE); for (const dx of [-5, 3]) s.rect(x + dx * k, y - 20 * k, 2 * k, 12 * k, m.lo);
     s.line(x - 1 * k, y - 27 * k, x - 14 * k, y - 40 * k, c); s.line(x - 1 * k, y - 27 * k, x + 9 * k, y - 38 * k, c); s.line(x - 1 * k, y - 27 * k, x - 12 * k, y - 22 * k, c); s.line(x - 9 * k, y - 35 * k, x - 12 * k, y - 32 * k, c);
   },
   watermill(s, x, y, k) {
     const m = STUFF.wall;
-    wall(s, x - 12 * k, y, 24 * k, 12 * k, m, 4 * k); roof(s, [x - 14 * k, y - 12 * k, x - 6 * k, y - 22 * k, x + 6 * k, y - 22 * k, x + 14 * k, y - 12 * k], STUFF.thatch, { course: 3, lw: 2, sw: 3 });
-    win(s, x - 8 * k, y - 8 * k, 3 * k, 3 * k); win(s, x - 2 * k, y - 8 * k, 4 * k, 8 * k, true);
+    walls(s, x - 12 * k, y, 24 * k, 12 * k, m, 4 * k); roofOver(s, [x - 14 * k, y - 12 * k, x - 6 * k, y - 22 * k, x + 6 * k, y - 22 * k, x + 14 * k, y - 12 * k], STUFF.thatch, { course: 3, lw: 2, sw: 3 });
+    windowAt(s, x - 8 * k, y - 8 * k, 3 * k, 3 * k); windowAt(s, x - 2 * k, y - 8 * k, 4 * k, 8 * k, true);
     const wx = x + 17 * k, wy = y - 7 * k, b = STUFF.timber;
     s.disc(wx, wy, 8 * k, 8 * k, STUFF.water.mid, b.mid); s.disc(wx, wy, 6 * k, 6 * k, STUFF.water.lit);
     for (let i = 0; i < 4; i++) { const a = i * Math.PI / 4; s.line(wx - Math.cos(a) * 8 * k, wy - Math.sin(a) * 8 * k, wx + Math.cos(a) * 8 * k, wy + Math.sin(a) * 8 * k, b.lit); }
@@ -882,14 +882,14 @@ const PROPS: Record<PropName, Prop> = {
   signpost(s, x, y, k) {
     const b = STUFF.timber;
     s.rect(x - 1, y - 20 * k, 2, 20 * k, b.lo); s.rect(x - 1, y - 20 * k, 1, 20 * k, b.mid);
-    const a = s.poly([x, y - 19 * k, x + 11 * k, y - 19 * k, x + 14 * k, y - 16 * k, x + 11 * k, y - 13 * k, x, y - 13 * k], b.lit, OUT); s.shade(a, b.mid, 1);
-    const c = s.poly([x, y - 11 * k, x - 10 * k, y - 11 * k, x - 13 * k, y - 8 * k, x - 10 * k, y - 5 * k, x, y - 5 * k], b.lit, OUT); s.shade(c, b.mid, 1);
+    const a = s.poly([x, y - 19 * k, x + 11 * k, y - 19 * k, x + 14 * k, y - 16 * k, x + 11 * k, y - 13 * k, x, y - 13 * k], b.lit, LAND_EDGE); s.shade(a, b.mid, 1);
+    const c = s.poly([x, y - 11 * k, x - 10 * k, y - 11 * k, x - 13 * k, y - 8 * k, x - 10 * k, y - 5 * k, x, y - 5 * k], b.lit, LAND_EDGE); s.shade(c, b.mid, 1);
   },
   barn(s, x, y, k) {
     const b = STUFF.timber;
-    wall(s, x - 19 * k, y, 38 * k, 12 * k, b, 4 * k); for (let lx = x - 16 * k; lx < x + 19 * k; lx += 4 * k) s.rect(lx, y - 12 * k, 1, 11 * k, b.lo);
-    roof(s, [x - 22 * k, y - 12 * k, x - 14 * k, y - 26 * k, x + 14 * k, y - 26 * k, x + 22 * k, y - 12 * k], STUFF.thatch, { course: 3, lw: 2, sw: 3 });
-    s.rect(x - 5 * k, y - 9 * k, 10 * k, 9 * k, OUT); s.line(x - 5 * k, y - 9 * k, x + 5 * k, y, b.lo); s.line(x + 5 * k, y - 9 * k, x - 5 * k, y, b.lo);
+    walls(s, x - 19 * k, y, 38 * k, 12 * k, b, 4 * k); for (let lx = x - 16 * k; lx < x + 19 * k; lx += 4 * k) s.rect(lx, y - 12 * k, 1, 11 * k, b.lo);
+    roofOver(s, [x - 22 * k, y - 12 * k, x - 14 * k, y - 26 * k, x + 14 * k, y - 26 * k, x + 22 * k, y - 12 * k], STUFF.thatch, { course: 3, lw: 2, sw: 3 });
+    s.rect(x - 5 * k, y - 9 * k, 10 * k, 9 * k, LAND_EDGE); s.line(x - 5 * k, y - 9 * k, x + 5 * k, y, b.lo); s.line(x + 5 * k, y - 9 * k, x - 5 * k, y, b.lo);
   },
   flame(s, x, y, k) {
     s.poly([x - 4 * k, y, x - 5 * k, y - 6 * k, x - 1 * k, y - 10 * k, x, y - 17 * k, x + 2 * k, y - 10 * k, x + 5 * k, y - 6 * k, x + 4 * k, y], rFire[2]);
@@ -899,7 +899,7 @@ const PROPS: Record<PropName, Prop> = {
   cow(s, x, y, k) {
     const c = STUFF.earth.lit, c2 = STUFF.earth.mid;
     s.rect(x - 4 * k, y - 6 * k, 8 * k, 4 * k, c); s.rect(x - 4 * k, y - 6 * k, 8 * k, 1, STUFF.earth.hi); s.rect(x - 4 * k, y - 3 * k, 8 * k, 1, c2); s.rect(x + 4 * k, y - 8 * k, 3 * k, 3 * k, c);
-    for (const dx of [-3, -1, 2, 3]) s.rect(x + dx * k, y - 2 * k, 1, 2 * k, OUT); s.rect(x + 5 * k, y - 9 * k, 1, 2, rBone[4]); s.rect(x - 2 * k, y - 5 * k, 3 * k, 2 * k, rBone[4]);
+    for (const dx of [-3, -1, 2, 3]) s.rect(x + dx * k, y - 2 * k, 1, 2 * k, LAND_EDGE); s.rect(x + 5 * k, y - 9 * k, 1, 2, rBone[4]); s.rect(x - 2 * k, y - 5 * k, 3 * k, 2 * k, rBone[4]);
   }
 };
 
@@ -947,13 +947,21 @@ function track(s: Scene, y0: number, y1: number, bare = 0) {
     return h === 1 && u > 0.55 ? mid : lit;
   });
 }
-/** A stretch of water from x0 to x1 between its banks y0 (which wavers) and y1: the sky in it, its glints, and the dark of the bank below. */
+/** A stretch of water from x0 to x1 between its banks y0 (which wavers) and y1: the sky in it, its glints, and the dark of the bank below; a pond or a lake, which does not cross the whole picture, closes to a point at each end. */
 function water(s: Scene, x0: number, x1: number, y0: number, y1: number) {
-  const f = s.r() * 6, m = STUFF.water, tops: number[] = [], ramp = s.ramp([m.hi, m.lit, m.mid, m.lo]);
-  for (let x = x0; x < x1; x++) tops.push(Math.round(y0 + 1.5 * Math.sin(x * 0.045 + f)));
-  s.run(x0, y0 - 2, x1, y1, (x, y) => { const t = tops[x - x0]; return y < t ? undefined : y === t ? rBone[5] : ramp((y - t) / Math.max(1, y1 - t - 1)); });
-  for (let i = 0; i < (x1 - x0) / 12; i++) s.rect(x0 + (s.r() * (x1 - x0) | 0), y0 + 3 + (s.r() * Math.max(1, y1 - y0 - 4) | 0), 5 + (s.r() * 14 | 0), 1, i % 2 ? m.hi : rBone[5]);
-  s.rect(x0, y1 - 1, x1 - x0, 1, m.dk);
+  const f = s.r() * 6, m = STUFF.water, tops: number[] = [], bots: number[] = [], ramp = s.ramp([m.hi, m.lit, m.mid, m.lo]), finite = x0 > 0 || x1 < s.W;
+  for (let x = x0; x < x1; x++) {
+    const d = Math.min(x - x0, x1 - 1 - x), close = finite && d < 16 ? Math.round((16 - d) * (y1 - y0) / 34) : 0;
+    tops.push(Math.round(y0 + 1.5 * Math.sin(x * 0.045 + f)) + close); bots.push(y1 - close);
+  }
+  s.run(x0, y0 - 2, x1, y1, (x, y) => {
+    const t = tops[x - x0], b = bots[x - x0];
+    return y < t || y >= b ? undefined : y >= b - 1 ? m.dk : y === t ? rBone[5] : ramp((y - t) / Math.max(1, b - t - 1));
+  });
+  for (let i = 0; i < (x1 - x0) / 12; i++) {
+    const gx = x0 + (s.r() * (x1 - x0) | 0), gy = y0 + 3 + (s.r() * Math.max(1, y1 - y0 - 4) | 0), gw = 5 + (s.r() * 14 | 0), k = i % 2;
+    if (!finite || (gx > x0 + 14 && gx + gw < x1 - 14)) s.rect(gx, gy, gw, 1, k ? m.hi : rBone[5]);
+  }
 }
 /** A wood along the skyline from x to x1: trees of the kinds given, every few pixels, a row far off and a row near. */
 function wood(s: Scene, from: number, to: number, kinds: readonly PropName[], kLo: number, kHi: number) {
@@ -1000,7 +1008,7 @@ function place(s: Scene, items: readonly (readonly [width: number, draw: (x: num
   for (const i of order) { items[i][1](Math.round(x + items[i][0] / 2 + (s.r() - 0.5) * gap * 0.4)); x += items[i][0] + gap; }
 }
 /** A landmark far off on the far hills, k times its size, gone blue and pale in the haze. */
-function distant(s: Scene, far: (x: number) => number, prop: PropName, x: number, k: number) { s.fade(0.58, () => PROPS[prop](s, x, far(x) + 2, k)); }
+function farLandmark(s: Scene, far: (x: number) => number, prop: PropName, x: number, k: number) { s.fade(0.58, () => PROPS[prop](s, x, far(x) + 2, k)); }
 /** A hamlet at x: houses of this kind at these offsets along the skyline, and a tree of the kind given at each end. */
 function hamlet(s: Scene, x: number, house: PropName, offs: readonly number[], k: number, tree?: PropName) {
   offs.forEach((dx, i) => PROPS[house](s, x + dx, s.ridge(x + dx) + 2, k + (i % 2) * 0.1));
@@ -1033,7 +1041,7 @@ const LAND_ART: Record<LandId, LandArt> = {
     skyArt(s, { clouds: 3, sun: [250, 76] });
     birds(s, 4);
     const far = hillsArt(s, 90, [[0.007, 7], [0.021, 3.5]], { pal: T.far, haze: 12, jag: 1 });
-    distant(s, far, 'windmill', 40 + (r() * 520 | 0), 0.5);
+    farLandmark(s, far, 'windmill', 40 + (r() * 520 | 0), 0.5);
     s.ridge = hillsArt(s, 100, [[0.013, 6], [0.04, 2.5]], { pal: T.hill, marks: 120 });
     const items: [number, (x: number) => void][] = [[150, x => hamlet(s, x, 'khata', [-42, -14, 14, 42], 0.82, 'willow')], [76, x => along(s, 'poplar', x - 30, 5, 14, 0.75)]];
     if (church) items.push([52, x => PROPS.orthodox(s, x, s.ridge(x) + 2, 0.95)]);
@@ -1049,7 +1057,7 @@ const LAND_ART: Record<LandId, LandArt> = {
     skyArt(s, { clouds: 4, sun: [270, 78] });
     birds(s, 3);
     const far = hillsArt(s, 94, [[0.008, 4], [0.025, 2]], { pal: T.far, haze: 12, jag: 1 });
-    distant(s, far, 'manor', 40 + (r() * 520 | 0), 0.55);
+    farLandmark(s, far, 'manor', 40 + (r() * 520 | 0), 0.55);
     s.ridge = hillsArt(s, 102, [[0.012, 4], [0.036, 2]], { pal: T.hill, marks: 90 });
     place(s, [
       [170, x => { PROPS.church(s, x, s.ridge(x) + 2, 0.9); [-48, 40, 68].forEach((dx, i) => PROPS.cottage(s, x + dx, s.ridge(x + dx) + 2, 0.76 + (i % 2) * 0.1)); PROPS.nest(s, x - 78, s.ridge(x - 78) + 2, 0.75); }],
@@ -1136,7 +1144,7 @@ const LAND_ART: Record<LandId, LandArt> = {
     const T = s.T, r = s.r, castle = r() < 0.5;
     skyArt(s, { clouds: 3, sun: [300, 76] });
     const far = hillsArt(s, 82, [[0.009, 7], [0.03, 3]], { pal: T.far, haze: 12 });
-    distant(s, far, 'church', 40 + (r() * 520 | 0), 0.5);
+    farLandmark(s, far, 'church', 40 + (r() * 520 | 0), 0.5);
     s.ridge = hillsArt(s, 96, [[0.014, 7], [0.04, 3]], { pal: T.hill, marks: 140 });
     const items: [number, (x: number) => void][] = [
       [190, x => { hamlet(s, x - 14, 'halfTimber', [-52, -24, 12, 38], 0.66); PROPS.church(s, x + 72, s.ridge(x + 72) + 2, 0.8); }],
@@ -1166,13 +1174,13 @@ function palisade(s: Scene, x0: number, x1: number, y: number, k: number) {
   const b = STUFF.timber;
   s.rect(x0, y - 4 * k, x1 - x0, 1, b.lo);
   for (let x = x0; x < x1; x += 3 * k) {
-    const st = s.poly([x, y - 9 * k, x + k, y - 12 * k, x + 2 * k, y - 9 * k, x + 2 * k, y, x, y], b.mid, OUT); s.lit(st, b.lit, 1); s.shade(st, b.lo, 1);
+    const st = s.poly([x, y - 9 * k, x + k, y - 12 * k, x + 2 * k, y - 9 * k, x + 2 * k, y, x, y], b.mid, LAND_EDGE); s.lit(st, b.lit, 1); s.shade(st, b.lo, 1);
   }
 }
 /** A bridge of planks over the water at x, w long, on the ground at y. */
 function bridge(s: Scene, x: number, y: number, w: number) {
   const b = STUFF.timber;
-  s.rect(x - w / 2 - 1, y - 8, w + 2, 9, OUT); s.rect(x - w / 2, y - 3, w, 3, b.mid); s.rect(x - w / 2, y - 3, w, 1, b.lit); s.rect(x - w / 2, y - 7, w, 1, b.lo);
+  s.rect(x - w / 2 - 1, y - 8, w + 2, 9, LAND_EDGE); s.rect(x - w / 2, y - 3, w, 3, b.mid); s.rect(x - w / 2, y - 3, w, 1, b.lit); s.rect(x - w / 2, y - 7, w, 1, b.lo);
   for (let px = x - w / 2; px <= x + w / 2; px += 8) s.rect(px, y - 7, 1, 7, b.lo);
 }
 /** A river across the whole picture behind the fight, with reeds on its bank; ford says where it can be waded. */
@@ -1235,7 +1243,7 @@ const SITE_ART: Record<SiteId, SiteArt> = {
       top.push(x + dx, y - 1 - 4 * w - (j > 0 ? 1 : 0)); bot.unshift(x + dx, y + 1 + 6 * w + (j < 0 ? 1 : 0));
     }
     const sh = s.shape([...top, ...bot]), n = sh.runs.length;
-    s.edge(sh, OUT);
+    s.edge(sh, LAND_EDGE);
     sh.runs.forEach((row, i) => { for (let k = 0; k < row.length; k += 2) s.rect(row[k], sh.y0 + i, row[k + 1] - row[k], 1, cleft.at(Math.round(i / Math.max(1, n - 1) * cleft.levels))); });
     s.cap(sh, e.lit, 1); s.lit(sh, e.lit, 2); s.courses(sh, s.dither(null, e.dk, 6), 3, 2);
     for (let dx = -56; dx <= 56; dx += 4) { const h = 2 + ((dx * 11) % 5 + 5) % 3; s.rect(x + dx, y - 6 - h + 2, 1, h, e.lo); }
@@ -1314,7 +1322,7 @@ function makeBackdrop(seed: number, weather: Weather, setting?: Setting, o: { wi
   const c = sceneCanvas(W / SS, LH), s = makeScene(c.getContext('2d')!, seed, weather, weatherTone(TONES[land], weather), W, o.sky !== false, !!o.night);
   LAND_ART[land](s);
   if (setting && setting.site) c.siteX = SITE_ART[setting.site](s);
-  if (s.sky) fringe(s);
+  if (s.sky) groundFringe(s);
   weatherArt(s);
   return c;
 }
