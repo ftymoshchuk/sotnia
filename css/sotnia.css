@@ -685,7 +685,7 @@ kbd { font: 11px/1 var(--body); padding: 2px 4px; border: 1px solid currentColor
   .seg.big button { flex: 1 1 0; min-width: 0; flex-direction: column; justify-content: center; gap: 3px; padding: 8px 4px 9px; font-size: 15px; }
   .seg.big button .i { font-size: 19px; }
   .cmd kbd { display: none; }
-  .plate.field { container-type: inline-size; }
+  .fight .plate.field { container-type: inline-size; }
   .verdict { gap: 6px; padding: 6px; }
   .verdict .ribbon-word { font-size: clamp(16px, calc((100cqw - 48px) / 9.4), 32px); padding: 5px clamp(14px, 6cqw, 24px) 9px; }
   .verdict .btn.big { font-size: 15px; padding: 8px 14px 9px; }
