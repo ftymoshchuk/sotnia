@@ -1658,7 +1658,7 @@ const LIGHT3 = (() => { const v = [-0.55, -0.62, 0.56], n = Math.hypot(v[0], v[1
  * A mass of leaves made of domes (cx, cy, r), shaded as a heap would be by the moon on the upper left: a dark mass, its clumps lit on the
  * upper left, the rim there caught in a light of its own. tones go from the shade to the lit; lit leans the shading towards the light.
  */
-function foliage(p, blobs, seed, tones, rim, rim2, lit = 0) {
+function campFoliage(p, blobs, seed, tones, rim, rim2, lit = 0) {
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const [cx, cy, r] of blobs) {
         x0 = Math.min(x0, cx - r - 3);
@@ -1711,7 +1711,7 @@ function poplar(p, cx, base, top, w, seed, tones) {
             blobs.push([x + (r() < 0.5 ? -1 : 1) * rr * 0.85, y + (r() * 3 - 1), Math.max(1.5, rr * 0.55)]);
     }
     blobs.push([cx, top + 2, 1.9]);
-    return foliage(p, blobs, seed, tones, 'moss4', 'woad4');
+    return campFoliage(p, blobs, seed, tones, 'moss4', 'woad4');
 }
 /** A pine: tiers of boughs, wide below and narrow above, on a trunk. */
 function pine(p, cx, base, top, w, seed, tiers, tones) {
@@ -1724,7 +1724,7 @@ function pine(p, cx, base, top, w, seed, tiers, tones) {
         }
     }
     blobs.push([cx, top + 1, 1.8]);
-    const m = foliage(p, blobs, seed + 1, tones, 'moss4', 'woad4');
+    const m = campFoliage(p, blobs, seed + 1, tones, 'moss4', 'woad4');
     for (let y = Math.floor(base - 12); y < base; y++) {
         putPix(p, cx, y, 'soot1');
         putPix(p, cx + 1, y, 'soot1');
@@ -1788,7 +1788,7 @@ function paintLookout(far, cx = 296, base = 150, top = 112) {
 /** A bush at the foot of things: a few domes of leaves. */
 function paintBush(L, cx, base, r, seed) {
     standProp(L, [Math.floor(cx - r * 2.2), Math.floor(base - r * 2.4), Math.ceil(cx + r * 2.2), base + 3], base, 30, 0.5, b => {
-        foliage(b.p, [[cx, base - r * 0.7, r], [cx - r * 0.8, base - r * 0.4, r * 0.7], [cx + r * 0.9, base - r * 0.35, r * 0.75]], seed, ['moss0', 'moss1', 'moss2'], 'moss3', 'moss3', -0.05);
+        campFoliage(b.p, [[cx, base - r * 0.7, r], [cx - r * 0.8, base - r * 0.4, r * 0.7], [cx + r * 0.9, base - r * 0.35, r * 0.75]], seed, ['moss0', 'moss1', 'moss2'], 'moss3', 'moss3', -0.05);
     });
 }
 /* ----- the tents ----- */
