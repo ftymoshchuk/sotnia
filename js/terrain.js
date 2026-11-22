@@ -1,22 +1,163 @@
 "use strict";
-/** What buildings, roofs and water are made of, whatever the land. */
-const STUFF = {
-    wall: '#efe9d6', wallLo: '#d6cfba', thatch: '#cdb77f', thatchLo: '#a8935c', tile: '#b9785a', tileLo: '#8f5a43', shingle: '#6d685c', timber: '#9a7b52', timberLo: '#6f5535',
-    stone: '#c3bdad', stoneLo: '#9b9588', brick: '#b0674d', brickLo: '#86503d', water: '#b5c3c4', waterLo: '#8fa4a8', smoke: '#c4bfb2', straw: '#d8c58b', earth: '#7f6544', bark: '#6b4f35', birch: '#f0ece0'
-};
+/* ===== SOTNIA interface: terrain. The scenery behind a fight is the land the fight is in. ===== */
+/**
+ * Backdrops are drawn SS times finer than the scene, as the figures are, so that a man does not stand against blocks twice his own
+ * pixel. Everything here is in figure pixels from the picture's top left: W by H of them, with the horizon at HZ of the scene. The
+ * men stand between FY and FY + BD of the scene, the lower half of the picture, so what is drawn there is kept quiet, and the
+ * landmarks stand on the hills, the line of the horizon and a little below it.
+ *
+ * It is painted, not drawn: every colour is a step of the master palette (the ramps just below), and what is far, or wet, or foggy, or
+ * lit by the moon is the same step moved along the palette, never a blend off it. Gradients and haze are ordered dither (a Bayer
+ * matrix, so a pattern and never speckle) laid on in runs. The light is one low sun, upper left: what stands is lit on its left, cool in
+ * its lee, and edged in the darkest soot.
+ */
+/* ---------- the dyes: the master palette, each ramp dark to light ---------- */
+const rSoot = ['#0b0907', '#14100c', '#1d1711', '#2a2018', '#3a2d21', '#4e3d2c', '#67533b', '#846c4c'];
+const rBone = ['#6e6249', '#8f8467', '#b3a784', '#d1c5a1', '#e7ddbf', '#f4edd6'];
+const rPaper = ['#6d5f3f', '#8d7b52', '#a8976a', '#bfae82', '#d3c498', '#e4d8b3'];
+const rBronze = ['#3a2a12', '#5b4219', '#80602a', '#a78039', '#cba34f', '#e8c874', '#f7e2a0'];
+const rMadder = ['#240d0c', '#4a1816', '#6e2420', '#8f3328', '#b2493a', '#d0705a', '#e9a58b'];
+const rWoad = ['#0e1420', '#17233a', '#233756', '#33507a', '#4b6f98', '#6f94b4', '#9dbad0'];
+const rMoss = ['#0e130b', '#1a2411', '#2a3a1a', '#3f5524', '#587030', '#7a8e42', '#a0ae60', '#c6cf8c'];
+const rOchre = ['#33240c', '#563b12', '#7e571b', '#a67a27', '#cf9f3c', '#e6c15f', '#f2dc92'];
+const rIron = ['#101316', '#1d2227', '#2f363d', '#48515a', '#6b757e', '#939ca3', '#bec4c6', '#e3e6e2'];
+const rSkin = ['#4a2c20', '#7a4d36', '#a5714f', '#cd9a73', '#e8bd96', '#f3d6b4'];
+const rNight = ['#05070e', '#0a0f1c', '#101a2e', '#182742', '#233a5c', '#35527a'];
+const rFire = ['#4a1006', '#8a2c0e', '#c4521a', '#e8862c', '#f6b73e', '#fcdc7c', '#fff2c2'];
+const rTeal = ['#0f2623', '#1a403b', '#2a625a', '#3f867a', '#66ac9a', '#9acfbd'];
+const rPlum = ['#241022', '#40203c', '#5e3158', '#80487a', '#a86a9c'];
+const rSky = ['#4a6a82', '#6c8fa4', '#92b0bb', '#b8cac8', '#d6dccb', '#ece8cf'];
+/** Every step of every ramp: what a colour moved off the palette is brought back to. */
+const LAND_DYES = [...rSoot, ...rBone, ...rPaper, ...rBronze, ...rMadder, ...rWoad, ...rMoss, ...rOchre, ...rIron, ...rSkin, ...rNight, ...rFire, ...rTeal, ...rPlum, ...rSky];
+/** The dark that edges what stands, and the dark of a window and a door. */
+const OUT = rSoot[1], DARK = rSoot[2];
 /** A colour (#rrggbb) moved the part t of the way, from 0 to 1, towards another. */
 function mixHex(a, b, t) {
     const p = parseInt(a.slice(1), 16), q = parseInt(b.slice(1), 16), ch = (s) => Math.round(((p >> s) & 255) * (1 - t) + ((q >> s) & 255) * t);
     return '#' + ((1 << 24) | (ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).slice(1);
 }
+const dyeRGB = LAND_DYES.map(h => { const n = parseInt(h.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; });
+/** The step of the palette nearest to a colour, as the eye weighs red, green and blue. */
+function nearDye(hex) {
+    const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+    let best = Infinity, out = LAND_DYES[0];
+    dyeRGB.forEach(([R, G, B], i) => { const m = (r + R) / 2, e = (2 + m / 256) * (r - R) ** 2 + 4 * (g - G) ** 2 + (2 + (255 - m) / 256) * (b - B) ** 2; if (e < best) {
+        best = e;
+        out = LAND_DYES[i];
+    } });
+    return out;
+}
+function dyeGrade(f) {
+    const memo = new Map();
+    return c => { let o = memo.get(c); if (o === undefined)
+        memo.set(c, o = f(c)); return o; };
+}
+/** A grade that takes each colour the part k of the way to another, then a part dark of the way to soot, and back to the nearest dye (a far hill goes blue this way). */
+const towards = (to, k, dark = 0) => dyeGrade(c => nearDye(mixHex(mixHex(c, to, k), rSoot[1], dark)));
+/** Where each dye stands: its ramp, and its step on it. */
+const dyeAt = new Map();
+for (const ramp of [rSoot, rBone, rPaper, rBronze, rMadder, rWoad, rMoss, rOchre, rIron, rSkin, rNight, rFire, rTeal, rPlum, rSky])
+    ramp.forEach((h, i) => dyeAt.set(h, [ramp, i]));
+/** A dye moved d steps along its own ramp, so that it keeps its hue as it darkens or pales. */
+const stepped = (c, d) => { const at = dyeAt.get(c); return at ? at[0][clamp(at[1] + d, 0, at[0].length - 1)] : c; };
+const brightness = (h) => { const n = parseInt(h.slice(1), 16); return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255); };
+/** The dye of another ramp whose brightness is nearest to k times this one's. */
+const viaRamp = (c, to, k = 1) => { const L = brightness(c) * k; return to.reduce((a, b) => (Math.abs(brightness(b) - L) < Math.abs(brightness(a) - L) ? b : a)); };
+/** Rain: whitewash goes the grey of wet lime and thatch the drab of wet straw, the rest a step darker on its own ramp; fire and skin are left alone. */
+const RAIN_GRADE = dyeGrade(c => {
+    const at = dyeAt.get(c);
+    if (!at)
+        return c;
+    const ramp = at[0];
+    if (ramp === rBone)
+        return viaRamp(c, rIron, 0.95);
+    if (ramp === rOchre || ramp === rBronze)
+        return viaRamp(c, rPaper, 0.92);
+    return ramp === rSoot || ramp === rFire || ramp === rSkin || ramp === rNight || ramp === rPlum || ramp === rTeal ? c : stepped(c, -1);
+});
+/** Fog: every dye a step paler on its own ramp (the soot of an outline two), the rest is done by the haze laid over the picture. */
+const FOG_GRADE = dyeGrade(c => stepped(c, dyeAt.get(c)?.[0] === rSoot ? 2 : 1));
+/** The moon's grade: every dye becomes a step of the night ramp by its brightness, but fire and gold, which keep their light. */
+const MOON_GRADE = dyeGrade(c => {
+    if (c === rFire[3] || c === rFire[4] || c === rFire[5] || c === rBronze[5] || c === rBronze[6])
+        return c;
+    const n = parseInt(c.slice(1), 16), L = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+    return rNight[L < 0.1 ? 0 : L < 0.2 ? 1 : L < 0.31 ? 2 : L < 0.45 ? 3 : L < 0.62 ? 4 : 5];
+});
+const BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+/** The patterns made so far, by their two colours and level: each a 4 by 4 tile of the Bayer matrix, drawn one tile pixel to a pixel of the picture. */
+const landPatterns = new Map();
+/** The fill that stands for a dither of a and b at level n: its pattern, or where the canvas can make none, the two blended (a stipple, which has no a to blend, is left out). */
+function landPattern(g, a, b, n) {
+    const key = a + '|' + b + '|' + n;
+    let p = landPatterns.get(key);
+    if (p === undefined) {
+        const tile = document.createElement('canvas');
+        tile.width = tile.height = 4;
+        const t = tile.getContext('2d');
+        for (let y = 0; y < 4; y++)
+            for (let x = 0; x < 4; x++) {
+                const c = BAYER[y][x] < n ? b : a;
+                if (c) {
+                    t.fillStyle = c;
+                    t.fillRect(x, y, 1, 1);
+                }
+            }
+        p = g.createPattern(tile, 'repeat');
+        if (p)
+            p.setTransform({ a: 1 / SS, b: 0, c: 0, d: 1 / SS, e: 0, f: 0 }); // the picture's context is scaled SS times: this undoes it
+        else
+            p = a === null ? null : mixHex(a, b, n / 16);
+        landPatterns.set(key, p);
+    }
+    return p;
+}
 /** A scene to draw on: g is the SS-fine canvas of the backdrop (see sceneCanvas), whose context is scaled to the scene. */
-function makeScene(g, seed, weather, T, W = LW * SS, sky = true) {
-    const H = LH * SS;
+function makeScene(g, seed, weather, T, W = LW * SS, sky = true, night = false) {
+    const H = LH * SS, weatherGrade = weather === 'rain' ? RAIN_GRADE : weather === 'fog' ? FOG_GRADE : null;
+    const baseGrade = night ? MOON_GRADE : weatherGrade;
+    let grade = baseGrade, lastFill = null; // lastFill: what the canvas is set to paint with, so that it is set only when it changes
+    const fades = new Map(), dithers = new Map();
+    const toned = (c) => (grade ? grade(c) : c);
+    /** What a fill is made of: a colour, a pattern, or (a stipple with no pattern to make it of) nothing. */
+    const fillOf = (c) => {
+        if (c === null)
+            return null;
+        if (typeof c === 'string')
+            return toned(c);
+        const a = c.a === null ? null : toned(c.a), b = toned(c.b);
+        if (c.n >= 16 || a === b)
+            return b;
+        if (c.n <= 0)
+            return a;
+        return landPattern(g, a, b, c.n);
+    };
     const rect = (x, y, w, h, c) => {
         const x0 = Math.round(x), y0 = Math.round(y), x1 = Math.round(x + w), y1 = Math.round(y + h);
         if (x1 > x0 && y1 > y0) {
-            g.fillStyle = c;
-            g.fillRect(x0 / SS, y0 / SS, (x1 - x0) / SS, (y1 - y0) / SS);
+            const f = fillOf(c);
+            if (f !== null) {
+                if (f !== lastFill)
+                    g.fillStyle = lastFill = f;
+                g.fillRect(x0 / SS, y0 / SS, (x1 - x0) / SS, (y1 - y0) / SS);
+            }
+        }
+    };
+    const same = (p, q) => p === q || (!!p && !!q && typeof p === 'object' && typeof q === 'object' && p.a === q.a && p.b === q.b && p.n === q.n);
+    const run = (x0, y0, x1, y1, fn) => {
+        x0 = Math.round(x0);
+        x1 = Math.round(x1);
+        for (let y = Math.round(y0), ye = Math.round(y1); y < ye; y++) {
+            let from = x0, cur = fn(x0, y);
+            for (let x = x0 + 1; x <= x1; x++) {
+                const p = x < x1 ? fn(x, y) : undefined;
+                if (x === x1 || !same(p, cur)) {
+                    if (cur)
+                        rect(from, y, x - from, 1, cur);
+                    from = x;
+                    cur = p;
+                }
+            }
         }
     };
     const line = (x0, y0, x1, y1, c) => {
@@ -41,389 +182,708 @@ function makeScene(g, seed, weather, T, W = LW * SS, sky = true) {
             }
         }
     };
-    const fillPoly = (pts, c) => {
+    const shape = (pts) => {
         let top = Infinity, bot = -Infinity;
         for (let i = 1; i < pts.length; i += 2) {
             top = Math.min(top, pts[i]);
             bot = Math.max(bot, pts[i]);
         }
-        for (let y = Math.floor(top); y < Math.ceil(bot); y++) {
-            const xs = [], yc = y + 0.5;
+        const y0 = Math.floor(top), runs = [];
+        for (let y = y0; y < Math.ceil(bot); y++) {
+            const xs = [], yc = y + 0.5, row = [];
             for (let i = 0, n = pts.length; i < n; i += 2) {
                 const ax = pts[i], ay = pts[i + 1], bx = pts[(i + 2) % n], by = pts[(i + 3) % n];
                 if ((ay <= yc && by > yc) || (by <= yc && ay > yc))
                     xs.push(ax + (yc - ay) / (by - ay) * (bx - ax));
             }
             xs.sort((a, b) => a - b);
-            for (let k = 0; k + 1 < xs.length; k += 2)
-                rect(Math.round(xs[k]), y, Math.round(xs[k + 1]) - Math.round(xs[k]), 1, c);
-        }
-    };
-    const poly = (pts, c, edge) => {
-        fillPoly(pts, c);
-        if (edge)
-            for (let i = 0, n = pts.length; i < n; i += 2)
-                line(pts[i], pts[i + 1], pts[(i + 2) % n], pts[(i + 3) % n], edge);
-    };
-    const disc = (cx, cy, rx, ry, c, edge) => {
-        const rows = (a, b, col) => {
-            for (let dy = -b; dy <= b; dy++) {
-                const hw = Math.round(a * Math.sqrt(Math.max(0, 1 - (dy / Math.max(1, b)) ** 2)));
-                rect(cx - hw, cy + dy, 2 * hw + 1, 1, col);
+            for (let k = 0; k + 1 < xs.length; k += 2) {
+                const a = Math.round(xs[k]), b = Math.round(xs[k + 1]);
+                if (b > a)
+                    row.push(a, b);
             }
-        };
-        rx = Math.round(rx);
-        ry = Math.round(ry);
+            runs.push(row);
+        }
+        return { y0, runs };
+    };
+    const ellipse = (cx, cy, rx, ry) => {
         cx = Math.round(cx);
         cy = Math.round(cy);
-        if (edge) {
-            rows(rx, ry, edge);
-            rows(rx - 1, ry - 1, c);
+        rx = Math.round(rx);
+        ry = Math.round(ry);
+        const runs = [];
+        for (let dy = -ry; dy <= ry; dy++) {
+            const hw = Math.round(rx * Math.sqrt(Math.max(0, 1 - (dy / Math.max(1, ry)) ** 2)));
+            runs.push([cx - hw, cx + hw + 1]);
         }
-        else
-            rows(rx, ry, c);
+        return { y0: cy - ry, runs };
     };
-    return { W, H, HZ: HZ * SS, sky, weather, T, r: mulberry(seed), ridge: () => HZ * SS - 4, rect, line, disc, poly };
+    const fill = (sh, c) => sh.runs.forEach((row, i) => { for (let k = 0; k < row.length; k += 2)
+        rect(row[k], sh.y0 + i, row[k + 1] - row[k], 1, c); });
+    const edge = (sh, c) => {
+        for (let i = -1; i <= sh.runs.length; i++) {
+            const iv = [];
+            for (const [j, grow] of [[i, 1], [i - 1, 0], [i + 1, 0]]) {
+                const row = sh.runs[j];
+                if (row)
+                    for (let k = 0; k < row.length; k += 2)
+                        iv.push([row[k] - grow, row[k + 1] + grow]);
+            }
+            iv.sort((p, q) => p[0] - q[0]);
+            let cur = null;
+            for (const v of iv) {
+                if (cur && v[0] <= cur[1])
+                    cur[1] = Math.max(cur[1], v[1]);
+                else {
+                    if (cur)
+                        rect(cur[0], sh.y0 + i, cur[1] - cur[0], 1, c);
+                    cur = [v[0], v[1]];
+                }
+            }
+            if (cur)
+                rect(cur[0], sh.y0 + i, cur[1] - cur[0], 1, c);
+        }
+    };
+    const poly = (pts, c, e) => { const sh = shape(pts); if (e)
+        edge(sh, e); fill(sh, c); return sh; };
+    const disc = (cx, cy, rx, ry, c, e) => {
+        const sh = ellipse(cx, cy, rx, ry);
+        if (e) {
+            fill(sh, e);
+            const inner = ellipse(cx, cy, rx - 1, ry - 1);
+            fill(inner, c);
+            return inner;
+        }
+        fill(sh, c);
+        return sh;
+    };
+    const rims = (sh, c, w, right) => sh.runs.forEach((row, i) => { for (let k = 0; k < row.length; k += 2) {
+        const a = row[k], b = row[k + 1], ww = Math.min(w, b - a);
+        if (right)
+            rect(b - ww, sh.y0 + i, ww, 1, c);
+        else
+            rect(a, sh.y0 + i, ww, 1, c);
+    } });
+    const fadeGrade = (t) => { let f = fades.get(t); if (!f) {
+        const to = towards(baseGrade ? baseGrade(T.haze) : T.haze, t);
+        f = baseGrade ? (c => to(baseGrade(c))) : to;
+        fades.set(t, f);
+    } return f; };
+    return {
+        W, H, HZ: HZ * SS, sky, night, weather, T, r: mulberry(seed), ridge: () => HZ * SS - 4, rect, line, disc, poly, shape, edge, fill, run,
+        lit: (sh, c, w = 1) => rims(sh, c, w, false), shade: (sh, c, w = 1) => rims(sh, c, w, true),
+        cap: (sh, c, h = 1) => sh.runs.slice(0, h).forEach((row, i) => { for (let k = 0; k < row.length; k += 2)
+            rect(row[k], sh.y0 + i, row[k + 1] - row[k], 1, c); }),
+        split: (sh, cx, left, right) => sh.runs.forEach((row, i) => { for (let k = 0; k < row.length; k += 2) {
+            const a = row[k], b = row[k + 1], m = Math.min(Math.max(Math.round(cx), a), b);
+            rect(a, sh.y0 + i, m - a, 1, left);
+            rect(m, sh.y0 + i, b - m, 1, right);
+        } }),
+        courses: (sh, c, every, from = 2) => sh.runs.forEach((row, i) => { if (i >= from && (i - from) % every === 0)
+            for (let k = 0; k < row.length; k += 2)
+                rect(row[k] + 1, sh.y0 + i, row[k + 1] - row[k] - 2, 1, c); }),
+        dither(a, b, n) { const key = a + '|' + b + '|' + n; let d = dithers.get(key); if (!d)
+            dithers.set(key, d = { a, b, n }); return d; },
+        ramp(cols) {
+            const steps = cols.length - 1, top = steps * 16, table = [];
+            for (let i = 0; i <= top; i++) {
+                const k = Math.min(steps - 1, Math.floor(i / 16)), n = i - k * 16;
+                table.push(n <= 0 ? cols[k] : n >= 16 ? cols[k + 1] : this.dither(cols[k], cols[k + 1], n));
+            }
+            const f = ((t) => table[Math.min(top, Math.max(0, Math.round(t * top)))]);
+            f.levels = top;
+            f.at = level => table[level < 0 ? 0 : level > top ? top : level];
+            return f;
+        },
+        fade(t, draw) { const was = grade; grade = fadeGrade(t); try {
+            return draw();
+        }
+        finally {
+            grade = was;
+        } },
+        plain(draw) { const was = grade; grade = null; try {
+            return draw();
+        }
+        finally {
+            grade = was;
+        } }
+    };
 }
 /* ---------- the colours of each land ---------- */
-// Pale, as the paper of the old backdrops was: the ink does the drawing and the tone only says which country it is.
+// Each land has its own light, low and from the left: the steppe's is warm and long, Ukraine's golden, the Crown's a pale overcast gold, Prussia's the grey-blue of
+// the sea, Lithuania's the dusk of a forest, the Smolensk front's a smoky dawn, and Silesia's and Saxony's the cooler light of hills.
 const TONES = {
-    steppe: { sky: '#e0d9bd', haze: '#ebe1ba', far: '#dccf9f', hill: '#d6cca4', ground: '#d1c598', fore: '#c3b68c', mark: '#8e7c4b', leaf: '#b8b078', leafLo: '#8a8355' },
-    ukraine: { sky: '#dcd6be', haze: '#e6ddc0', far: '#d0cba9', hill: '#cec7a4', ground: '#c8bd9a', fore: '#b7ab88', mark: '#6e5d3b', leaf: '#aab380', leafLo: '#7d8860' },
-    poland: { sky: '#dbd7c2', haze: '#e5e0c8', far: '#cfcfb0', hill: '#c9cba9', ground: '#c5c7a2', fore: '#b4b790', mark: '#68704a', leaf: '#aab782', leafLo: '#78875a' },
-    prussia: { sky: '#d6d9ce', haze: '#e1e3d6', far: '#c3cdc9', hill: '#cdcbb2', ground: '#d3cba9', fore: '#c6bd98', mark: '#7a7052', leaf: '#a7b08a', leafLo: '#6f7c5b' },
-    lithuania: { sky: '#d4d5c6', haze: '#dedecd', far: '#aeb59c', hill: '#b7bda2', ground: '#bdc0a0', fore: '#aaad8c', mark: '#5a6040', leaf: '#8f9f74', leafLo: '#566a4c' },
-    front: { sky: '#d3ccbb', haze: '#dacfb4', far: '#c8bfa6', hill: '#c4b799', ground: '#bfae91', fore: '#aa9876', mark: '#5e4a30', leaf: '#9a9670', leafLo: '#6b6a4c' },
-    silesia: { sky: '#dcd6c2', haze: '#e6ddc4', far: '#bfc3c4', hill: '#cfc29c', ground: '#c9bd9a', fore: '#b9ab86', mark: '#6e5e3a', leaf: '#a8ab7c', leafLo: '#77805a' },
-    saxony: { sky: '#dcd8c3', haze: '#e6e0c7', far: '#c4ccbb', hill: '#cccb9e', ground: '#c8c79c', fore: '#b8b78d', mark: '#66703f', leaf: '#a6b57a', leafLo: '#6f8656' }
+    steppe: {
+        sky: [rSky[0], rSky[1], rSky[2], rSky[3], rSky[4], rSky[5]], glow: rOchre[6], sun: rBone[5], haze: rSky[5], cloud: [rSky[5], rOchre[6], rSky[2]],
+        far: [rSky[4], rSky[3], rSky[2], rSky[1]], hill: [rOchre[6], rOchre[5], rOchre[4], rOchre[2]],
+        ground: [rPaper[4], rPaper[3], rOchre[3], rMoss[4], rMoss[3], rMoss[2]], earth: [rSoot[4], rSoot[6], rPaper[2]], leaf: [rMoss[2], rMoss[4], rMoss[5]], dry: rPaper[3], mark: rBronze[3]
+    },
+    ukraine: {
+        sky: [rSky[0], rSky[1], rSky[2], rSky[3], rSky[4], rBone[5]], glow: rOchre[6], sun: rBone[5], haze: rSky[5], cloud: [rSky[5], rOchre[6], rSky[2]],
+        far: [rSky[3], rSky[2], rSky[1], rWoad[4]], hill: [rMoss[6], rMoss[5], rMoss[4], rMoss[3]],
+        ground: [rMoss[6], rMoss[5], rMoss[4], rMoss[3], rMoss[2]], earth: [rSoot[4], rSoot[5], rPaper[2]], leaf: [rMoss[2], rMoss[4], rMoss[5]], dry: rOchre[4], mark: rMoss[4]
+    },
+    poland: {
+        sky: [rSky[1], rSky[2], rSky[3], rSky[4], rSky[5], rBone[5]], glow: rBronze[6], sun: rBone[5], haze: rSky[5], cloud: [rBone[5], rBronze[6], rSky[3]],
+        far: [rSky[4], rSky[3], rSky[2], rWoad[5]], hill: [rMoss[6], rMoss[5], rMoss[4], rMoss[3]],
+        ground: [rPaper[4], rMoss[5], rMoss[4], rMoss[3], rMoss[2]], earth: [rSoot[4], rSoot[6], rPaper[3]], leaf: [rMoss[2], rMoss[4], rMoss[5]], dry: rPaper[3], mark: rMoss[5]
+    },
+    prussia: {
+        sky: [rSky[0], rSky[1], rSky[2], rIron[6], rIron[7], rIron[7]], glow: rSky[5], sun: rIron[7], haze: rIron[7], cloud: [rIron[7], rSky[5], rIron[5]],
+        far: [rIron[6], rSky[3], rSky[2], rSky[1]], hill: [rBone[4], rPaper[4], rPaper[3], rMoss[4]],
+        ground: [rBone[4], rPaper[4], rMoss[5], rMoss[4], rMoss[3], rMoss[2]], earth: [rSoot[5], rBone[1], rBone[3]], leaf: [rMoss[2], rMoss[3], rMoss[5]], dry: rBone[3], mark: rWoad[4]
+    },
+    lithuania: {
+        sky: [rWoad[2], rWoad[3], rWoad[4], rSky[1], rSky[3], rBone[3]], glow: rMadder[6], sun: rBone[5], haze: rWoad[5], cloud: [rBone[4], rMadder[6], rWoad[5]],
+        far: [rSky[2], rWoad[5], rWoad[4], rWoad[3]], hill: [rMoss[5], rMoss[4], rMoss[3], rMoss[1]],
+        ground: [rMoss[6], rMoss[5], rMoss[4], rMoss[3], rMoss[2]], earth: [rSoot[3], rSoot[5], rBone[1]], leaf: [rMoss[0], rMoss[2], rMoss[4]], dry: rMoss[5], mark: rMoss[2]
+    },
+    front: {
+        sky: [rIron[3], rIron[4], rIron[5], rBone[2], rBone[3], rPaper[5]], glow: rOchre[6], sun: rFire[5], haze: rPaper[4], cloud: [rBone[3], rOchre[6], rIron[4]],
+        far: [rBone[3], rBone[2], rIron[5], rIron[4]], hill: [rPaper[4], rPaper[3], rPaper[2], rBone[1]],
+        ground: [rPaper[3], rPaper[2], rPaper[1], rSoot[7], rSoot[6]], earth: [rSoot[4], rSoot[6], rPaper[2]], leaf: [rMoss[1], rMoss[3], rMoss[5]], dry: rPaper[3], mark: rSoot[6]
+    },
+    silesia: {
+        sky: [rSky[0], rSky[1], rSky[2], rSky[3], rSky[4], rIron[7]], glow: rSky[5], sun: rBone[5], haze: rSky[4], cloud: [rIron[7], rBone[5], rSky[2]],
+        far: [rSky[3], rSky[2], rWoad[5], rWoad[4]], hill: [rOchre[6], rOchre[4], rPaper[2], rBone[1]],
+        ground: [rPaper[4], rPaper[3], rMoss[5], rMoss[4], rMoss[3], rMoss[2]], earth: [rSoot[4], rSoot[6], rPaper[3]], leaf: [rMoss[2], rMoss[4], rMoss[5]], dry: rPaper[3], mark: rBronze[2]
+    },
+    saxony: {
+        sky: [rSky[0], rSky[1], rSky[2], rSky[3], rSky[4], rSky[5]], glow: rBone[5], sun: rBone[5], haze: rSky[4], cloud: [rSky[5], rBone[5], rSky[2]],
+        far: [rSky[3], rSky[2], rWoad[5], rWoad[4]], hill: [rMoss[6], rMoss[5], rMoss[4], rMoss[3]],
+        ground: [rMoss[6], rMoss[5], rMoss[4], rMoss[3], rMoss[2]], earth: [rSoot[4], rSoot[6], rPaper[3]], leaf: [rMoss[2], rMoss[4], rMoss[5]], dry: rMoss[5], mark: rMoss[3]
+    }
 };
-/** A land's colours on a day of this weather: rain greys and darkens them, fog pales them. */
+/** A land's colours on a day of this weather: rain closes the sky over it in grey and fog pales it (the rest is graded as it is painted, see makeScene). */
 function weatherTone(T, weather) {
-    if (weather === 'clear')
-        return T;
-    const to = weather === 'rain' ? '#8f8c82' : '#efebdf', k = weather === 'rain' ? 0.3 : 0.4, out = {};
-    for (const n of Object.keys(T))
-        out[n] = mixHex(T[n], to, n === 'mark' ? k / 2 : k);
-    return out;
+    if (weather === 'rain')
+        return { ...T, sky: [rIron[2], rIron[3], rIron[4], rIron[5], rIron[5], rIron[6]], glow: rIron[6], sun: rIron[6], haze: rIron[6], cloud: [rIron[4], rIron[5], rIron[2]] };
+    if (weather === 'fog')
+        return { ...T, sky: [rSky[3], rSky[4], rSky[4], rSky[5], rSky[5], rSky[5]], glow: rSky[5], sun: rSky[5], haze: rSky[5], cloud: [rSky[5], rSky[5], rSky[3]] };
+    return T;
 }
+const mat = (dk, lo, mid, lit, hi) => ({ dk, lo, mid, lit, hi });
+const STUFF = {
+    wall: mat(rIron[4], rIron[5], rBone[3], rBone[4], rBone[5]), // whitewash, warm in the light and cool in its lee
+    thatch: mat(rOchre[1], rOchre[3], rOchre[4], rOchre[5], rOchre[6]),
+    tile: mat(rMadder[1], rMadder[2], rMadder[3], rMadder[4], rMadder[5]),
+    brick: mat(rMadder[1], rMadder[2], rMadder[3], rMadder[4], rMadder[5]),
+    shingle: mat(rIron[1], rIron[2], rIron[3], rIron[4], rIron[5]), // slate and weathered shingle
+    timber: mat(rSoot[2], rSoot[4], rSoot[5], rSoot[6], rSoot[7]),
+    stone: mat(rIron[2], rIron[3], rIron[4], rIron[5], rIron[6]),
+    lime: mat(rIron[3], rIron[4], rBone[2], rBone[3], rBone[4]), // limewashed stone and plaster
+    water: mat(rWoad[3], rWoad[4], rSky[1], rSky[2], rSky[4]),
+    smoke: mat(rIron[2], rIron[3], rIron[4], rIron[5], rIron[6]),
+    straw: mat(rOchre[2], rOchre[3], rOchre[4], rOchre[5], rOchre[6]),
+    earth: mat(rSoot[3], rSoot[4], rSoot[5], rSoot[6], rSoot[7]),
+    bark: mat(rSoot[2], rSoot[3], rSoot[4], rSoot[5], rSoot[6]),
+    birch: mat(rBone[1], rBone[2], rBone[3], rBone[4], rBone[5])
+};
 /* ---------- the sky ---------- */
-/** One cloud, as the old woodcuts have them: strokes, the longest below. */
-function cloud(s, cx, cy, w, heavy) {
-    const c = PAL.ink;
-    s.rect(cx + w * 0.3, cy, w * 0.3, 1, c);
-    s.rect(cx + w * 0.14, cy + 3, w * 0.62, 1, c);
-    s.rect(cx, cy + 6, w, 2, c);
-    if (heavy) {
-        s.rect(cx + w * 0.1, cy + 10, w * 0.7, 1, c);
-        s.rect(cx + w * 0.22, cy + 13, w * 0.4, 1, mixHex(c, s.T.sky, 0.35));
+/** One cloud, a lens of lit cloud w by h about cx, cy: its rim in the sun's warmth along the top, its belly in the cool, and a dash of its shadow beneath. */
+function cloud(s, cx, cy, w, h, flat = false) {
+    const [body, rim, shade] = s.T.cloud, x0 = Math.round(cx - w / 2), n = Math.round(w), top = [], bot = [], f1 = s.r() * 6, f2 = s.r() * 6, f3 = s.r() * 6;
+    const belly = clamp(Math.round(h * 0.4), 3, 12); // how many rows of its underside are in shadow
+    for (let i = 0; i < n; i++) {
+        const u = (2 * i + 1) / n - 1, bump = Math.pow(Math.max(0, 1 - u * u), flat ? 0.4 : 0.62);
+        const ripple = flat ? 0.8 + 0.2 * Math.sin(i * 0.05 + f1) * Math.sin(i * 0.021 + f2) : 0.7 + 0.3 * Math.sin(i * 0.19 + f1) * Math.sin(i * 0.053 + f2) + (h > 12 ? 0.16 * Math.sin(i * 0.09 + f3) : 0);
+        top.push(Math.round(cy - h * bump * ripple));
+        bot.push(Math.round(cy + 0.5 * Math.sin(i * 0.11 + f2)));
     }
+    s.run(x0, cy - h - 1, x0 + n, cy + 6, (x, y) => {
+        const i = x - x0, t = top[i], b = bot[i];
+        if (y < t || t >= b)
+            return undefined;
+        if (y > b)
+            return y === b + 3 && ((i >> 3) % 3 !== 1) && i > 4 && i < n - 4 ? shade : undefined;
+        if (y === t)
+            return i === 0 || t <= top[i - 1] ? rim : body;
+        if (y === t + 1 && h > 9 && i > 0 && t <= top[i - 1] && t < top[Math.min(n - 1, i + 2)])
+            return s.dither(body, rim, 5);
+        const up = b - y;
+        return up < belly ? s.dither(body, shade, Math.round(13 * (1 - up / belly)) + 1) : body;
+    });
 }
-/** The sun with its rays, as the old woodcuts have it. */
+/** The low sun, a soft disc with no rays, and the glow it makes round itself in the air. */
 function sun(s, sx, sy, k = 1) {
-    const c = PAL.ink;
-    s.disc(sx, sy, 10 * k, 10 * k, mixHex(s.T.haze, '#fff8e0', 0.7), c);
-    for (let a = 0; a < 16; a++) {
-        const an = a * Math.PI / 8, r0 = 14 * k, r1 = (a % 2 ? 19 : 25) * k;
-        s.line(sx + Math.cos(an) * r0, sy + Math.sin(an) * r0, sx + Math.cos(an) * r1, sy + Math.sin(an) * r1, c);
-    }
+    const R = Math.round(7 * k), reach = 30 * k, [, rim] = s.T.cloud;
+    s.run(sx - R - reach, sy - R - reach, sx + R + reach, sy + R + reach, (x, y) => {
+        const d = Math.hypot(x - sx, (y - sy) * 1.15);
+        if (d <= R)
+            return d > R - 1.2 ? rim : s.T.sun;
+        const f = 1 - (d - R) / reach;
+        return f > 0 ? s.dither(null, s.T.glow, Math.round(11 * f * f)) : undefined;
+    });
 }
-/** The sky: bands from the tone overhead to the haze at the horizon, ruled across as an engraver would, the sun if it is out, and the clouds. */
+/** The sky: ordered dither from the deep air overhead to the glow at the horizon, brightest by the sun, then the sun if it is out and the clouds. */
 function skyArt(s, o) {
     if (!s.sky)
         return;
-    const { W, HZ, T, r } = s, bands = 6;
-    for (let i = 0; i < bands; i++)
-        s.rect(0, Math.round(i * HZ / bands), W, Math.ceil(HZ / bands) + 1, mixHex(T.sky, T.haze, i / (bands - 1)));
-    for (let y = 6; y < HZ - 4; y += 9 - Math.round(5 * y / HZ)) {
-        const c = mixHex(mixHex(T.sky, T.haze, y / HZ), PAL.ink, 0.05 + 0.05 * y / HZ);
-        for (let x = -(r() * 60 | 0); x < W; x += 30 + (r() * 60 | 0) + 20)
-            s.rect(x, y, 30 + (r() * 90 | 0), 1, c);
-    }
-    const clear = s.weather === 'clear', n = clear ? o.clouds : o.clouds * 2 + 1;
-    if (clear && o.sun)
-        sun(s, o.sun[0] + (r() * 80 | 0) - 40, o.sun[1], o.sunK || 1);
-    for (let i = 0; i < n; i++)
-        cloud(s, r() * (W - 120) | 0, 8 + (r() * 46 | 0), 52 + (r() * 60 | 0), !clear);
+    const { W, HZ, T, r } = s, clear = s.weather === 'clear', p1 = r() * 6.28, p2 = r() * 6.28, sx = o.sun ? o.sun[0] + ((r() * 80) | 0) - 40 : -999;
+    s.plain(() => {
+        const wob = [], lit = [], K = T.sky.length, ramp = s.ramp(clear && o.sun ? [...T.sky, T.glow] : T.sky), glowing = clear && !!o.sun, span = glowing ? K : K - 1;
+        for (let x = 0; x < W; x++) {
+            wob.push(Math.round(1.8 * Math.sin(x * 0.012 + p1) + 1.1 * Math.sin(x * 0.031 + p2)));
+            lit.push(glowing ? Math.exp(-(((x - sx) / (W * 0.3)) ** 2)) : 0);
+        }
+        // the air at each row (offset by a few rows where the wobble puts it) as a position along the ramp, and how low in the sky each row is
+        const along = [], low = [];
+        for (let y = -8; y < HZ + 8; y++)
+            along.push(Math.pow(Math.max(0, y) / (HZ - 1), 0.92) * (K - 1));
+        for (let y = 0; y < HZ; y++) {
+            const l = Math.max(0, (y - HZ * 0.4) / (HZ * 0.6));
+            low.push(l * l);
+        }
+        const levels = ramp.levels / span;
+        s.run(0, 0, W, HZ, (x, y) => ramp.at(((along[y + wob[x] + 8] + lit[x] * low[y]) * levels + 0.5) | 0));
+        if (clear && o.sun)
+            sun(s, sx, o.sun[1], o.sunK || 1);
+        if (clear) {
+            for (let i = 0; i < o.clouds; i++) {
+                const low = i % 3 === 2, w = (low ? 90 : 120) + r() * 100, h = low ? 4 + r() * 3 : 8 + r() * 8;
+                cloud(s, w / 2 + r() * (W - w), low ? 66 + r() * 32 : 10 + r() * 40, w, h, low);
+            }
+        }
+        else {
+            // a close sky: long banks of cloud lying across the whole of it, the high ones first
+            const n = o.clouds + 4;
+            for (let i = 0; i < n; i++) {
+                const w = 380 + r() * 300;
+                cloud(s, w / 2 + r() * (W - w) - 30, 12 + (i + r() * 0.8) * HZ * 0.66 / n, w, 7 + r() * 9, true);
+            }
+        }
+    });
 }
 /* ---------- the hills ---------- */
 /**
- * A skyline of hills, a sum of waves (their frequency and their height) about the line base. It fills the hills in with a tone, inks the
- * skyline and hatches the slopes that turn from the light, and returns the skyline for the landmarks to stand on.
+ * A skyline of hills, a sum of waves (their frequency and their height) about the line base. It fills them in with the colours of their light
+ * (the rim, the lit flank, the middle and the lee, by how each stretch of the skyline faces the sun), hazes their feet into the air, and returns
+ * the skyline for the landmarks to stand on. jag roughens the skyline, as a far wood does.
  */
 function hillsArt(s, base, waves, o) {
-    const ph = waves.map(() => s.r() * 6.28), r = s.r, edge = o.edge || PAL.ink;
-    const ridge = (x) => Math.round(base - waves.reduce((a, w, i) => a + w[1] * Math.sin(x * w[0] + ph[i]), 0));
-    for (let x = 0; x < s.W; x++) {
-        const y = ridge(x), next = ridge(x + 3);
-        s.rect(x, y, 1, s.HZ - y, o.fill);
-        s.rect(x, y, 1, 1, edge);
-        if (o.hatch !== false && x % 3 === 0 && next > y)
-            s.rect(x, y + 3, 1, 2 + (r() * 8 | 0), mixHex(o.fill, PAL.ink, 0.35));
+    const ph = waves.map(() => s.r() * 6.28), off = 8, ys = [], { W, HZ, T } = s, [rim, lit, mid, lee] = o.pal;
+    for (let x = -off; x < W + off; x++) {
+        let y = base;
+        for (let i = 0; i < waves.length; i++)
+            y -= waves[i][1] * Math.sin(x * waves[i][0] + ph[i]);
+        if (o.jag)
+            y -= (x * 7 + 3) % 11 < 4 ? o.jag : 0;
+        ys.push(Math.round(y));
     }
-    return ridge;
+    const Y = (x) => ys[clamp(x + off, 0, ys.length - 1)], raw = [], lie = [];
+    let top = HZ;
+    for (let x = 0; x < W; x++) {
+        raw.push(clamp((Y(x - 7) - Y(x + 7)) / 9, -1, 1));
+        top = Math.min(top, Y(x));
+    }
+    // how each stretch of the skyline faces the sun, smoothed and cut into seven steps, so that the light changes slowly along a hill
+    for (let x = 0; x < W; x++) {
+        let sum = 0;
+        for (let k = -8; k <= 8; k++)
+            sum += raw[clamp(x + k, 0, W - 1)];
+        lie.push(clamp(Math.round(sum / 17 * 3.6), -3, 3));
+    }
+    const paints = [lee, s.dither(mid, lee, 11), s.dither(mid, lee, 5), mid, s.dither(mid, lit, 5), s.dither(mid, lit, 11), lit], inLee = s.dither(mid, lee, 10), inSun = s.dither(mid, lit, 3);
+    s.run(0, top, W, HZ, (x, y) => {
+        const t = Y(x);
+        if (y < t)
+            return undefined;
+        const d = y - t, c = lie[x];
+        if (d === 0)
+            return c >= 2 ? rim : c >= -1 ? lit : mid;
+        if (d < (c > 0 ? 7 : 4))
+            return paints[c + 3];
+        return c <= -2 ? inLee : c >= 2 ? inSun : mid;
+    });
+    const hz = o.haze === undefined ? 10 : o.haze;
+    if (hz)
+        s.run(0, HZ - 14, W, HZ, (x, y) => (y >= Y(x) ? s.dither(null, T.haze, Math.round((y - (HZ - 14)) / 14 * hz)) : undefined));
+    return Y;
 }
 /* ---------- the ground ---------- */
-/** The ground: the horizon line and tone shading from the haze at the horizon to the fore at the foot of the picture. */
-function groundArt(s) {
-    const { W, H, HZ, T } = s, n = 8;
-    for (let i = 0; i < n; i++) {
-        const y0 = HZ + Math.round(i * (H - HZ) / n), y1 = HZ + Math.round((i + 1) * (H - HZ) / n);
-        s.rect(0, y0, W, y1 - y0 + 1, mixHex(T.ground, T.fore, i / (n - 1)));
-    }
-    s.rect(0, HZ, W, 2, PAL.ink);
+/** How fast the ground darkens from the horizon: the bright of the sun-lit middle distance is kept to a strip, and the rows where the men stand are mid-value and calm. */
+const GROUND_CURVE = 0.72;
+/** The ground's colour at row y, d steps darker (or, negative, lighter) along its ramp. */
+function groundTone(s, y, d = 0) {
+    const G = s.T.ground, K = G.length;
+    return G[clamp(Math.round(Math.pow(Math.max(0, y - s.HZ) / (s.H - s.HZ), GROUND_CURVE) * (K - 1)) + d, 0, K - 1)];
 }
-/** The colour of the edge of a mass of leaves or a stone: its own colour, much darkened. */
-const edgeOf = (c) => mixHex(c, INK, 0.55);
-/** The dark of a window or a door. */
-const DARK = '#4a443b';
-/** Hatches the inside of a polygon with vertical strokes, every step pixels, as an engraver shades a roof. */
-function hatchPoly(s, pts, c, step = 2, inset = 2) {
-    let left = Infinity, right = -Infinity;
-    for (let i = 0; i < pts.length; i += 2) {
-        left = Math.min(left, pts[i]);
-        right = Math.max(right, pts[i]);
+/** Blobs of ordered dither on the ground, flat as the ground lies and softer at their edges: count of them, within the rows y0 to y1 below the horizon, up to rx wide, in the ground's own colour a step darker or lighter, or in its dry grass. */
+function patches(s, count, kind, y0, y1, rx, nMax = 6) {
+    for (let i = 0; i < count; i++) {
+        const u = s.r(), cy = s.HZ + y0 + u * u * (y1 - y0), k = 0.35 + 0.65 * (cy - s.HZ) / (s.H - s.HZ), w = (0.5 + s.r()) * rx * k, h = Math.max(2, w * 0.1), cx = s.r() * s.W;
+        const c = kind === 'dry' ? s.T.dry : kind === 'green' ? s.T.leaf[1] : groundTone(s, cy, kind === 'dark' ? 1 : -1), m = nMax - ((s.r() * 2) | 0);
+        s.run(cx - w, cy - h, cx + w, cy + h + 1, (x, y) => { const d = ((x - cx) / w) ** 2 + ((y - cy) / h) ** 2; return d >= 1 ? undefined : s.dither(null, c, Math.round((1 - d) * m * 1.3)); });
     }
-    for (let x = Math.ceil(left) + 1; x < right; x += step) {
-        const ys = [], xc = x + 0.5;
-        for (let i = 0, n = pts.length; i < n; i += 2) {
-            const ax = pts[i], ay = pts[i + 1], bx = pts[(i + 2) % n], by = pts[(i + 3) % n];
-            if ((ax <= xc && bx > xc) || (bx <= xc && ax > xc))
-                ys.push(ay + (xc - ax) / (bx - ax) * (by - ay));
+}
+/** The small marks that make a meadow: dashes and blades a step darker and lighter than the ground they lie on, a fleck of dry grass, denser and larger towards the foot of the picture. */
+function grassMarks(s, n) {
+    const { W, H, HZ, T } = s;
+    for (let i = 0; i < n; i++) {
+        const y = HZ + 4 + Math.floor(Math.sqrt(s.r()) * (H - HZ - 6)), x = Math.floor(s.r() * W), t = (y - HZ) / (H - HZ), k = 1 + Math.floor(t * 2.2), c = s.r();
+        if (c < 0.5) {
+            const d = groundTone(s, y, 1);
+            s.rect(x, y, 2 * k + 1, 1, d);
+            if (c < 0.3)
+                s.rect(x + 1, y - 1, k, 1, d);
         }
-        ys.sort((a, b) => a - b);
-        for (let k = 0; k + 1 < ys.length; k += 2)
-            if (ys[k + 1] - ys[k] > 2 * inset + 1)
-                s.rect(x, ys[k] + inset, 1, ys[k + 1] - ys[k] - 2 * inset, c);
+        else if (c < 0.86) {
+            const l = groundTone(s, y, -1);
+            s.rect(x, y - k, 1, k + 1, l);
+            if (c < 0.7)
+                s.rect(x + 2, y - 1, 1, 2, l);
+        }
+        else
+            s.rect(x, y, k, 1, T.dry);
     }
+}
+/** The grass at the foot of the picture, dark blades with the sun on their tips, which the men never reach. */
+function fringe(s) {
+    const { W, H, T } = s, L = T.leaf;
+    for (let x = 0; x < W; x += 3 + (s.r() * 4 | 0)) {
+        const h = 4 + (s.r() * 9 | 0), lean = s.r() < 0.5 ? -1 : 1, lo = h >> 1;
+        s.rect(x, H - lo, 1, lo, L[0]);
+        s.rect(x + 1, H - lo, 1, lo, L[1]);
+        s.rect(x + lean, H - h, 1, h - lo, L[0]);
+        s.rect(x + lean, H - h, 1, 1, L[2]);
+    }
+}
+/** The ground: ordered dither from the haze at the horizon, through the light mid-distance where the sun lies, to the dark of the foot of the picture, then its patches and marks. */
+function groundArt(s, o = {}) {
+    const { W, H, HZ, T } = s, ramp = s.ramp(T.ground), wob = [], p1 = s.r() * 6.28, p2 = s.r() * 6.28;
+    for (let x = 0; x < W; x++)
+        wob.push(Math.round(2.2 * Math.sin(x * 0.017 + p1) + 1.4 * Math.sin(x * 0.043 + p2)));
+    const lvl = [], veil = [];
+    for (let i = -8; i < H - HZ + 8; i++)
+        lvl.push(Math.round(Math.pow(Math.max(0, i) / (H - HZ), GROUND_CURVE) * ramp.levels));
+    for (let i = 0; i < 9; i++)
+        veil.push(s.dither(null, T.haze, Math.round(15 * Math.pow(1 - i / 9, 1.3))));
+    s.run(0, HZ, W, H, (x, y) => ramp.at(lvl[y - HZ + wob[x] + 8]));
+    s.run(0, HZ, W, HZ + 9, (x, y) => veil[y - HZ]); // the haze of the horizon lying on the far ground
+    patches(s, o.dark === undefined ? 7 : o.dark, 'dark', 6, H - HZ - 6, 80);
+    patches(s, o.light === undefined ? 7 : o.light, 'light', 6, H - HZ - 6, 80);
+    patches(s, o.dry === undefined ? 3 : o.dry, 'dry', 10, H - HZ - 14, 70, 5);
+    if (o.green)
+        patches(s, o.green, 'green', 8, H - HZ - 30, 90, 9);
+    grassMarks(s, o.marks === undefined ? 1500 : o.marks);
+}
+/** A window or a door: dark by day, and by night, in some, the warm light of a fire in the room. */
+function win(s, x, y, w, h, door = false) {
+    const lit = s.night && !door && ((Math.round(x) * 7 + Math.round(y) * 13) % 5) < 3;
+    s.rect(x, y, w, h, lit ? rFire[3] : DARK);
+    if (!lit && !door && w >= 2)
+        s.rect(x, y, w, 1, rIron[3]);
+}
+/** A plain wall, edged in soot: x0 its left, y its foot, w by h, lit on the left and, if side is given, shaded for that many pixels at its right end. */
+function wall(s, x0, y, w, h, m, side = 0) {
+    x0 = Math.round(x0);
+    y = Math.round(y);
+    w = Math.round(w);
+    h = Math.round(h);
+    s.rect(x0 - 1, y - h - 1, w + 2, h + 2, OUT);
+    s.rect(x0, y - h, w, h, m.lit);
+    s.rect(x0, y - h, 1, h, m.hi);
+    s.rect(x0, y - 1, w, 1, m.mid);
+    s.rect(x0, y - h, w, 1, m.mid);
+    if (side)
+        s.rect(x0 + w - side, y - h, side, h, m.lo);
+}
+/** A roof over the polygon pts, edged in soot, lit along its left and top and shaded in its lee, with the rows of thatch or shingle across it. */
+function roof(s, pts, m, o = {}) {
+    const sh = s.poly(pts, m.mid, OUT);
+    if (o.split !== undefined)
+        s.split(sh, o.split, m.lit, m.mid);
+    else
+        s.cap(sh, m.lit, 1);
+    s.lit(sh, m.hi, o.lw === undefined ? 1 : o.lw);
+    s.shade(sh, m.lo, o.sw === undefined ? 2 : o.sw);
+    if (o.course)
+        s.courses(sh, s.dither(null, m.lo, 7), o.course, 2);
+    const last = sh.runs.length - 1;
+    if (last > 1)
+        for (let k = 0; k < sh.runs[last].length; k += 2)
+            s.rect(sh.runs[last][k], sh.y0 + last, sh.runs[last][k + 1] - sh.runs[last][k], 1, m.dk);
+    return sh;
+}
+/** A mass of leaves: shade underneath, the body, and the sun on its upper left. */
+function ball(s, cx, cy, rx, ry, p, edge) {
+    s.disc(cx, cy, rx, ry, p[0], edge);
+    s.disc(cx - rx * 0.12, cy - ry * 0.18, rx * 0.84, ry * 0.8, p[1]);
+    s.disc(cx - rx * 0.3, cy - ry * 0.4, rx * 0.5, ry * 0.42, p[2]);
+    s.rect(cx - rx * 0.8, cy - ry * 0.45, rx * 0.5, 1, s.dither(null, p[2], 6));
 }
 /** The four sails of a mill turning on its hub, each a long arm with the bars of its lattice. */
 function sails(s, hx, hy, len, k, turn) {
     for (let i = 0; i < 4; i++) {
         const a = turn + i * Math.PI / 2, ux = Math.cos(a), uy = Math.sin(a), nx = -uy, ny = ux;
-        s.line(hx, hy, hx + ux * len, hy + uy * len, INK);
-        s.line(hx + ux * len * 0.25 + nx * 4 * k, hy + uy * len * 0.25 + ny * 4 * k, hx + ux * len + nx * 4 * k, hy + uy * len + ny * 4 * k, STUFF.thatchLo);
+        s.line(hx, hy, hx + ux * len, hy + uy * len, STUFF.timber.mid);
+        s.line(hx + ux * len * 0.25 + nx * 4 * k, hy + uy * len * 0.25 + ny * 4 * k, hx + ux * len + nx * 4 * k, hy + uy * len + ny * 4 * k, STUFF.timber.lit);
         for (let d = 0.3; d < 1; d += 0.14)
-            s.line(hx + ux * len * d, hy + uy * len * d, hx + ux * len * d + nx * 4 * k, hy + uy * len * d + ny * 4 * k, STUFF.thatchLo);
+            s.line(hx + ux * len * d, hy + uy * len * d, hx + ux * len * d + nx * 4 * k, hy + uy * len * d + ny * 4 * k, STUFF.timber.mid);
     }
+    s.rect(hx - 1, hy - 1, 3, 3, OUT);
 }
-/** A plain wall of a building, as a box with its two sides and its foot inked. */
-function walls(s, x0, y, w, h, c) {
-    s.rect(x0, y - h, w, h, c);
-    s.rect(x0, y - h, 1, h, INK);
-    s.rect(x0 + w - 1, y - h, 1, h, INK);
-    s.rect(x0, y - 1, w, 1, INK);
+/** A gold cross, as high as h, with its top at x, y. */
+function crossAt(s, x, y, h, c = rBronze[5]) { s.rect(x, y, 1, h, c); s.rect(x - 1, y + 1, 3, 1, c); }
+/** An onion dome of width w and height h on its drum at the foot (x, y): iron-blue, lit on the left, with its gold cross. */
+function dome(s, x, y, w, h, m = STUFF.shingle) {
+    const sh = s.poly([x, y - h, x + w * 0.3, y - h * 0.78, x + w * 0.5, y - h * 0.42, x + w * 0.36, y - h * 0.12, x + w * 0.22, y, x - w * 0.22, y, x - w * 0.36, y - h * 0.12, x - w * 0.5, y - h * 0.42, x - w * 0.3, y - h * 0.78], m.mid, OUT);
+    s.split(sh, x, m.lit, m.mid);
+    s.shade(sh, m.lo, 1);
+    s.rect(x - w * 0.28, y - h * 0.58, 1, 2, m.hi);
+    crossAt(s, x, y - h - 5, 5);
 }
 const PROPS = {
     /* trees */
     pine(s, x, y, k) {
-        const h = 38 * k, T = s.T;
-        s.rect(x - 1, y - h * 0.8, 2, h * 0.8, STUFF.bark);
-        s.rect(x - 1, y - h * 0.8, 1, h * 0.8, STUFF.timberLo);
+        const h = 38 * k, L = s.T.leaf;
+        s.rect(x - 1, y - h * 0.8, 2, h * 0.8, STUFF.bark.lo);
+        s.rect(x - 1, y - h * 0.8, 1, h * 0.8, STUFF.bark.mid);
         for (const [dx, dy, rx, ry] of [[-7, 9, 8, 4], [7, 6, 9, 4], [0, 0, 9, 4]])
-            s.disc(x + dx * k, y - h + dy * k, rx * k, ry * k, T.leafLo, edgeOf(T.leafLo));
-        s.rect(x - 5 * k, y - h - 2 * k, 6 * k, 1, T.leaf);
+            ball(s, x + dx * k, y - h + dy * k, rx * k, ry * k, L);
     },
     spruce(s, x, y, k) {
-        const h = 36 * k, T = s.T, n = 5, step = (h - 4 * k) / n;
-        s.rect(x - 1, y - 4 * k, 2, 4 * k, STUFF.bark);
-        for (let i = n - 1; i >= 0; i--) {
-            const top = y - h + i * step, hw = (3.2 + i * 2.2) * k;
-            s.poly([x, top, x + hw, top + step * 1.8, x - hw, top + step * 1.8], T.leafLo, edgeOf(T.leafLo));
+        const h = 36 * k, L = s.T.leaf, n = 5, step = (h - 4 * k) / n, right = [], left = [];
+        s.rect(x - 1, y - 4 * k, 2, 4 * k, STUFF.bark.mid);
+        // one silhouette of five tiers, each wider than the last, lit on its left
+        for (let i = 0; i < n; i++) {
+            const top = y - h + i * step, hw = (3.2 + i * 2.2) * k, bot = top + step * 1.6;
+            right.push(x + hw * 0.55, top + step * 0.55, x + hw, bot);
+            left.unshift(x - hw, bot, x - hw * 0.55, top + step * 0.55);
         }
+        const sh = s.shape([x, y - h, ...right, x + 1, y - 4 * k, ...left]);
+        s.split(sh, x, L[1], L[0]);
+        s.lit(sh, L[2], 1);
     },
     birch(s, x, y, k) {
-        const h = 32 * k, T = s.T, top = y - h * 0.72;
-        s.rect(x - 1, top, 2, h * 0.72, STUFF.birch);
-        s.rect(x, top, 1, h * 0.72, STUFF.wallLo);
+        const h = 32 * k, L = s.T.leaf, top = y - h * 0.72;
+        s.rect(x - 1, top, 2, h * 0.72, STUFF.birch.lit);
+        s.rect(x, top, 1, h * 0.72, STUFF.birch.lo);
         for (let i = 0; i < 5; i++)
-            s.rect(x - 1 + (i % 2), top + 3 + i * 4 * k, 1, 1, INK);
-        for (const [dx, dy, rx, ry] of [[-5, -2, 5, 5], [5, -4, 5, 6], [0, -9, 6, 6], [-3, 3, 4, 4], [4, 4, 4, 4]]) {
-            s.disc(x + dx * k + 1, top + dy * k + 2, rx * k, ry * k, T.leafLo);
-            s.disc(x + dx * k, top + dy * k, rx * k, ry * k, T.leaf);
-        }
+            s.rect(x - 1 + (i % 2), top + 3 + i * 4 * k, 1, 1, rSoot[2]);
+        for (const [dx, dy, rx, ry] of [[-5, -2, 5, 5], [5, -4, 5, 6], [0, -9, 6, 6], [-3, 3, 4, 4], [4, 4, 4, 4]])
+            ball(s, x + dx * k, top + dy * k + 2, rx * k, ry * k, L);
     },
     willow(s, x, y, k) {
-        const T = s.T, top = y - 24 * k, rx = 13 * k, ry = 8 * k;
-        s.rect(x - 2 * k, y - 14 * k, 4 * k, 14 * k, STUFF.bark);
-        s.disc(x, top + 6 * k, rx, ry, T.leaf, edgeOf(T.leaf));
+        const L = s.T.leaf, top = y - 24 * k, rx = 13 * k, ry = 8 * k;
+        s.rect(x - 2 * k, y - 14 * k, 4 * k, 14 * k, STUFF.bark.mid);
+        s.rect(x - 2 * k, y - 14 * k, 1, 14 * k, STUFF.bark.lit);
+        ball(s, x, top + 6 * k, rx, ry, L);
         for (let dx = -rx + 1; dx < rx; dx += 2) {
-            const yy = top + 6 * k + ry * Math.sqrt(1 - (dx / rx) ** 2);
-            s.rect(x + dx, yy, 1, (5 + ((dx * 7 + 91) % 5) + (Math.abs(dx) < rx * 0.6 ? 4 : 0)) * k, T.leafLo);
+            const yy = top + 6 * k + ry * Math.sqrt(1 - (dx / rx) ** 2), len = (5 + ((dx * 7 + 91) % 5) + (Math.abs(dx) < rx * 0.6 ? 4 : 0)) * k;
+            s.rect(x + dx, yy, 1, len, dx < -rx * 0.2 ? L[1] : L[0]);
+            s.rect(x + dx, yy, 1, 1, L[2]);
         }
     },
     poplar(s, x, y, k) {
-        const h = 44 * k, T = s.T, ry = (h - 5 * k) / 2;
-        s.rect(x - 1, y - 5 * k, 2, 5 * k, STUFF.bark);
-        s.disc(x, y - 5 * k - ry, 4 * k, ry, mixHex(T.leafLo, T.leaf, 0.4), edgeOf(T.leafLo));
-        s.rect(x - 2 * k, y - h + 8 * k, 1, h * 0.5, T.leaf);
+        const h = 44 * k, L = s.T.leaf, ry = (h - 5 * k) / 2;
+        s.rect(x - 1, y - 5 * k, 2, 5 * k, STUFF.bark.mid);
+        const sh = s.disc(x, y - 5 * k - ry, 4 * k, ry, L[0]);
+        s.disc(x - 1, y - 5 * k - ry - 2, 3 * k - 1, ry - 3, L[1]);
+        s.lit(sh, L[2], 1);
+        s.rect(x - 2 * k, y - h + 6 * k, 1, h * 0.4, L[2]);
     },
     oak(s, x, y, k) {
-        const T = s.T;
-        s.rect(x - 2 * k, y - 12 * k, 4 * k, 12 * k, STUFF.bark);
+        const L = s.T.leaf;
+        s.rect(x - 2 * k, y - 12 * k, 4 * k, 12 * k, STUFF.bark.mid);
+        s.rect(x - 2 * k, y - 12 * k, 1, 12 * k, STUFF.bark.lit);
         for (const [dx, dy, rx, ry] of [[-8, -14, 9, 7], [8, -15, 9, 7], [0, -21, 10, 8]])
-            s.disc(x + dx * k, y + dy * k, rx * k, ry * k, T.leafLo, edgeOf(T.leafLo));
-        s.disc(x - 2 * k, y - 22 * k, 6 * k, 4 * k, T.leaf);
+            ball(s, x + dx * k, y + dy * k, rx * k, ry * k, L);
     },
     orchard(s, x, y, k) {
-        const T = s.T;
-        s.rect(x - 1, y - 6 * k, 2, 6 * k, STUFF.bark);
-        s.disc(x, y - 11 * k, 6 * k, 6 * k, T.leaf, edgeOf(T.leaf));
+        const L = s.T.leaf;
+        s.rect(x - 1, y - 6 * k, 2, 6 * k, STUFF.bark.mid);
+        ball(s, x, y - 11 * k, 6 * k, 6 * k, L);
         for (let i = 0; i < 5; i++)
-            s.rect(x - 4 * k + ((i * 5) % 9) * k, y - 15 * k + ((i * 7) % 8) * k, 1, 1, '#f1e4de');
+            s.rect(x - 4 * k + ((i * 5) % 9) * k, y - 15 * k + ((i * 7) % 8) * k, 1, 1, i % 2 ? rBone[5] : rMadder[6]);
     },
     thorn(s, x, y, k) {
-        const T = s.T, bark = STUFF.bark, pts = [[0, 0], [1, -5], [3, -10], [6, -14], [9, -17]];
+        const L = s.T.leaf, bark = STUFF.bark.mid, pts = [[0, 0], [1, -5], [3, -10], [6, -14], [9, -17]];
         for (let i = 1; i < pts.length; i++)
             for (const o of [0, 1])
                 s.line(x + pts[i - 1][0] * k + o, y + pts[i - 1][1] * k, x + pts[i][0] * k + o, y + pts[i][1] * k, bark);
         s.line(x + 3 * k, y - 10 * k, x - 3 * k, y - 15 * k, bark);
         s.line(x + 6 * k, y - 14 * k, x + 13 * k, y - 16 * k, bark);
         for (const [dx, dy, rx, ry] of [[-3, -17, 4, 3], [4, -20, 5, 3], [11, -18, 6, 3], [17, -16, 4, 2]])
-            s.disc(x + dx * k, y + dy * k, rx * k, ry * k, T.leafLo, edgeOf(T.leafLo));
+            ball(s, x + dx * k, y + dy * k, rx * k, ry * k, L);
     },
     dead(s, x, y, k) {
-        const c = mixHex(INK, s.T.ground, 0.2);
+        const c = STUFF.bark.lo;
         s.rect(x - 1, y - 22 * k, 2, 22 * k, c);
+        s.rect(x - 1, y - 22 * k, 1, 22 * k, STUFF.bark.mid);
         for (const [a, b, d, e] of [[0, -14, -7, -21], [0, -17, 6, -23], [0, -9, 6, -13], [0, -12, -5, -14], [-5, -18, -8, -17]])
             s.line(x + a * k, y + b * k, x + d * k, y + e * k, c);
     },
-    bush(s, x, y, k) { s.disc(x, y - 3 * k, 5 * k, 3 * k, s.T.leafLo, edgeOf(s.T.leafLo)); s.rect(x - 2 * k, y - 5 * k, 3 * k, 1, s.T.leaf); },
+    bush(s, x, y, k) { ball(s, x, y - 3 * k, 5 * k, 3 * k, s.T.leaf); },
     /* what lies on the ground */
     rock(s, x, y, k) {
-        s.poly([x - 6 * k, y, x - 5 * k, y - 4 * k, x - 1 * k, y - 6 * k, x + 4 * k, y - 5 * k, x + 7 * k, y], STUFF.stone, edgeOf(STUFF.stone));
-        s.rect(x - 3 * k, y - 5 * k, 3 * k, 1, STUFF.wall);
+        const sh = s.poly([x - 6 * k, y, x - 5 * k, y - 4 * k, x - 1 * k, y - 6 * k, x + 4 * k, y - 5 * k, x + 7 * k, y], STUFF.stone.lit, OUT);
+        s.shade(sh, STUFF.stone.mid, 3);
+        s.cap(sh, rBone[3], 1);
+        s.rect(x - 4 * k, y - 1, 8 * k, 1, STUFF.stone.mid);
     },
     boulder(s, x, y, k) {
-        s.poly([x - 11 * k, y, x - 9 * k, y - 7 * k, x - 3 * k, y - 11 * k, x + 5 * k, y - 10 * k, x + 11 * k, y - 4 * k, x + 12 * k, y], STUFF.stone, edgeOf(STUFF.stone));
-        s.rect(x - 6 * k, y - 9 * k, 6 * k, 1, STUFF.wall);
-        s.rect(x + 3 * k, y - 5 * k, 6 * k, 5 * k, STUFF.stoneLo);
+        const sh = s.poly([x - 11 * k, y, x - 9 * k, y - 7 * k, x - 3 * k, y - 11 * k, x + 5 * k, y - 10 * k, x + 11 * k, y - 4 * k, x + 12 * k, y], STUFF.stone.mid, OUT);
+        s.split(sh, x, STUFF.stone.lit, STUFF.stone.mid);
+        s.shade(sh, STUFF.stone.lo, 3);
+        s.cap(sh, STUFF.stone.hi, 1);
     },
-    tuft(s, x, y, k) { const c = mixHex(s.T.mark, s.T.ground, 0.3); for (let i = -2; i <= 2; i++)
-        s.line(x + i * k, y, x + i * 1.5 * k, y - (3 + 2 - Math.abs(i)) * k, c); },
-    kovyl(s, x, y, k) {
-        const pale = mixHex(s.T.ground, '#fffbe8', 0.85), stem = mixHex(s.T.ground, INK, 0.28);
+    tuft(s, x, y, k) {
+        const L = s.T.leaf;
         for (let i = -2; i <= 2; i++) {
-            const h = (8 + 2 * (2 - Math.abs(i))) * k, tx = x + i * 2 * k, d = i < 0 ? -1 : 1;
-            s.line(x + i * k, y, tx, y - h, stem);
-            s.line(tx, y - h, tx + d * 3 * k, y - h + 3 * k, pale);
-            s.line(tx, y - h + 2, tx + d * 2 * k, y - h + 5 * k, pale);
+            const h = (3 + 2 - Math.abs(i) + (i & 1)) * k, tx = x + i * 1.5 * k;
+            s.line(x + i * k * 0.7, y, tx, y - h, i < 0 ? L[1] : L[0]);
+            s.rect(tx, y - h, 1, 1, L[2]);
+        }
+        s.rect(x - 2 * k, y, 4 * k + 1, 1, L[0]);
+    },
+    kovyl(s, x, y, k) {
+        const stem = s.T.dry;
+        for (let i = -2; i <= 2; i++) {
+            const h = (7 + 2 * (2 - Math.abs(i))) * k, tx = x + i * 1.6 * k;
+            s.line(x + i * 0.6 * k, y, tx, y - h, stem);
+            s.rect(tx, y - h, 1, 1, rBone[5]);
+            if (i & 1)
+                s.rect(tx + (i < 0 ? -1 : 1), y - h + 1, 1, 1, rBone[4]);
         }
     },
-    fern(s, x, y, k) { const c = mixHex(s.T.leafLo, s.T.ground, 0.15); for (let i = -3; i <= 3; i++)
-        s.line(x, y, x + i * 2 * k, y - (7 - Math.abs(i)) * k, c); },
+    fern(s, x, y, k) { const L = s.T.leaf; for (let i = -3; i <= 3; i++) {
+        s.line(x, y, x + i * 2 * k, y - (7 - Math.abs(i)) * k, i < 0 ? L[2] : L[1]);
+    } },
     reeds(s, x, y, k) {
+        const L = s.T.leaf;
         for (let i = -3; i <= 3; i++) {
             const h = (12 + ((i * 5 + 21) % 6)) * k;
-            s.line(x + i * 2, y, x + i * 2 + (i % 2), y - h, s.T.leafLo);
+            s.line(x + i * 2, y, x + i * 2 + (i % 2), y - h, i < 0 ? L[1] : L[0]);
             if (i % 2 === 0)
-                s.rect(x + i * 2 + (i % 2) - 1, y - h - 1, 2, 4 * k, STUFF.earth);
+                s.rect(x + i * 2 + (i % 2) - 1, y - h - 1, 2, 4 * k, STUFF.earth.lit);
         }
     },
     hay(s, x, y, k) {
-        s.disc(x, y - 6 * k, 8 * k, 7 * k, STUFF.straw, edgeOf(STUFF.straw));
-        s.rect(x - 8 * k, y - 1, 16 * k + 1, 1, INK);
-        for (let dx = -6; dx <= 6; dx += 3)
-            s.rect(x + dx * k, y - 9 * k + Math.abs(dx) * 0.5, 1, 6 * k, STUFF.thatchLo);
-        s.rect(x, y - 15 * k, 1, 4 * k, STUFF.bark);
+        const m = STUFF.straw, sh = s.poly([x - 8 * k, y, x - 7 * k, y - 5 * k, x - 3 * k, y - 11 * k, x, y - 15 * k, x + 3 * k, y - 11 * k, x + 7 * k, y - 5 * k, x + 8 * k, y], m.mid, OUT);
+        s.split(sh, x - k, m.lit, m.mid);
+        s.shade(sh, m.lo, 3);
+        s.lit(sh, m.hi, 1);
+        s.cap(sh, m.hi, 2);
+        for (let dy = 4; dy < 14; dy += 3)
+            s.rect(x - 7 * k + dy * 0.3, y - dy * k, 14 * k - dy * 0.7, 1, s.dither(null, m.dk, 6));
+        s.rect(x - 8 * k, y - 1, 16 * k + 1, 1, m.dk);
+        s.rect(x, y - 19 * k, 1, 5 * k, STUFF.bark.mid);
     },
     sheaf(s, x, y, k) {
+        const m = STUFF.straw;
         for (let i = -2; i <= 2; i++)
-            s.line(x + i * 2 * k, y, x + i * k * 0.5, y - 9 * k, STUFF.straw);
-        s.rect(x - 3 * k, y - 4 * k, 6 * k, 1, STUFF.thatchLo);
-        s.rect(x - 4 * k, y - 11 * k, 8 * k, 2, STUFF.straw);
+            s.line(x + i * 2 * k, y, x + i * k * 0.5, y - 9 * k, i < 0 ? m.lit : m.mid);
+        s.rect(x - 3 * k, y - 4 * k, 6 * k, 1, m.lo);
+        s.rect(x - 4 * k, y - 11 * k, 8 * k, 2, m.lit);
     },
     well(s, x, y, k) {
-        s.rect(x - 1, y - 16 * k, 2, 16 * k, STUFF.bark);
-        s.rect(x - 3 * k, y - 1, 7 * k, 1, INK);
-        s.line(x - 7 * k, y - 12 * k, x + 13 * k, y - 20 * k, STUFF.timberLo);
-        s.line(x - 7 * k, y - 13 * k, x + 13 * k, y - 21 * k, STUFF.timberLo);
-        s.rect(x - 9 * k, y - 12 * k, 4 * k, 3 * k, STUFF.stoneLo);
-        s.line(x + 13 * k, y - 20 * k, x + 13 * k, y - 11 * k, INK);
-        s.rect(x + 11 * k, y - 11 * k, 4 * k, 3 * k, STUFF.timberLo);
+        const b = STUFF.timber;
+        s.rect(x - 1, y - 16 * k, 2, 16 * k, b.lit);
+        s.rect(x - 3 * k, y - 1, 7 * k, 1, OUT);
+        s.line(x - 7 * k, y - 12 * k, x + 13 * k, y - 20 * k, b.mid);
+        s.line(x - 7 * k, y - 13 * k, x + 13 * k, y - 21 * k, b.lit);
+        s.rect(x - 9 * k, y - 12 * k, 4 * k, 3 * k, STUFF.stone.mid);
+        s.rect(x - 9 * k, y - 12 * k, 4 * k, 1, STUFF.stone.hi);
+        s.line(x + 13 * k, y - 20 * k, x + 13 * k, y - 11 * k, b.dk);
+        s.rect(x + 11 * k, y - 11 * k, 4 * k, 3 * k, b.mid);
+        s.rect(x + 11 * k, y - 11 * k, 4 * k, 1, b.lit);
     },
     cross(s, x, y, k) {
-        s.rect(x - 1, y - 14 * k, 2, 14 * k, STUFF.timberLo);
-        s.rect(x - 4 * k, y - 11 * k, 9 * k, 2, STUFF.timberLo);
-        s.poly([x - 3 * k, y - 14 * k, x, y - 18 * k, x + 3 * k, y - 14 * k], STUFF.shingle, INK);
+        const b = STUFF.timber;
+        s.rect(x - 2, y - 15 * k, 4, 15 * k + 1, OUT);
+        s.rect(x - 5 * k, y - 12 * k, 10 * k + 1, 4, OUT);
+        s.rect(x - 1, y - 14 * k, 2, 14 * k, b.mid);
+        s.rect(x - 4 * k, y - 11 * k, 9 * k, 2, b.mid);
+        s.rect(x - 1, y - 14 * k, 1, 14 * k, b.lit);
+        s.poly([x - 3 * k, y - 14 * k, x, y - 18 * k, x + 3 * k, y - 14 * k], STUFF.shingle.mid, OUT);
     },
     gallows(s, x, y, k) {
-        s.rect(x - 1, y - 24 * k, 2, 24 * k, INK);
-        s.rect(x - 1, y - 24 * k, 14 * k, 2, INK);
-        s.line(x, y - 18 * k, x + 7 * k, y - 24 * k, INK);
-        s.line(x + 11 * k, y - 22 * k, x + 11 * k, y - 15 * k, INK);
-        s.rect(x + 10 * k, y - 15 * k, 3 * k, 2, INK);
+        const b = STUFF.timber;
+        s.rect(x - 1, y - 24 * k, 2, 24 * k, b.dk);
+        s.rect(x - 1, y - 24 * k, 14 * k, 2, b.dk);
+        s.line(x, y - 18 * k, x + 7 * k, y - 24 * k, b.dk);
+        s.line(x + 11 * k, y - 22 * k, x + 11 * k, y - 15 * k, b.lit);
+        s.rect(x + 10 * k, y - 15 * k, 3 * k, 2, b.dk);
     },
     nest(s, x, y, k) {
-        s.rect(x - 1, y - 26 * k, 2, 26 * k, STUFF.timberLo);
-        s.disc(x, y - 27 * k, 7 * k, 3 * k, STUFF.timber, INK);
-        s.rect(x - 2 * k, y - 36 * k, 4 * k, 7 * k, STUFF.wall);
-        s.rect(x - 2 * k, y - 36 * k, 1, 7 * k, INK);
-        s.rect(x + 2 * k, y - 35 * k, 4 * k, 1, '#a24a32');
-        s.rect(x - 4 * k, y - 34 * k, 2 * k, 3 * k, INK);
+        const b = STUFF.timber;
+        s.rect(x - 1, y - 26 * k, 2, 26 * k, b.mid);
+        s.rect(x - 1, y - 26 * k, 1, 26 * k, b.lit);
+        ball(s, x, y - 27 * k, 7 * k, 3 * k, [b.lo, b.mid, b.lit], OUT);
+        s.rect(x - 2 * k, y - 36 * k, 4 * k, 7 * k, rBone[5]);
+        s.rect(x - 2 * k, y - 36 * k, 1, 7 * k, rBone[4]);
+        s.rect(x - 2 * k, y - 36 * k - 1, 4 * k + 5 * k, 1, OUT);
+        s.rect(x + 2 * k, y - 35 * k, 4 * k, 1, rMadder[4]);
+        s.rect(x - 4 * k, y - 34 * k, 2 * k, 3 * k, OUT);
     },
     /* the steppe */
     baba(s, x, y, k) {
-        const st = STUFF.stoneLo;
-        s.rect(x - 2 * k, y - 9 * k, 5 * k, 9 * k, STUFF.stone);
-        s.rect(x - 1 * k, y - 12 * k, 3 * k, 3 * k, STUFF.stone);
-        s.rect(x - 2 * k, y - 9 * k, 1, 9 * k, st);
-        s.rect(x - 1 * k, y - 12 * k, 1, 3 * k, st);
-        s.rect(x - 2 * k, y - 5 * k, 5 * k, 1, st);
-        s.rect(x - 1 * k, y - 11 * k, 1, 1, INK);
-        s.rect(x + 1 * k, y - 11 * k, 1, 1, INK);
+        const st = STUFF.stone, a = x - 2 * k, w = 5 * k;
+        s.rect(a - 1, y - 12 * k - 1, w + 2, 9 * k + 2, OUT);
+        s.rect(x - 2 * k, y - 13 * k, 3 * k + 2, 4 * k, OUT);
+        s.rect(a, y - 9 * k, w, 9 * k, st.lit);
+        s.rect(x - 1 * k, y - 12 * k, 3 * k, 3 * k, st.hi);
+        s.rect(a + w - 2, y - 9 * k, 2, 9 * k, st.mid);
+        s.rect(x + 1 * k, y - 12 * k, 1, 3 * k, st.mid);
+        s.rect(a, y - 5 * k, w, 1, st.mid);
+        s.rect(x - 1 * k, y - 11 * k, 1, 1, OUT);
+        s.rect(x + 1 * k, y - 11 * k, 1, 1, OUT);
     },
     beacon(s, x, y, k) {
-        const h = 32 * k, b = STUFF.timberLo;
+        const h = 32 * k, b = STUFF.timber;
         for (const o of [0, 1]) {
-            s.line(x - 7 * k + o, y, x - 3 * k + o, y - h * 0.78, b);
-            s.line(x + 7 * k - o, y, x + 3 * k - o, y - h * 0.78, b);
+            s.line(x - 7 * k + o, y, x - 3 * k + o, y - h * 0.78, o ? b.mid : b.lit);
+            s.line(x + 7 * k - o, y, x + 3 * k - o, y - h * 0.78, b.dk);
         }
-        s.line(x - 6 * k, y - 4 * k, x + 4 * k, y - 15 * k, b);
-        s.line(x + 6 * k, y - 4 * k, x - 4 * k, y - 15 * k, b);
-        s.line(x - 5 * k, y - 16 * k, x + 4 * k, y - 25 * k, b);
-        s.line(x + 5 * k, y - 16 * k, x - 4 * k, y - 25 * k, b);
-        s.rect(x - 6 * k, y - h * 0.78, 12 * k, 2, STUFF.timber);
-        s.poly([x - 5 * k, y - h * 0.78, x, y - h, x + 5 * k, y - h * 0.78], STUFF.shingle, INK);
-        s.rect(x + 10 * k, y - h * 0.9, 1, h * 0.9, b);
-        s.rect(x + 8 * k, y - h * 0.96, 5 * k, 5 * k, '#5a4430');
-        s.rect(x + 8 * k, y - h * 0.96, 5 * k, 1, INK);
+        s.line(x - 6 * k, y - 4 * k, x + 4 * k, y - 15 * k, b.mid);
+        s.line(x + 6 * k, y - 4 * k, x - 4 * k, y - 15 * k, b.mid);
+        s.line(x - 5 * k, y - 16 * k, x + 4 * k, y - 25 * k, b.mid);
+        s.line(x + 5 * k, y - 16 * k, x - 4 * k, y - 25 * k, b.mid);
+        s.rect(x - 7 * k, y - h * 0.78 - 1, 14 * k, 4, OUT);
+        s.rect(x - 6 * k, y - h * 0.78, 12 * k, 2, b.lit);
+        const r = s.poly([x - 5 * k, y - h * 0.78, x, y - h, x + 5 * k, y - h * 0.78], STUFF.shingle.mid, OUT);
+        s.split(r, x, STUFF.shingle.lit, STUFF.shingle.mid);
+        s.rect(x + 10 * k, y - h * 0.9, 1, h * 0.9, b.mid);
+        s.rect(x + 8 * k - 1, y - h * 0.96 - 1, 5 * k + 2, 5 * k + 2, OUT);
+        s.rect(x + 8 * k, y - h * 0.96, 5 * k, 5 * k, rMadder[3]);
+        s.rect(x + 8 * k, y - h * 0.96, 5 * k, 1, rMadder[5]);
     },
     /* houses and churches */
     khata(s, x, y, k) {
-        const w = 24 * k, h = 9 * k, rh = 8 * k, x0 = x - w / 2, roof = [x0 - 3 * k, y - h + 1, x0 + 5 * k, y - h - rh, x0 + w - 5 * k, y - h - rh, x0 + w + 3 * k, y - h + 1];
-        walls(s, x0, y, w, h, STUFF.wall);
-        s.rect(x0 + w - 4 * k, y - h, 4 * k - 1, h - 1, STUFF.wallLo);
-        s.poly(roof, STUFF.thatch, INK);
-        hatchPoly(s, roof, STUFF.thatchLo);
-        s.rect(x - 2 * k, y - 6 * k, 4 * k, 6 * k - 1, DARK);
-        s.rect(x + 6 * k, y - 7 * k, 3 * k, 3 * k, DARK);
-        s.rect(x + 7 * k, y - 7 * k, 1, 3 * k, STUFF.wall);
-        s.rect(x - 8 * k, y - h - rh - 2 * k, 3 * k, 4 * k, STUFF.wall);
-        s.rect(x - 8 * k, y - h - rh - 2 * k, 3 * k, 1, INK);
+        const w = 24 * k, h = 9 * k, rh = 8 * k, x0 = x - w / 2, m = STUFF.wall, t = STUFF.thatch;
+        wall(s, x0, y, w, h, m, 4 * k);
+        s.rect(x0 + w - 4 * k - 1, y - h, 1, h, m.mid);
+        roof(s, [x0 - 3 * k, y - h + 1, x0 + 5 * k, y - h - rh, x0 + w - 5 * k, y - h - rh, x0 + w + 3 * k, y - h + 1], t, { course: 3, lw: 2, sw: 3 });
+        win(s, x - 2 * k, y - 6 * k, 4 * k, 6 * k - 1, true);
+        win(s, x + 6 * k, y - 7 * k, 3 * k, 3 * k);
+        s.rect(x + 6 * k, y - 4 * k, 3 * k, 1, m.hi);
+        s.rect(x - 8 * k - 1, y - h - rh - 2 * k - 1, 3 * k + 2, 4 * k + 1, OUT);
+        s.rect(x - 8 * k, y - h - rh - 2 * k, 3 * k, 4 * k, m.lit);
+        s.rect(x - 8 * k + 3 * k - 1, y - h - rh - 2 * k, 1, 4 * k, m.lo);
     },
     cottage(s, x, y, k) {
-        const w = 18 * k, h = 8 * k, rh = 10 * k, x0 = x - w / 2, roof = [x0 - 2 * k, y - h + 1, x, y - h - rh, x0 + w + 2 * k, y - h + 1];
-        walls(s, x0, y, w, h, STUFF.wall);
-        s.poly(roof, STUFF.thatch, INK);
-        hatchPoly(s, roof, STUFF.thatchLo);
-        s.rect(x - 2 * k, y - 6 * k, 4 * k, 5 * k, DARK);
-        s.rect(x + 4 * k, y - 6 * k, 3 * k, 3 * k, DARK);
-        s.rect(x + 6 * k, y - h - rh + 3 * k, 3 * k, 5 * k, STUFF.wall);
-        s.rect(x + 6 * k, y - h - rh + 3 * k, 3 * k, 1, INK);
+        const w = 18 * k, h = 8 * k, rh = 10 * k, x0 = x - w / 2, m = STUFF.wall;
+        wall(s, x0, y, w, h, m, 3 * k);
+        roof(s, [x0 - 2 * k, y - h + 1, x, y - h - rh, x0 + w + 2 * k, y - h + 1], STUFF.thatch, { course: 3, lw: 1, sw: 3, split: x });
+        win(s, x - 2 * k, y - 6 * k, 4 * k, 5 * k, true);
+        win(s, x + 4 * k, y - 6 * k, 3 * k, 3 * k);
+        s.rect(x + 6 * k - 1, y - h - rh + 3 * k - 1, 3 * k + 2, 5 * k + 1, OUT);
+        s.rect(x + 6 * k, y - h - rh + 3 * k, 3 * k, 5 * k, m.lit);
+        s.rect(x + 8 * k, y - h - rh + 3 * k, 1, 5 * k, m.lo);
     },
     logHut(s, x, y, k) {
-        const w = 18 * k, h = 8 * k, rh = 11 * k, x0 = x - w / 2, roof = [x0 - 2 * k, y - h + 1, x, y - h - rh, x0 + w + 2 * k, y - h + 1];
-        walls(s, x0, y, w, h, STUFF.timber);
+        const w = 18 * k, h = 8 * k, rh = 11 * k, x0 = x - w / 2, b = STUFF.timber;
+        wall(s, x0, y, w, h, b, 3 * k);
         for (let ly = y - h + 2; ly < y - 1; ly += 2)
-            s.rect(x0 + 1, ly, w - 2, 1, STUFF.timberLo);
-        s.poly(roof, STUFF.thatch, INK);
-        hatchPoly(s, roof, STUFF.thatchLo, 3);
-        s.rect(x - 2 * k, y - 6 * k, 4 * k, 5 * k, INK);
-        s.rect(x + 4 * k, y - 6 * k, 3 * k, 3 * k, INK);
+            s.rect(x0 + 1, ly, w - 2, 1, b.lo);
+        roof(s, [x0 - 2 * k, y - h + 1, x, y - h - rh, x0 + w + 2 * k, y - h + 1], STUFF.thatch, { course: 3, lw: 1, sw: 3, split: x });
+        win(s, x - 2 * k, y - 6 * k, 4 * k, 5 * k, true);
+        win(s, x + 4 * k, y - 6 * k, 3 * k, 3 * k);
     },
     halfTimber(s, x, y, k) {
-        const w = 22 * k, h = 13 * k, x0 = x - w / 2, t = STUFF.timberLo, roof = [x0 - 2 * k, y - h + 1, x, y - h - 13 * k, x0 + w + 2 * k, y - h + 1];
-        s.rect(x0, y - h, w, h, STUFF.wall);
+        const w = 22 * k, h = 13 * k, x0 = x - w / 2, t = STUFF.timber.mid, m = STUFF.wall;
+        wall(s, x0, y, w, h, m, 4 * k);
         for (const px of [0, w / 3, 2 * w / 3, w - 1])
             s.rect(x0 + px, y - h, 1, h, t);
         for (const py of [h, h / 2, 1])
@@ -431,322 +891,348 @@ const PROPS = {
         s.line(x0, y - h / 2, x0 + w / 3, y - h, t);
         s.line(x0 + w, y - h / 2, x0 + 2 * w / 3, y - h, t);
         s.line(x0 + w / 3, y - 1, x0 + 2 * w / 3, y - h / 2, t);
-        s.poly(roof, STUFF.tile, INK);
-        hatchPoly(s, roof, STUFF.tileLo, 2);
-        s.rect(x - 2 * k, y - 6 * k, 4 * k, 5 * k, DARK);
-        s.rect(x - 8 * k, y - 10 * k, 3 * k, 3 * k, DARK);
-        s.rect(x + 5 * k, y - 10 * k, 3 * k, 3 * k, DARK);
-        s.rect(x - 1 * k, y - h - 7 * k, 3 * k, 3 * k, DARK);
-        s.rect(x + 6 * k, y - h - 11 * k, 3 * k, 6 * k, STUFF.brick);
+        s.rect(x + 6 * k - 1, y - h - 11 * k - 1, 3 * k + 2, 6 * k + 1, OUT);
+        s.rect(x + 6 * k, y - h - 11 * k, 3 * k, 6 * k, STUFF.brick.mid);
+        s.rect(x + 6 * k, y - h - 11 * k, 1, 6 * k, STUFF.brick.lit);
+        roof(s, [x0 - 2 * k, y - h + 1, x, y - h - 13 * k, x0 + w + 2 * k, y - h + 1], STUFF.tile, { course: 2, lw: 1, sw: 2, split: x });
+        win(s, x - 2 * k, y - 6 * k, 4 * k, 5 * k, true);
+        win(s, x - 8 * k, y - 10 * k, 3 * k, 3 * k);
+        win(s, x + 5 * k, y - 10 * k, 3 * k, 3 * k);
+        win(s, x - 1 * k, y - h - 7 * k, 3 * k, 3 * k);
     },
     manor(s, x, y, k) {
-        const w = 38 * k, h = 11 * k, x0 = x - w / 2, roof = [x0 - 2 * k, y - h + 1, x0 + 6 * k, y - h - 9 * k, x0 + w - 6 * k, y - h - 9 * k, x0 + w + 2 * k, y - h + 1];
-        walls(s, x0, y, w, h, STUFF.wall);
-        s.poly(roof, STUFF.tile, INK);
-        hatchPoly(s, roof, STUFF.tileLo, 3);
-        for (const dx of [-14, -8, 8, 14]) {
-            s.rect(x + dx * k - k, y - 8 * k, 3 * k, 4 * k, DARK);
-            s.rect(x + dx * k, y - 8 * k, 1, 4 * k, STUFF.wall);
-        }
+        const w = 38 * k, h = 11 * k, x0 = x - w / 2, m = STUFF.wall;
+        wall(s, x0, y, w, h, m, 4 * k);
+        roof(s, [x0 - 2 * k, y - h + 1, x0 + 6 * k, y - h - 9 * k, x0 + w - 6 * k, y - h - 9 * k, x0 + w + 2 * k, y - h + 1], STUFF.tile, { course: 3, lw: 1, sw: 3, split: x });
+        for (const dx of [-14, -8, 8, 14])
+            win(s, x + dx * k - k, y - 8 * k, 3 * k, 4 * k);
         for (const dx of [-4, -1, 2, 5])
-            s.rect(x + dx * k, y - 7 * k, 1, 6 * k, STUFF.wallLo);
-        s.poly([x - 6 * k, y - h, x, y - h - 6 * k, x + 6 * k, y - h], STUFF.wall, INK);
-        s.rect(x - 1 * k, y - 6 * k, 3 * k, 5 * k, DARK);
-        s.rect(x + 10 * k, y - h - 11 * k, 3 * k, 4 * k, STUFF.wall);
+            s.rect(x + dx * k, y - 7 * k, 1, 6 * k, m.mid);
+        const g = s.poly([x - 6 * k, y - h, x, y - h - 6 * k, x + 6 * k, y - h], m.lit, OUT);
+        s.shade(g, m.lo, 2);
+        win(s, x - 1 * k, y - 6 * k, 3 * k, 5 * k, true);
+        s.rect(x + 10 * k - 1, y - h - 11 * k - 1, 3 * k + 2, 4 * k + 1, OUT);
+        s.rect(x + 10 * k, y - h - 11 * k, 3 * k, 4 * k, m.lit);
+        s.rect(x + 12 * k, y - h - 11 * k, 1, 4 * k, m.lo);
     },
     church(s, x, y, k) {
-        const nave = [x - 22 * k, y - 11 * k, x - 17 * k, y - 17 * k, x + 2 * k, y - 17 * k, x + 7 * k, y - 11 * k], spire = [x + 4 * k, y - 26 * k, x + 9.5 * k, y - 46 * k, x + 15 * k, y - 26 * k];
-        walls(s, x - 20 * k, y, 25 * k, 11 * k, STUFF.wall);
-        s.poly(nave, STUFF.tile, INK);
-        hatchPoly(s, nave, STUFF.tileLo, 3);
+        const m = STUFF.wall;
+        wall(s, x - 20 * k, y, 25 * k, 11 * k, m, 3 * k);
+        roof(s, [x - 22 * k, y - 11 * k, x - 17 * k, y - 17 * k, x + 2 * k, y - 17 * k, x + 7 * k, y - 11 * k], STUFF.tile, { course: 3, lw: 1, sw: 2, split: x - 10 * k });
         for (const dx of [-16, -11, -6])
-            s.rect(x + dx * k, y - 8 * k, 2 * k, 5 * k, DARK);
-        walls(s, x + 5 * k, y, 9 * k, 26 * k, STUFF.wall);
-        s.rect(x + 12 * k, y - 26 * k, 2 * k, 26 * k, STUFF.wallLo);
-        s.rect(x + 8 * k, y - 22 * k, 3 * k, 5 * k, DARK);
-        s.disc(x + 9.5 * k, y - 12 * k, 2 * k, 2 * k, STUFF.wall, INK);
-        s.poly(spire, STUFF.shingle, INK);
-        hatchPoly(s, spire, mixHex(STUFF.shingle, INK, 0.4), 2, 3);
-        s.rect(x + 9.5 * k, y - 54 * k, 1, 8 * k, INK);
-        s.rect(x + 8 * k, y - 52 * k, 4 * k, 1, INK);
+            win(s, x + dx * k, y - 8 * k, 2 * k, 5 * k);
+        wall(s, x + 5 * k, y, 9 * k, 26 * k, m, 3 * k);
+        win(s, x + 8 * k, y - 22 * k, 3 * k, 5 * k);
+        s.disc(x + 9.5 * k, y - 12 * k, 2 * k, 2 * k, m.hi, OUT);
+        const sp = s.poly([x + 4 * k, y - 26 * k, x + 9.5 * k, y - 46 * k, x + 15 * k, y - 26 * k], STUFF.shingle.mid, OUT);
+        s.split(sp, x + 9.5 * k, STUFF.shingle.lit, STUFF.shingle.mid);
+        s.shade(sp, STUFF.shingle.lo, 2);
+        s.courses(sp, s.dither(null, STUFF.shingle.lo, 6), 3, 3);
+        crossAt(s, x + 9.5 * k, y - 54 * k, 8);
     },
     orthodox(s, x, y, k) {
-        const log = STUFF.timber, lo = STUFF.timberLo, roof = STUFF.shingle;
+        const log = STUFF.timber, domeM = STUFF.shingle;
         const bay = (cx, w, h, ridge) => {
-            walls(s, cx - w / 2, y, w, h, log);
+            wall(s, cx - w / 2, y, w, h, log, 2);
             for (let ly = y - h + 3; ly < y - 1; ly += 3)
-                s.rect(cx - w / 2 + 1, ly, w - 2, 1, lo);
-            s.poly([cx - w / 2 - 2, y - h, cx, y - h - ridge, cx + w / 2 + 2, y - h], roof, INK);
-            s.disc(cx, y - h - ridge - 2 * k, 2.5 * k, 3 * k, STUFF.thatch, INK);
-            s.rect(cx, y - h - ridge - 8 * k, 1, 4 * k, INK);
-            s.rect(cx - 1 * k, y - h - ridge - 6 * k, 3 * k, 1, INK);
+                s.rect(cx - w / 2 + 1, ly, w - 2, 1, log.lo);
+            const r = s.poly([cx - w / 2 - 2, y - h, cx, y - h - ridge, cx + w / 2 + 2, y - h], domeM.mid, OUT);
+            s.split(r, cx, domeM.lit, domeM.mid);
+            dome(s, cx, y - h - ridge + 2 * k, 5 * k + 2, 7 * k, STUFF.shingle);
         };
         bay(x - 12 * k, 8 * k, 9 * k, 6 * k);
         bay(x + 12 * k, 8 * k, 9 * k, 6 * k);
         bay(x, 14 * k, 14 * k, 12 * k);
-        s.rect(x - 2 * k, y - 6 * k, 4 * k, 6 * k, INK);
+        win(s, x - 2 * k, y - 6 * k, 4 * k, 6 * k, true);
     },
     chapel(s, x, y, k) {
-        const roof = [x - 8 * k, y - 8 * k, x, y - 17 * k, x + 8 * k, y - 8 * k];
-        walls(s, x - 6 * k, y, 12 * k, 8 * k, STUFF.timber);
+        const b = STUFF.timber;
+        wall(s, x - 6 * k, y, 12 * k, 8 * k, b, 2);
         for (let ly = y - 6 * k; ly < y - 1; ly += 2)
-            s.rect(x - 6 * k + 1, ly, 12 * k - 2, 1, STUFF.timberLo);
-        s.poly(roof, STUFF.shingle, INK);
-        hatchPoly(s, roof, mixHex(STUFF.shingle, INK, 0.4), 2, 2);
-        s.disc(x, y - 19 * k, 2 * k, 2.5 * k, STUFF.shingle, INK);
-        s.rect(x, y - 26 * k, 1, 4 * k, INK);
-        s.rect(x - 1 * k, y - 24 * k, 3 * k, 1, INK);
-        s.rect(x - 1 * k, y - 5 * k, 3 * k, 5 * k, INK);
+            s.rect(x - 6 * k + 1, ly, 12 * k - 2, 1, b.lo);
+        roof(s, [x - 8 * k, y - 8 * k, x, y - 17 * k, x + 8 * k, y - 8 * k], STUFF.shingle, { course: 2, lw: 1, sw: 2, split: x });
+        dome(s, x, y - 17 * k + 2, 4 * k + 2, 5 * k, STUFF.shingle);
+        win(s, x - 1 * k, y - 5 * k, 3 * k, 5 * k, true);
     },
     brickChurch(s, x, y, k) {
-        const nave = [x - 30 * k, y - 14 * k, x - 26 * k, y - 22 * k, x - 6 * k, y - 22 * k, x - 2 * k, y - 14 * k], spire = [x - 7 * k, y - 36 * k, x, y - 56 * k, x + 7 * k, y - 36 * k];
-        walls(s, x - 28 * k, y, 26 * k, 14 * k, STUFF.brick);
+        const m = STUFF.brick;
+        wall(s, x - 28 * k, y, 26 * k, 14 * k, m, 4 * k);
         for (let bx = -24; bx < -4; bx += 5) {
-            s.rect(x + bx * k, y - 14 * k, 1, 14 * k, STUFF.brickLo);
-            s.rect(x + (bx + 2) * k, y - 10 * k, 2 * k, 6 * k, '#4a3a30');
+            s.rect(x + bx * k, y - 14 * k, 1, 14 * k, m.lo);
+            win(s, x + (bx + 2) * k, y - 10 * k, 2 * k, 6 * k);
         }
-        s.poly(nave, STUFF.tileLo, INK);
-        hatchPoly(s, nave, mixHex(STUFF.tileLo, INK, 0.4), 3);
-        walls(s, x - 5 * k, y, 10 * k, 36 * k, STUFF.brick);
-        s.rect(x + 2 * k, y - 36 * k, 3 * k, 36 * k, STUFF.brickLo);
-        s.rect(x - 2 * k, y - 32 * k, 3 * k, 8 * k, '#4a3a30');
-        s.rect(x - 2 * k, y - 18 * k, 3 * k, 6 * k, '#4a3a30');
-        s.poly(spire, STUFF.shingle, INK);
-        hatchPoly(s, spire, mixHex(STUFF.shingle, INK, 0.4), 2, 3);
-        s.rect(x, y - 64 * k, 1, 8 * k, INK);
+        roof(s, [x - 30 * k, y - 14 * k, x - 26 * k, y - 22 * k, x - 6 * k, y - 22 * k, x - 2 * k, y - 14 * k], STUFF.shingle, { course: 3, lw: 1, sw: 2, split: x - 16 * k });
+        wall(s, x - 5 * k, y, 10 * k, 36 * k, m, 3 * k);
+        win(s, x - 2 * k, y - 32 * k, 3 * k, 8 * k);
+        win(s, x - 2 * k, y - 18 * k, 3 * k, 6 * k);
+        const sp = s.poly([x - 7 * k, y - 36 * k, x, y - 56 * k, x + 7 * k, y - 36 * k], STUFF.shingle.mid, OUT);
+        s.split(sp, x, STUFF.shingle.lit, STUFF.shingle.mid);
+        s.shade(sp, STUFF.shingle.lo, 2);
+        s.courses(sp, s.dither(null, STUFF.shingle.lo, 6), 3, 3);
+        crossAt(s, x, y - 64 * k, 8);
     },
     windmill(s, x, y, k) {
-        const my = y - 22 * k, b = STUFF.timberLo;
-        s.rect(x - 1, y - 14 * k, 2, 14 * k, b);
-        s.line(x - 7 * k, y, x - 1, y - 9 * k, b);
-        s.line(x + 7 * k, y, x + 1, y - 9 * k, b);
-        s.poly([x - 6 * k, my + 9 * k, x - 4 * k, my - 6 * k, x + 4 * k, my - 6 * k, x + 6 * k, my + 9 * k], STUFF.timber, INK);
-        s.poly([x - 5 * k, my - 6 * k, x, my - 12 * k, x + 5 * k, my - 6 * k], STUFF.shingle, INK);
+        const my = y - 22 * k, b = STUFF.timber;
+        s.rect(x - 1, y - 14 * k, 2, 14 * k, b.lo);
+        s.line(x - 7 * k, y, x - 1, y - 9 * k, b.mid);
+        s.line(x + 7 * k, y, x + 1, y - 9 * k, b.lo);
+        const body = s.poly([x - 6 * k, my + 9 * k, x - 4 * k, my - 6 * k, x + 4 * k, my - 6 * k, x + 6 * k, my + 9 * k], b.mid, OUT);
+        s.split(body, x - k, b.lit, b.mid);
+        s.shade(body, b.lo, 2);
+        for (let ly = my - 3 * k; ly < my + 9 * k; ly += 3)
+            s.rect(x - 4 * k, ly, 8 * k, 1, s.dither(null, b.lo, 5));
+        const cap = s.poly([x - 5 * k, my - 6 * k, x, my - 12 * k, x + 5 * k, my - 6 * k], STUFF.thatch.mid, OUT);
+        s.split(cap, x, STUFF.thatch.lit, STUFF.thatch.mid);
         sails(s, x, my, 26 * k, k, 0.5 + s.r() * 0.5);
     },
     towerMill(s, x, y, k) {
-        const body = [x - 8 * k, y, x - 5 * k, y - 26 * k, x + 5 * k, y - 26 * k, x + 8 * k, y], hy = y - 28 * k;
-        s.poly(body, STUFF.wall, INK);
-        s.poly([x + 2 * k, y - 26 * k, x + 5 * k, y - 26 * k, x + 8 * k, y, x + 3 * k, y], STUFF.wallLo);
-        s.poly([x - 6 * k, y - 26 * k, x - 3 * k, y - 32 * k, x + 3 * k, y - 32 * k, x + 6 * k, y - 26 * k], STUFF.shingle, INK);
-        s.rect(x - 1 * k, y - 6 * k, 3 * k, 6 * k, INK);
-        s.rect(x - 1 * k, y - 18 * k, 2 * k, 3 * k, INK);
+        const m = STUFF.wall, hy = y - 28 * k, body = s.poly([x - 8 * k, y, x - 5 * k, y - 26 * k, x + 5 * k, y - 26 * k, x + 8 * k, y], m.lit, OUT);
+        s.shade(body, m.lo, 3 * k);
+        s.lit(body, m.hi, 1);
+        const cap = s.poly([x - 6 * k, y - 26 * k, x - 3 * k, y - 32 * k, x + 3 * k, y - 32 * k, x + 6 * k, y - 26 * k], STUFF.shingle.mid, OUT);
+        s.split(cap, x - k, STUFF.shingle.lit, STUFF.shingle.mid);
+        win(s, x - 1 * k, y - 6 * k, 3 * k, 6 * k, true);
+        win(s, x - 1 * k, y - 18 * k, 2 * k, 3 * k);
         sails(s, x, hy, 24 * k, k, 0.35 + s.r() * 0.6);
     },
     castle(s, x, y, k) {
-        const wall = (x0, w, h) => {
-            walls(s, x0, y, w, h, STUFF.stone);
-            for (let mx = x0; mx < x0 + w - 1; mx += 3 * k) {
-                s.rect(mx, y - h - 2 * k, 2 * k, 2 * k, STUFF.stone);
-                s.rect(mx, y - h - 2 * k, 2 * k, 1, INK);
-            }
-        };
+        const m = STUFF.lime;
+        const bat = (x0, w, h) => { for (let mx = x0; mx < x0 + w - 1; mx += 3 * k) {
+            s.rect(mx - 1, y - h - 2 * k - 1, 2 * k + 2, 2 * k + 1, OUT);
+            s.rect(mx, y - h - 2 * k, 2 * k, 2 * k, m.lit);
+        } };
+        const curtain = (x0, w, h) => { bat(x0, w, h); wall(s, x0, y, w, h, m, 0); };
         const tower = (cx, w, h, cone) => {
-            const c = [cx - w / 2 - 1, y - h, cx, y - h - cone, cx + w / 2 + 1, y - h];
-            walls(s, cx - w / 2, y, w, h, STUFF.stone);
-            s.rect(cx + w / 4, y - h, w / 4, h, STUFF.stoneLo);
-            s.poly(c, STUFF.tile, INK);
-            hatchPoly(s, c, STUFF.tileLo, 2, 2);
-            s.rect(cx - 1, y - h + 4 * k, 2, 4 * k, INK);
+            wall(s, cx - w / 2, y, w, h, m, w / 4);
+            roof(s, [cx - w / 2 - 1, y - h, cx, y - h - cone, cx + w / 2 + 1, y - h], STUFF.tile, { course: 2, lw: 1, sw: 2, split: cx });
+            win(s, cx - 1, y - h + 4 * k, 2, 4 * k);
         };
-        wall(x - 30 * k, 60 * k, 12 * k);
+        curtain(x - 30 * k, 60 * k, 12 * k);
         tower(x - 30 * k, 10 * k, 24 * k, 10 * k);
         tower(x + 30 * k, 10 * k, 24 * k, 10 * k);
         tower(x, 14 * k, 32 * k, 14 * k);
-        s.rect(x - 14 * k, y - 8 * k, 4 * k, 6 * k, INK);
-        s.rect(x + 8 * k, y - 8 * k, 4 * k, 6 * k, INK);
+        win(s, x - 14 * k, y - 8 * k, 4 * k, 6 * k, true);
+        win(s, x + 8 * k, y - 8 * k, 4 * k, 6 * k, true);
     },
     cityWall(s, x, y, k) {
-        const w = 170 * k, x0 = x - w / 2;
+        const w = 170 * k, x0 = x - w / 2, m = STUFF.lime;
         for (const dx of [-0.3, 0, 0.32]) {
             const cx = x + dx * w;
-            s.rect(cx - 5 * k, y - 26 * k, 10 * k, 14 * k, STUFF.wall);
-            s.rect(cx - 5 * k, y - 26 * k, 1, 14 * k, INK);
-            s.disc(cx, y - 30 * k, 4 * k, 5 * k, STUFF.thatch, INK);
-            s.rect(cx, y - 40 * k, 1, 4 * k, INK);
+            wall(s, cx - 5 * k, y - 12 * k, 10 * k, 14 * k, m, 3 * k);
+            dome(s, cx, y - 26 * k, 8 * k, 9 * k, STUFF.thatch);
+            s.rect(cx - 1, y - 40 * k, 1, 4 * k, rBronze[5]);
         }
-        s.rect(x0, y - 14 * k, w, 14 * k, STUFF.wall);
-        s.rect(x0, y - 14 * k, w, 1, INK);
-        s.rect(x0, y - 1, w, 1, INK);
         for (let mx = x0; mx < x0 + w; mx += 4 * k) {
-            s.rect(mx, y - 17 * k, 2 * k, 3 * k, STUFF.wall);
-            s.rect(mx, y - 17 * k, 2 * k, 1, INK);
-            s.rect(mx, y - 17 * k, 1, 3 * k, INK);
+            s.rect(mx - 1, y - 17 * k - 1, 2 * k + 2, 3 * k + 1, OUT);
+            s.rect(mx, y - 17 * k, 2 * k, 3 * k, m.lit);
         }
+        wall(s, x0, y, w, 14 * k, m, 0);
         for (let i = 0; i <= 6; i++) {
-            const cx = x0 + 8 * k + i * (w - 16 * k) / 6, h = (i === 3 ? 34 : 24 + (i % 2) * 4) * k, wd = (i === 3 ? 14 : 10) * k, cone = [cx - wd / 2 - 1, y - h, cx, y - h - 11 * k, cx + wd / 2 + 1, y - h];
-            walls(s, cx - wd / 2, y, wd, h, STUFF.wall);
-            s.rect(cx + wd / 4, y - h, wd / 4, h, STUFF.wallLo);
-            s.poly(cone, STUFF.shingle, INK);
-            hatchPoly(s, cone, mixHex(STUFF.shingle, INK, 0.4), 2, 2);
-            s.rect(cx - 1, y - h + 4 * k, 2, 5 * k, INK);
+            const cx = x0 + 8 * k + i * (w - 16 * k) / 6, h = (i === 3 ? 34 : 24 + (i % 2) * 4) * k, wd = (i === 3 ? 14 : 10) * k;
+            wall(s, cx - wd / 2, y, wd, h, m, wd / 4);
+            roof(s, [cx - wd / 2 - 1, y - h, cx, y - h - 11 * k, cx + wd / 2 + 1, y - h], i % 2 ? STUFF.tile : STUFF.shingle, { course: 2, lw: 1, sw: 2, split: cx });
+            win(s, cx - 1, y - h + 4 * k, 2, 5 * k);
         }
-        s.rect(x - 4 * k, y - 9 * k, 8 * k, 9 * k, INK);
+        win(s, x - 4 * k, y - 9 * k, 8 * k, 9 * k, true);
     },
     ruin(s, x, y, k) {
-        const c = '#3b3530', w = 22 * k;
-        s.poly([x - w / 2, y, x - w / 2, y - 9 * k, x - w / 2 + 4 * k, y - 7 * k, x - w / 2 + 7 * k, y - 11 * k, x - w / 2 + 10 * k, y - 5 * k, x - 1 * k, y - 6 * k, x - 1 * k, y], STUFF.wallLo, INK);
-        s.poly([x + 3 * k, y, x + 3 * k, y - 7 * k, x + 8 * k, y - 4 * k, x + 11 * k, y - 8 * k, x + 11 * k, y], STUFF.wallLo, INK);
-        s.rect(x + 12 * k, y - 16 * k, 4 * k, 16 * k, STUFF.brick);
-        s.rect(x + 12 * k, y - 16 * k, 1, 16 * k, INK);
-        s.rect(x + 12 * k, y - 16 * k, 4 * k, 1, INK);
+        const m = STUFF.lime, c = STUFF.timber.dk, w = 22 * k;
+        const a = s.poly([x - w / 2, y, x - w / 2, y - 9 * k, x - w / 2 + 4 * k, y - 7 * k, x - w / 2 + 7 * k, y - 11 * k, x - w / 2 + 10 * k, y - 5 * k, x - 1 * k, y - 6 * k, x - 1 * k, y], m.lit, OUT);
+        s.shade(a, m.lo, 3);
+        s.lit(a, m.hi, 1);
+        const b = s.poly([x + 3 * k, y, x + 3 * k, y - 7 * k, x + 8 * k, y - 4 * k, x + 11 * k, y - 8 * k, x + 11 * k, y], m.lit, OUT);
+        s.shade(b, m.lo, 3);
+        s.rect(x + 12 * k - 1, y - 16 * k - 1, 4 * k + 2, 16 * k + 1, OUT);
+        s.rect(x + 12 * k, y - 16 * k, 4 * k, 16 * k, STUFF.brick.mid);
+        s.rect(x + 12 * k, y - 16 * k, 1, 16 * k, STUFF.brick.lit);
+        s.rect(x + 12 * k, y - 16 * k, 4 * k, 1, STUFF.brick.dk);
         s.line(x - 8 * k, y - 8 * k, x + 2 * k, y - 15 * k, c);
         s.line(x - 4 * k, y - 9 * k, x + 6 * k, y - 13 * k, c);
         s.line(x + 2 * k, y - 15 * k, x + 7 * k, y - 8 * k, c);
     },
     /* the camp before Smolensk */
     tent(s, x, y, k) {
-        s.poly([x - 9 * k, y, x, y - 13 * k, x + 9 * k, y], STUFF.wall, INK);
-        s.poly([x, y - 13 * k, x + 9 * k, y, x + 3 * k, y], STUFF.wallLo);
-        s.poly([x - 2 * k, y, x, y - 7 * k, x + 2 * k, y], '#3a342e');
-        s.rect(x, y - 19 * k, 1, 6 * k, INK);
-        s.rect(x + 1, y - 19 * k, 5 * k, 3 * k, PAL.red);
+        const m = STUFF.wall, sh = s.poly([x - 9 * k, y, x, y - 13 * k, x + 9 * k, y], m.lit, OUT);
+        s.split(sh, x, m.lit, m.lo);
+        s.lit(sh, m.hi, 1);
+        s.cap(sh, m.hi, 2);
+        s.poly([x - 2 * k, y, x, y - 7 * k, x + 2 * k, y], DARK);
+        s.rect(x, y - 19 * k, 1, 6 * k, OUT);
+        s.rect(x + 1, y - 19 * k, 5 * k, 3 * k, rMadder[3]);
+        s.rect(x + 1, y - 19 * k, 5 * k, 1, rMadder[5]);
     },
     cannon(s, x, y, k) {
-        s.rect(x - 9 * k, y - 8 * k, 15 * k, 3 * k, '#3c3f42');
-        s.rect(x - 9 * k, y - 8 * k, 15 * k, 1, '#6a6d70');
-        s.rect(x - 11 * k, y - 9 * k, 3 * k, 5 * k, '#3c3f42');
-        s.rect(x - 7 * k, y - 5 * k, 10 * k, 3 * k, STUFF.timber);
-        s.disc(x - 2 * k, y - 4 * k, 4 * k, 4 * k, STUFF.timberLo, INK);
-        s.disc(x - 2 * k, y - 4 * k, 1 * k, 1 * k, INK);
+        const st = STUFF.stone, b = STUFF.timber;
+        s.rect(x - 11 * k - 1, y - 9 * k - 1, 18 * k + 2, 6 * k + 2, OUT);
+        s.rect(x - 9 * k, y - 8 * k, 15 * k, 3 * k, st.lo);
+        s.rect(x - 9 * k, y - 8 * k, 15 * k, 1, st.lit);
+        s.rect(x - 11 * k, y - 9 * k, 3 * k, 5 * k, st.mid);
+        s.rect(x - 7 * k, y - 5 * k, 10 * k, 3 * k, b.mid);
+        s.rect(x - 7 * k, y - 5 * k, 10 * k, 1, b.lit);
+        s.disc(x - 2 * k, y - 4 * k, 4 * k, 4 * k, b.lo, OUT);
+        s.disc(x - 2 * k, y - 4 * k, 1 * k, 1 * k, OUT);
     },
     gabions(s, x, y, k) {
+        const e = STUFF.earth, w = STUFF.straw;
         for (let i = 0; i < 4; i++) {
             const gx = x + i * 7 * k;
-            walls(s, gx, y, 6 * k, 7 * k, STUFF.earth);
-            s.rect(gx, y - 7 * k, 6 * k, 1, INK);
+            wall(s, gx, y, 6 * k, 7 * k, w, 1);
+            s.rect(gx, y - 7 * k - 1, 6 * k, 2, e.mid);
+            s.rect(gx, y - 7 * k - 1, 6 * k, 1, e.lit);
             for (let dy = 2; dy < 7; dy += 2)
-                s.rect(gx + 1, y - dy * k, 6 * k - 2, 1, STUFF.timberLo);
+                s.rect(gx + 1, y - dy * k, 6 * k - 2, 1, w.lo);
         }
     },
     /* the water, the smoke and the farms */
     ship(s, x, y, k) {
-        s.poly([x - 11 * k, y - 4 * k, x + 11 * k, y - 4 * k, x + 8 * k, y, x - 8 * k, y], STUFF.timber, INK);
+        const b = STUFF.timber, m = STUFF.wall;
+        const hull = s.poly([x - 11 * k, y - 4 * k, x + 11 * k, y - 4 * k, x + 8 * k, y, x - 8 * k, y], b.mid, OUT);
+        s.cap(hull, b.lit, 1);
+        s.shade(hull, b.lo, 2);
         for (const dx of [-5, 3]) {
-            s.rect(x + dx * k, y - 22 * k, 1, 18 * k, INK);
-            s.poly([x + dx * k + 1, y - 21 * k, x + dx * k + 8 * k, y - 18 * k, x + dx * k + 8 * k, y - 8 * k, x + dx * k + 1, y - 7 * k], STUFF.wall, INK);
+            s.rect(x + dx * k, y - 22 * k, 1, 18 * k, OUT);
+            const sl = s.poly([x + dx * k + 1, y - 21 * k, x + dx * k + 8 * k, y - 18 * k, x + dx * k + 8 * k, y - 8 * k, x + dx * k + 1, y - 7 * k], m.lit, OUT);
+            s.shade(sl, m.lo, 3);
         }
     },
     barge(s, x, y, k) {
-        s.poly([x - 14 * k, y - 3 * k, x + 14 * k, y - 3 * k, x + 11 * k, y, x - 11 * k, y], STUFF.timberLo, INK);
-        s.rect(x - 2 * k, y - 18 * k, 1, 15 * k, INK);
-        s.poly([x - 1 * k, y - 17 * k, x + 8 * k, y - 15 * k, x + 8 * k, y - 6 * k, x - 1 * k, y - 5 * k], STUFF.thatchLo, INK);
+        const b = STUFF.timber, hull = s.poly([x - 14 * k, y - 3 * k, x + 14 * k, y - 3 * k, x + 11 * k, y, x - 11 * k, y], b.lo, OUT);
+        s.cap(hull, b.mid, 1);
+        s.rect(x - 2 * k, y - 18 * k, 1, 15 * k, OUT);
+        const sl = s.poly([x - 1 * k, y - 17 * k, x + 8 * k, y - 15 * k, x + 8 * k, y - 6 * k, x - 1 * k, y - 5 * k], STUFF.straw.mid, OUT);
+        s.shade(sl, STUFF.straw.lo, 3);
     },
     smoke(s, x, y, k) {
+        const m = STUFF.smoke;
         for (let i = 0; i < 9; i++) {
-            const sway = Math.sin(i * 0.8) * 3 * k + i * 1.2 * k;
-            s.disc(x + sway, y - i * 7 * k, (3 + i * 0.9) * k, (3 + i * 0.7) * k, i < 3 ? mixHex(STUFF.smoke, INK, 0.35) : STUFF.smoke);
+            const sway = Math.sin(i * 0.8) * 3 * k + i * 1.2 * k, rx = (3 + i * 0.9) * k, ry = (3 + i * 0.7) * k, cy = y - i * 7 * k, cx = x + sway;
+            s.disc(cx, cy, rx, ry, i < 3 ? m.lo : i < 6 ? m.mid : m.lit);
+            s.disc(cx - rx * 0.25, cy - ry * 0.3, rx * 0.6, ry * 0.55, i < 3 ? m.mid : m.lit);
+            s.rect(cx + rx * 0.2, cy - ry, rx * 0.9, ry * 2, s.dither(null, i < 5 ? m.dk : m.lo, 4));
         }
     },
     hops(s, x, y, k) {
+        const L = s.T.leaf;
         for (const dx of [-8, 0, 8]) {
-            s.rect(x + dx * k, y - 30 * k, 1, 30 * k, STUFF.timberLo);
+            s.rect(x + dx * k, y - 30 * k, 1, 30 * k, STUFF.timber.lit);
             for (let i = 0; i < 6; i++)
-                s.rect(x + dx * k - 2 + (i % 2) * 3, y - (4 + i * 4.5) * k, 3, 2, s.T.leaf);
+                s.rect(x + dx * k - 2 + (i % 2) * 3, y - (4 + i * 4.5) * k, 3, 2, i % 2 ? L[2] : L[1]);
         }
     },
     blockhouse(s, x, y, k) {
-        const roof = [x - 16 * k, y - 15 * k, x - 10 * k, y - 24 * k, x + 10 * k, y - 24 * k, x + 16 * k, y - 15 * k];
-        walls(s, x - 14 * k, y, 28 * k, 15 * k, STUFF.timber);
+        const b = STUFF.timber;
+        wall(s, x - 14 * k, y, 28 * k, 15 * k, b, 4 * k);
         for (let ly = y - 13 * k; ly < y - 1; ly += 2)
-            s.rect(x - 14 * k + 1, ly, 28 * k - 2, 1, STUFF.timberLo);
-        s.poly(roof, STUFF.shingle, INK);
-        hatchPoly(s, roof, mixHex(STUFF.shingle, INK, 0.4), 2, 2);
+            s.rect(x - 14 * k + 1, ly, 28 * k - 2, 1, b.lo);
+        roof(s, [x - 16 * k, y - 15 * k, x - 10 * k, y - 24 * k, x + 10 * k, y - 24 * k, x + 16 * k, y - 15 * k], STUFF.shingle, { course: 2, lw: 1, sw: 3, split: x - 4 * k });
         for (const dx of [-9, -2, 5, 10])
-            s.rect(x + dx * k, y - 11 * k, 2 * k, 3 * k, INK);
-        s.rect(x - 2 * k, y - 7 * k, 4 * k, 7 * k, INK);
+            s.rect(x + dx * k, y - 11 * k, 2 * k, 3 * k, OUT);
+        win(s, x - 2 * k, y - 7 * k, 4 * k, 7 * k, true);
     },
     tollHouse(s, x, y, k) {
-        const roof = [x - 11 * k, y - 11 * k, x, y - 21 * k, x + 11 * k, y - 11 * k];
-        walls(s, x - 9 * k, y, 18 * k, 11 * k, STUFF.wall);
-        s.poly(roof, STUFF.tile, INK);
-        hatchPoly(s, roof, STUFF.tileLo, 2);
-        s.rect(x - 2 * k, y - 7 * k, 4 * k, 6 * k, INK);
-        s.rect(x + 4 * k, y - 8 * k, 3 * k, 3 * k, INK);
-        s.rect(x + 12 * k, y - 10 * k, 1, 10 * k, INK);
-        s.rect(x + 12 * k, y - 10 * k, 24 * k, 2, INK);
-        s.rect(x + 18 * k, y - 10 * k, 4 * k, 2, PAL.red);
-        s.rect(x + 28 * k, y - 10 * k, 4 * k, 2, PAL.red);
+        const m = STUFF.wall;
+        wall(s, x - 9 * k, y, 18 * k, 11 * k, m, 3 * k);
+        roof(s, [x - 11 * k, y - 11 * k, x, y - 21 * k, x + 11 * k, y - 11 * k], STUFF.tile, { course: 2, lw: 1, sw: 2, split: x });
+        win(s, x - 2 * k, y - 7 * k, 4 * k, 6 * k, true);
+        win(s, x + 4 * k, y - 8 * k, 3 * k, 3 * k);
+        s.rect(x + 12 * k, y - 10 * k, 1, 10 * k, OUT);
+        s.rect(x + 12 * k, y - 11 * k, 24 * k, 3, OUT);
+        s.rect(x + 12 * k, y - 10 * k, 24 * k, 1, rBone[4]);
+        for (const dx of [18, 28])
+            s.rect(x + dx * k, y - 10 * k, 4 * k, 1, rMadder[4]);
     },
     wagon(s, x, y, k) {
-        const cover = [x - 9 * k, y - 9 * k, x - 6 * k, y - 16 * k, x + 7 * k, y - 16 * k, x + 10 * k, y - 9 * k];
-        s.rect(x - 11 * k, y - 9 * k, 22 * k, 5 * k, STUFF.timber);
-        s.rect(x - 11 * k, y - 9 * k, 22 * k, 1, INK);
-        s.rect(x - 11 * k, y - 5 * k, 22 * k, 1, STUFF.timberLo);
-        s.poly(cover, STUFF.wall, INK);
-        hatchPoly(s, cover, STUFF.wallLo, 3, 1);
+        const b = STUFF.timber, m = STUFF.wall;
+        s.rect(x - 11 * k - 1, y - 9 * k - 1, 22 * k + 2, 6 * k + 2, OUT);
+        s.rect(x - 11 * k, y - 9 * k, 22 * k, 5 * k, b.mid);
+        s.rect(x - 11 * k, y - 9 * k, 22 * k, 1, b.lit);
+        s.rect(x - 11 * k, y - 5 * k, 22 * k, 1, b.lo);
+        const cv = s.poly([x - 9 * k, y - 9 * k, x - 6 * k, y - 16 * k, x + 7 * k, y - 16 * k, x + 10 * k, y - 9 * k], m.lit, OUT);
+        s.shade(cv, m.lo, 3 * k);
+        s.cap(cv, m.hi, 1);
         for (const dx of [-6, 6]) {
-            s.disc(x + dx * k, y - 3 * k, 4 * k, 4 * k, STUFF.timberLo, INK);
-            s.disc(x + dx * k, y - 3 * k, 1 * k, 1 * k, INK);
+            s.disc(x + dx * k, y - 3 * k, 4 * k, 4 * k, b.lo, OUT);
+            s.disc(x + dx * k, y - 3 * k, 1 * k, 1 * k, OUT);
+            s.rect(x + dx * k - 2 * k, y - 3 * k, 4 * k + 1, 1, b.lit);
         }
     },
     raft(s, x, y, k) {
+        const b = STUFF.timber, m = STUFF.wall;
         for (let i = 0; i < 3; i++) {
-            s.rect(x - 14 * k, y - (i + 1) * 3 * k, 28 * k, 3 * k, STUFF.timber);
-            s.rect(x - 14 * k, y - (i + 1) * 3 * k, 28 * k, 1, STUFF.timberLo);
-            s.disc(x + 14 * k, y - (i + 0.5) * 3 * k, 1.5 * k, 1.5 * k, STUFF.timberLo, INK);
+            s.rect(x - 14 * k - 1, y - (i + 1) * 3 * k - 1, 28 * k + 2, 3 * k + 1, OUT);
+            s.rect(x - 14 * k, y - (i + 1) * 3 * k, 28 * k, 3 * k, b.mid);
+            s.rect(x - 14 * k, y - (i + 1) * 3 * k, 28 * k, 1, b.lit);
+            s.disc(x + 14 * k, y - (i + 0.5) * 3 * k, 1.5 * k, 1.5 * k, b.lo, OUT);
         }
-        for (let i = 0; i < 4; i++)
-            s.disc(x - 9 * k + i * 6 * k, y - 11 * k, 3 * k, 2.5 * k, STUFF.wall, INK);
-        s.disc(x - 6 * k, y - 15 * k, 3 * k, 2.5 * k, STUFF.wall, INK);
-        s.disc(x + 2 * k, y - 15 * k, 3 * k, 2.5 * k, STUFF.wall, INK);
-        s.rect(x + 12 * k, y - 20 * k, 1, 17 * k, STUFF.bark);
+        for (let i = 0; i < 4; i++) {
+            s.disc(x - 9 * k + i * 6 * k, y - 11 * k, 3 * k, 2.5 * k, m.lit, OUT);
+            s.rect(x - 11 * k + i * 6 * k, y - 11 * k, 2, 1, m.hi);
+        }
+        s.disc(x - 6 * k, y - 15 * k, 3 * k, 2.5 * k, m.lit, OUT);
+        s.disc(x + 2 * k, y - 15 * k, 3 * k, 2.5 * k, m.lit, OUT);
+        s.rect(x + 12 * k, y - 20 * k, 1, 17 * k, b.lo);
     },
     millRuin(s, x, y, k) {
-        const c = '#3b3530';
-        s.poly([x - 8 * k, y, x - 6 * k, y - 22 * k, x - 3 * k, y - 19 * k, x - 1 * k, y - 27 * k, x + 3 * k, y - 20 * k, x + 6 * k, y - 25 * k, x + 8 * k, y], STUFF.wallLo, INK);
-        s.rect(x - 2 * k, y - 8 * k, 4 * k, 8 * k, INK);
+        const m = STUFF.lime, c = STUFF.timber.dk;
+        const w = s.poly([x - 8 * k, y, x - 6 * k, y - 22 * k, x - 3 * k, y - 19 * k, x - 1 * k, y - 27 * k, x + 3 * k, y - 20 * k, x + 6 * k, y - 25 * k, x + 8 * k, y], m.lit, OUT);
+        s.shade(w, m.lo, 4 * k);
+        s.lit(w, m.hi, 1);
+        s.rect(x - 2 * k, y - 8 * k, 4 * k, 8 * k, OUT);
         for (const dx of [-5, 3])
-            s.rect(x + dx * k, y - 20 * k, 2 * k, 12 * k, mixHex(STUFF.wallLo, c, 0.5));
+            s.rect(x + dx * k, y - 20 * k, 2 * k, 12 * k, m.lo);
         s.line(x - 1 * k, y - 27 * k, x - 14 * k, y - 40 * k, c);
         s.line(x - 1 * k, y - 27 * k, x + 9 * k, y - 38 * k, c);
         s.line(x - 1 * k, y - 27 * k, x - 12 * k, y - 22 * k, c);
         s.line(x - 9 * k, y - 35 * k, x - 12 * k, y - 32 * k, c);
     },
     watermill(s, x, y, k) {
-        const roof = [x - 14 * k, y - 12 * k, x - 6 * k, y - 22 * k, x + 6 * k, y - 22 * k, x + 14 * k, y - 12 * k];
-        walls(s, x - 12 * k, y, 24 * k, 12 * k, STUFF.wall);
-        s.poly(roof, STUFF.thatch, INK);
-        hatchPoly(s, roof, STUFF.thatchLo);
-        s.rect(x - 8 * k, y - 8 * k, 3 * k, 3 * k, DARK);
-        s.rect(x - 2 * k, y - 8 * k, 4 * k, 8 * k, DARK);
-        const wx = x + 17 * k, wy = y - 7 * k;
-        s.disc(wx, wy, 8 * k, 8 * k, STUFF.water, STUFF.timberLo);
-        s.disc(wx, wy, 6 * k, 6 * k, STUFF.wall);
+        const m = STUFF.wall;
+        wall(s, x - 12 * k, y, 24 * k, 12 * k, m, 4 * k);
+        roof(s, [x - 14 * k, y - 12 * k, x - 6 * k, y - 22 * k, x + 6 * k, y - 22 * k, x + 14 * k, y - 12 * k], STUFF.thatch, { course: 3, lw: 2, sw: 3 });
+        win(s, x - 8 * k, y - 8 * k, 3 * k, 3 * k);
+        win(s, x - 2 * k, y - 8 * k, 4 * k, 8 * k, true);
+        const wx = x + 17 * k, wy = y - 7 * k, b = STUFF.timber;
+        s.disc(wx, wy, 8 * k, 8 * k, STUFF.water.mid, b.mid);
+        s.disc(wx, wy, 6 * k, 6 * k, STUFF.water.lit);
         for (let i = 0; i < 4; i++) {
             const a = i * Math.PI / 4;
-            s.line(wx - Math.cos(a) * 8 * k, wy - Math.sin(a) * 8 * k, wx + Math.cos(a) * 8 * k, wy + Math.sin(a) * 8 * k, STUFF.timberLo);
+            s.line(wx - Math.cos(a) * 8 * k, wy - Math.sin(a) * 8 * k, wx + Math.cos(a) * 8 * k, wy + Math.sin(a) * 8 * k, b.lit);
         }
     },
     signpost(s, x, y, k) {
-        s.rect(x - 1, y - 20 * k, 2, 20 * k, STUFF.timberLo);
-        s.poly([x, y - 19 * k, x + 11 * k, y - 19 * k, x + 14 * k, y - 16 * k, x + 11 * k, y - 13 * k, x, y - 13 * k], STUFF.timber, INK);
-        s.poly([x, y - 11 * k, x - 10 * k, y - 11 * k, x - 13 * k, y - 8 * k, x - 10 * k, y - 5 * k, x, y - 5 * k], STUFF.timber, INK);
+        const b = STUFF.timber;
+        s.rect(x - 1, y - 20 * k, 2, 20 * k, b.lo);
+        s.rect(x - 1, y - 20 * k, 1, 20 * k, b.mid);
+        const a = s.poly([x, y - 19 * k, x + 11 * k, y - 19 * k, x + 14 * k, y - 16 * k, x + 11 * k, y - 13 * k, x, y - 13 * k], b.lit, OUT);
+        s.shade(a, b.mid, 1);
+        const c = s.poly([x, y - 11 * k, x - 10 * k, y - 11 * k, x - 13 * k, y - 8 * k, x - 10 * k, y - 5 * k, x, y - 5 * k], b.lit, OUT);
+        s.shade(c, b.mid, 1);
     },
     barn(s, x, y, k) {
-        const roof = [x - 22 * k, y - 12 * k, x - 14 * k, y - 26 * k, x + 14 * k, y - 26 * k, x + 22 * k, y - 12 * k];
-        walls(s, x - 19 * k, y, 38 * k, 12 * k, STUFF.timber);
+        const b = STUFF.timber;
+        wall(s, x - 19 * k, y, 38 * k, 12 * k, b, 4 * k);
         for (let lx = x - 16 * k; lx < x + 19 * k; lx += 4 * k)
-            s.rect(lx, y - 12 * k, 1, 11 * k, STUFF.timberLo);
-        s.poly(roof, STUFF.thatch, INK);
-        hatchPoly(s, roof, STUFF.thatchLo, 3);
-        s.rect(x - 5 * k, y - 9 * k, 10 * k, 9 * k, INK);
-        s.line(x - 5 * k, y - 9 * k, x + 5 * k, y, STUFF.timberLo);
-        s.line(x + 5 * k, y - 9 * k, x - 5 * k, y, STUFF.timberLo);
+            s.rect(lx, y - 12 * k, 1, 11 * k, b.lo);
+        roof(s, [x - 22 * k, y - 12 * k, x - 14 * k, y - 26 * k, x + 14 * k, y - 26 * k, x + 22 * k, y - 12 * k], STUFF.thatch, { course: 3, lw: 2, sw: 3 });
+        s.rect(x - 5 * k, y - 9 * k, 10 * k, 9 * k, OUT);
+        s.line(x - 5 * k, y - 9 * k, x + 5 * k, y, b.lo);
+        s.line(x + 5 * k, y - 9 * k, x - 5 * k, y, b.lo);
     },
     flame(s, x, y, k) {
-        s.poly([x - 4 * k, y, x - 5 * k, y - 6 * k, x - 1 * k, y - 10 * k, x, y - 17 * k, x + 2 * k, y - 10 * k, x + 5 * k, y - 6 * k, x + 4 * k, y], '#d8642a');
-        s.poly([x - 2 * k, y, x - 2 * k, y - 5 * k, x, y - 9 * k, x + 2 * k, y - 5 * k, x + 2 * k, y], '#f0b93a');
+        s.poly([x - 4 * k, y, x - 5 * k, y - 6 * k, x - 1 * k, y - 10 * k, x, y - 17 * k, x + 2 * k, y - 10 * k, x + 5 * k, y - 6 * k, x + 4 * k, y], rFire[2]);
+        s.poly([x - 3 * k, y, x - 3 * k, y - 5 * k, x - 1 * k, y - 9 * k, x + 1 * k, y - 12 * k, x + 2 * k, y - 5 * k, x + 3 * k, y], rFire[3]);
+        s.poly([x - 2 * k, y, x - 2 * k, y - 4 * k, x, y - 8 * k, x + 2 * k, y - 4 * k, x + 2 * k, y], rFire[5]);
     },
     cow(s, x, y, k) {
-        const c = '#6b4f35';
+        const c = STUFF.earth.lit, c2 = STUFF.earth.mid;
         s.rect(x - 4 * k, y - 6 * k, 8 * k, 4 * k, c);
-        s.rect(x - 4 * k, y - 6 * k, 8 * k, 1, mixHex(c, INK, 0.5));
+        s.rect(x - 4 * k, y - 6 * k, 8 * k, 1, STUFF.earth.hi);
+        s.rect(x - 4 * k, y - 3 * k, 8 * k, 1, c2);
         s.rect(x + 4 * k, y - 8 * k, 3 * k, 3 * k, c);
         for (const dx of [-3, -1, 2, 3])
-            s.rect(x + dx * k, y - 2 * k, 1, 2 * k, INK);
-        s.rect(x + 5 * k, y - 9 * k, 1, 2, STUFF.wall);
-        s.rect(x - 2 * k, y - 5 * k, 3 * k, 2 * k, STUFF.wall);
+            s.rect(x + dx * k, y - 2 * k, 1, 2 * k, OUT);
+        s.rect(x + 5 * k, y - 9 * k, 1, 2, rBone[4]);
+        s.rect(x - 2 * k, y - 5 * k, 3 * k, 2 * k, rBone[4]);
     }
 };
 /** Scatters count things over the ground, small and faint by the horizon and large at the foot of the picture, the far ones first. */
@@ -757,87 +1243,115 @@ function scatter(s, count, draw, y0 = 8, y1 = 0) {
     for (const [x, y] of pts.sort((a, b) => a[1] - b[1]))
         draw(x, y, 0.55 + 0.7 * (y - s.HZ) / (s.H - s.HZ));
 }
-/** Dashes along the ground, such as the old backdrops have: long and faint, mostly by the horizon. */
-function streaks(s, count, c) {
-    for (let i = 0; i < count; i++)
-        s.rect(s.r() * s.W | 0, s.HZ + 4 + (s.r() * s.r() * (s.H - s.HZ - 8) | 0), 8 + (s.r() * 40 | 0), 1, c);
-}
 /* ---------- the lands ---------- */
-/** A burial mound or a rise on the skyline at x, w wide and h high, with its outline and the hatching of its shaded side; returns the top. */
+/** A burial mound or a rise on the skyline at x, w wide and h high, lit on its left and in the lee on its right, hazed at its foot; returns the top. */
 function mound(s, x, w, h) {
-    const base = s.ridge(x) + 1, pts = [], top = [];
-    for (let dx = -w / 2; dx <= w / 2; dx += 2) {
-        const u = 2 * dx / w, y = base - h * Math.pow(Math.max(0, 1 - u * u), 0.75);
-        top.push([x + dx, y]);
-        pts.push(x + dx, y);
+    const base = s.ridge(x) + 1, [rim, lit, mid, lee] = s.T.hill, x0 = Math.round(x - w / 2), n = Math.round(w), top = [];
+    for (let i = 0; i < n; i++) {
+        const u = (2 * i + 1) / n - 1;
+        top.push(Math.round(base - h * Math.pow(Math.max(0, 1 - u * u), 0.75)));
     }
-    pts.push(x + w / 2, s.HZ, x - w / 2, s.HZ);
-    s.poly(pts, mixHex(s.T.hill, '#fffbe8', 0.14));
-    for (let i = 1; i < top.length; i++) {
-        s.line(top[i - 1][0], top[i - 1][1], top[i][0], top[i][1], INK);
-        if (i > top.length / 2 && i % 2)
-            s.rect(top[i][0], top[i][1] + 3, 1, 3 + (i % 3) * 2, mixHex(s.T.hill, INK, 0.35));
-    }
+    s.run(x0, base - h, x0 + n, s.HZ, (px, y) => {
+        const i = px - x0, t = top[i];
+        if (y < t)
+            return undefined;
+        const u = (2 * i + 1) / n - 1, d = y - t, term = 0.22 - 0.02 * d; // where the light gives out, further left lower down
+        if (d === 0)
+            return u < term ? rim : lit;
+        if (y > s.HZ - 3)
+            return s.dither(u < term ? mid : lee, s.T.haze, (y - (s.HZ - 3)) * 4);
+        if (u < term - 0.45)
+            return d < 7 ? lit : s.dither(lit, mid, Math.min(11, (d - 6) * 3));
+        if (u < term - 0.12)
+            return d < 3 ? lit : s.dither(mid, lit, 8);
+        if (u < term + 0.06)
+            return mid;
+        return u < term + 0.2 ? s.dither(mid, lee, 9) : lee;
+    });
     return base - h;
 }
 /** A few horses grazing far off, along the line from x for len, on the ground at y. */
 function herd(s, x, y, len) {
-    const c = mixHex(INK, s.T.ground, 0.15);
+    const c = rSoot[3];
     for (let i = 0; i < 8; i++) {
         const hx = x + (i * len / 7 | 0) + (s.r() * 6 | 0), hy = y + (s.r() * 4 | 0);
         s.rect(hx, hy - 3, 4, 2, c);
         s.rect(hx, hy - 1, 1, 2, c);
         s.rect(hx + 3, hy - 1, 1, 2, c);
         s.rect(hx + 4, hy - 5, 1, 3, c);
+        s.rect(hx, hy - 3, 4, 1, rSoot[5]);
     }
 }
-/** A track across the ground, two ruts running from one side to the other, faint. */
-function track(s, y0, y1, c) {
-    const f = s.r() * 6;
+/** A track across the ground from y0 at the left to y1 at the right: dusty earth worn into ruts with the grass between, lit along its upper edge and feathered into the grass, broader as it comes near. */
+function track(s, y0, y1, bare = 0) {
+    const f = s.r() * 6, [dk, mid, lit] = s.T.earth, ctr = [], hw = [];
     for (let x = 0; x < s.W; x++) {
-        const y = y0 + (y1 - y0) * x / s.W + 3 * Math.sin(x * 0.02 + f);
-        s.rect(x, y, 1, 1, c);
-        s.rect(x, y + 5 + 3 * x / s.W, 1, 1, c);
+        const y = s.HZ + y0 + (y1 - y0) * x / s.W + 3 * Math.sin(x * 0.02 + f);
+        ctr.push(y);
+        hw.push(2.5 + 0.075 * (y - s.HZ) + bare);
     }
+    s.run(0, s.HZ + Math.min(y0, y1) - 10, s.W, s.HZ + Math.max(y0, y1) + 30, (x, y) => {
+        const d = y - ctr[x], a = Math.abs(d), w = hw[x], u = a / w, h = ((x >> 2) * 7 + (x >> 4) * 3 + Math.round(y)) % 5;
+        if (u > 1.3)
+            return undefined;
+        if (u > 1.05)
+            return s.dither(null, mid, u > 1.18 ? 3 : 7);
+        if (u > 1)
+            return s.dither(lit, mid, 8);
+        if (d < 0 && u > 0.78)
+            return s.dither(lit, mid, 5);
+        if (u < 0.22)
+            return h < 3 ? s.dither(mid, s.T.leaf[1], 8) : mid;
+        if (u > 0.3 && u < 0.52 && h !== 0)
+            return d > 0 ? dk : mid;
+        return h === 1 && u > 0.55 ? mid : lit;
+    });
 }
-/** A stretch of water from x0 to x1 between its banks y0 (which wavers) and y1, with the glints on it. */
+/** A stretch of water from x0 to x1 between its banks y0 (which wavers) and y1: the sky in it, its glints, and the dark of the bank below. */
 function water(s, x0, x1, y0, y1) {
-    const f = s.r() * 6, c = mixHex(STUFF.water, s.T.haze, 0.2);
-    for (let x = x0; x < x1; x++) {
-        const top = Math.round(y0 + 1.5 * Math.sin(x * 0.045 + f));
-        s.rect(x, top, 1, y1 - top, c);
-        s.rect(x, top, 1, 1, edgeOf(STUFF.waterLo));
-    }
+    const f = s.r() * 6, m = STUFF.water, tops = [], ramp = s.ramp([m.hi, m.lit, m.mid, m.lo]);
+    for (let x = x0; x < x1; x++)
+        tops.push(Math.round(y0 + 1.5 * Math.sin(x * 0.045 + f)));
+    s.run(x0, y0 - 2, x1, y1, (x, y) => { const t = tops[x - x0]; return y < t ? undefined : y === t ? rBone[5] : ramp((y - t) / Math.max(1, y1 - t - 1)); });
     for (let i = 0; i < (x1 - x0) / 12; i++)
-        s.rect(x0 + (s.r() * (x1 - x0) | 0), y0 + 3 + (s.r() * Math.max(1, y1 - y0 - 4) | 0), 5 + (s.r() * 14 | 0), 1, i % 2 ? STUFF.waterLo : STUFF.wall);
-    s.rect(x0, y1 - 1, x1 - x0, 1, STUFF.waterLo);
+        s.rect(x0 + (s.r() * (x1 - x0) | 0), y0 + 3 + (s.r() * Math.max(1, y1 - y0 - 4) | 0), 5 + (s.r() * 14 | 0), 1, i % 2 ? m.hi : rBone[5]);
+    s.rect(x0, y1 - 1, x1 - x0, 1, m.dk);
 }
-/** The same scene with its colours drawn a part t of the way into the haze, for what stands far off. */
-const faded = (s, t) => { const T = {}; for (const n of Object.keys(s.T))
-    T[n] = mixHex(s.T[n], s.T.haze, t); return { ...s, T }; };
 /** A wood along the skyline from x to x1: trees of the kinds given, every few pixels, a row far off and a row near. */
 function wood(s, from, to, kinds, kLo, kHi) {
     for (const far of [true, false]) {
-        const q = far ? faded(s, 0.45) : s;
-        for (let x = from + (far ? 4 : 0); x < to; x += 8 + (s.r() * 7 | 0)) {
-            const k = (kLo + s.r() * (kHi - kLo)) * (far ? 0.85 : 1);
-            PROPS[kinds[s.r() * kinds.length | 0]](q, x, s.ridge(x) + (far ? 0 : 3), k);
+        for (let x = from + (far ? 4 : 0); x < to; x += (far ? 11 : 9) + (s.r() * 7 | 0)) {
+            const k = (kLo + s.r() * (kHi - kLo)) * (far ? 0.85 : 1), kind = kinds[s.r() * kinds.length | 0], y = s.ridge(x) + (far ? 0 : 3);
+            if (far)
+                s.fade(0.5, () => PROPS[kind](s, x, y, k));
+            else
+                PROPS[kind](s, x, y, k);
         }
     }
 }
-/** A ploughed field centred on cx, wTop wide by the horizon and wBot at the foot of the picture, its furrows in bands that widen as they come near. */
-function field(s, cx, wTop, wBot, c) {
-    const n = 16, top = s.HZ + 6, bot = s.H - 4, half = (y) => (wTop + (wBot - wTop) * (y - top) / (bot - top)) / 2;
-    for (let i = 0; i < n; i += 2) {
-        const y0 = top + (bot - top) * Math.pow(i / n, 1.8), y1 = top + (bot - top) * Math.pow((i + 1) / n, 1.8);
-        s.poly([cx - half(y0), y0, cx + half(y0), y0, cx + half(y1), y1, cx - half(y1), y1], c);
-    }
+/** A ploughed field centred on cx, wTop wide at its far end and wBot at its near one, between the rows y0 and y1 below the horizon: furrows of earth, pale and dark by turns, in bands that widen as they come near, its edges wavering and feathered into the grass. */
+function field(s, cx, wTop, wBot, y0 = 14, y1 = 92) {
+    const [dk, mid, lit] = s.T.earth, n = 9, top = s.HZ + y0, bot = s.HZ + y1, f = s.r() * 6, half = (y) => (wTop + (wBot - wTop) * (y - top) / (bot - top)) / 2;
+    s.run(cx - wBot / 2 - 10, top, cx + wBot / 2 + 10, bot, (x, y) => {
+        const hw = half(y) + 4 * Math.sin(y * 0.11 + f), d = Math.abs(x - cx) - hw, e = Math.min(y - top, bot - y);
+        if (d > 3 || e < 0)
+            return undefined;
+        const u = (y - top) / (bot - top), band = Math.pow(u, 0.7) * n, fr = band - Math.floor(band);
+        if (d > 0)
+            return d < 2 ? s.dither(null, mid, 2) : undefined;
+        if (d > -3 || e < 2)
+            return s.dither(null, mid, 3);
+        return fr < 0.18 ? s.dither(null, dk, 5) : Math.floor(band) % 2 ? s.dither(null, lit, 4) : s.dither(null, mid, 4);
+    });
 }
 /** The rows of a vineyard on the slope between x0 and x1, from the skyline down to the foot of the hill. */
-function vines(s, x0, x1, c) {
+function vines(s, x0, x1) {
+    const L = s.T.leaf;
     for (let x = x0; x < x1; x += 4)
-        for (let y = s.ridge(x) + 5; y < s.HZ - 3; y += 4)
-            s.rect(x, y, 1, 3, c);
+        for (let y = s.ridge(x) + 5; y < s.HZ - 3; y += 4) {
+            s.rect(x, y, 1, 3, L[1]);
+            s.rect(x, y, 1, 1, L[2]);
+        }
 }
 /** Birds against the sky: a few small vees. */
 function birds(s, n) {
@@ -845,8 +1359,8 @@ function birds(s, n) {
         return;
     for (let i = 0; i < n; i++) {
         const x = 60 + (s.r() * (s.W - 120) | 0), y = 24 + (s.r() * 36 | 0);
-        s.line(x - 4, y - 2, x, y, INK);
-        s.line(x, y, x + 4, y - 2, INK);
+        s.line(x - 4, y - 2, x, y, rSoot[2]);
+        s.line(x, y, x + 4, y - 2, rSoot[2]);
     }
 }
 /** n copies of a prop along the skyline, from x, every dx, each k times its size. */
@@ -877,26 +1391,26 @@ function hamlet(s, x, house, offs, k, tree) {
 const LAND_ART = {
     steppe(s) {
         const T = s.T, r = s.r;
-        skyArt(s, { clouds: 3, sun: [300, 36], sunK: 1.25 });
-        s.ridge = hillsArt(s, 106, [[0.0105, 2.4], [0.034, 1.2]], { fill: T.hill, hatch: false });
+        skyArt(s, { clouds: 3, sun: [300, 78], sunK: 1.2 });
+        hillsArt(s, 108, [[0.006, 2], [0.02, 1]], { pal: T.far, haze: 12, jag: 1 });
+        s.ridge = hillsArt(s, 106, [[0.0105, 2.4], [0.034, 1.2]], { pal: T.hill });
         place(s, [
             [120, x => { const t = mound(s, x, 90 + (r() * 30 | 0), 12); PROPS.baba(s, x + 6, t + 2, 1); }],
             [110, x => { const t = mound(s, x, 70 + (r() * 30 | 0), 9); PROPS.beacon(s, x - 4, t + 1, 0.95); }],
             [40, x => PROPS.thorn(s, x, s.ridge(x) + 2, 0.85)], [70, x => herd(s, x - 35, s.HZ - 3, 60)]
         ]);
-        groundArt(s);
-        track(s, s.HZ + 20, s.HZ + 58, mixHex(T.ground, INK, 0.22));
+        groundArt(s, { dry: 7 });
+        track(s, 20, 58);
         PROPS.well(s, 60 + (r() * 480 | 0), s.HZ + 26, 0.85);
-        streaks(s, 40, mixHex(T.ground, INK, 0.2));
-        scatter(s, 90, (x, y, k) => PROPS.tuft(s, x, y, k));
-        scatter(s, 36, (x, y, k) => PROPS.kovyl(s, x, y, k));
+        scatter(s, 36, (x, y, k) => PROPS.tuft(s, x, y, k));
+        scatter(s, 22, (x, y, k) => PROPS.kovyl(s, x, y, k * 0.7));
         scatter(s, 8, (x, y, k) => PROPS.rock(s, x, y, k * 0.8));
     },
     ukraine(s) {
         const T = s.T, r = s.r, church = r() < 0.55, mill = !church || r() < 0.5;
-        skyArt(s, { clouds: 3, sun: [250, 34] });
-        hillsArt(s, 90, [[0.007, 7], [0.021, 3.5]], { fill: T.far, hatch: false, edge: mixHex(T.far, INK, 0.4) });
-        s.ridge = hillsArt(s, 100, [[0.013, 6], [0.04, 2.5]], { fill: T.hill });
+        skyArt(s, { clouds: 3, sun: [250, 76] });
+        hillsArt(s, 90, [[0.007, 7], [0.021, 3.5]], { pal: T.far, haze: 12, jag: 1 });
+        s.ridge = hillsArt(s, 100, [[0.013, 6], [0.04, 2.5]], { pal: T.hill });
         const items = [[150, x => hamlet(s, x, 'khata', [-42, -14, 14, 42], 0.82, 'willow')], [76, x => along(s, 'poplar', x - 30, 5, 14, 0.75)]];
         if (church)
             items.push([52, x => PROPS.orthodox(s, x, s.ridge(x) + 2, 0.95)]);
@@ -904,33 +1418,31 @@ const LAND_ART = {
             items.push([56, x => PROPS.windmill(s, x, s.ridge(x) + 2, 0.85)]);
         place(s, items);
         groundArt(s);
-        field(s, 120 + (r() * 360 | 0), 120, 420, mixHex(T.ground, INK, 0.09));
-        streaks(s, 30, mixHex(T.ground, INK, 0.2));
-        scatter(s, 90, (x, y, k) => PROPS.tuft(s, x, y, k));
+        field(s, 140 + (r() * 320 | 0), 70, 190);
+        scatter(s, 36, (x, y, k) => PROPS.tuft(s, x, y, k));
         scatter(s, 3, (x, y, k) => PROPS.hay(s, x, y, k * 0.9), 20);
     },
     poland(s) {
         const T = s.T, r = s.r;
-        skyArt(s, { clouds: 3, sun: [270, 34] });
-        hillsArt(s, 94, [[0.008, 4], [0.025, 2]], { fill: T.far, hatch: false, edge: mixHex(T.far, INK, 0.4) });
-        s.ridge = hillsArt(s, 102, [[0.012, 4], [0.036, 2]], { fill: T.hill });
+        skyArt(s, { clouds: 3, sun: [270, 78] });
+        hillsArt(s, 94, [[0.008, 4], [0.025, 2]], { pal: T.far, haze: 12, jag: 1 });
+        s.ridge = hillsArt(s, 102, [[0.012, 4], [0.036, 2]], { pal: T.hill });
         place(s, [
             [170, x => { PROPS.church(s, x, s.ridge(x) + 2, 0.9); [-48, 40, 68].forEach((dx, i) => PROPS.cottage(s, x + dx, s.ridge(x + dx) + 2, 0.76 + (i % 2) * 0.1)); PROPS.nest(s, x - 78, s.ridge(x - 78) + 2, 0.75); }],
             [70, x => (r() < 0.6 ? PROPS.windmill(s, x, s.ridge(x) + 2, 0.85) : PROPS.manor(s, x, s.ridge(x) + 2, 0.85))],
             [76, x => along(s, 'birch', x - 30, 5, 13, 0.85)]
         ]);
         groundArt(s);
-        field(s, 120 + (r() * 360 | 0), 110, 400, mixHex(T.ground, INK, 0.08));
+        field(s, 140 + (r() * 320 | 0), 60, 170);
         PROPS.cross(s, 90 + (r() * 420 | 0), s.HZ + 18, 0.9);
-        streaks(s, 30, mixHex(T.ground, INK, 0.2));
-        scatter(s, 80, (x, y, k) => PROPS.tuft(s, x, y, k));
+        scatter(s, 34, (x, y, k) => PROPS.tuft(s, x, y, k));
         scatter(s, 4, (x, y, k) => PROPS.sheaf(s, x, y, k), 16);
     },
     prussia(s) {
         const T = s.T, r = s.r;
-        skyArt(s, { clouds: 4, sun: [290, 34] });
+        skyArt(s, { clouds: 4, sun: [290, 74], sunK: 0.8 });
         birds(s, 5);
-        s.ridge = hillsArt(s, 104, [[0.006, 1.6], [0.03, 0.9]], { fill: T.hill, hatch: false });
+        s.ridge = hillsArt(s, 104, [[0.006, 1.6], [0.03, 0.9]], { pal: T.hill });
         const left = r() < 0.5, sea = left ? [0, 230] : [370, 600];
         water(s, sea[0], sea[1], 100, s.HZ - 1);
         [0.2, 0.62].forEach(t => PROPS.ship(s, sea[0] + (sea[1] - sea[0]) * t, 104, 0.85));
@@ -943,15 +1455,14 @@ const LAND_ART = {
         water(s, 0, s.W, s.HZ + 9, s.HZ + 16);
         for (let i = 0; i < 9; i++)
             PROPS.reeds(s, 20 + (r() * (s.W - 40) | 0), s.HZ + 17, 0.5);
-        streaks(s, 24, mixHex(T.ground, INK, 0.18));
-        scatter(s, 90, (x, y, k) => PROPS.tuft(s, x, y, k));
-        scatter(s, 30, (x, y, k) => PROPS.kovyl(s, x, y, k * 0.55), 24);
+        scatter(s, 36, (x, y, k) => PROPS.tuft(s, x, y, k));
+        scatter(s, 14, (x, y, k) => PROPS.kovyl(s, x, y, k * 0.5), 24);
     },
     lithuania(s) {
         const T = s.T, r = s.r;
-        skyArt(s, { clouds: 4, sun: [300, 34] });
-        hillsArt(s, 84, [[0.009, 6], [0.03, 3]], { fill: T.far, hatch: false, edge: mixHex(T.far, INK, 0.4) });
-        s.ridge = hillsArt(s, 98, [[0.011, 5], [0.04, 2]], { fill: T.hill });
+        skyArt(s, { clouds: 4, sun: [300, 80], sunK: 0.9 });
+        hillsArt(s, 84, [[0.009, 6], [0.03, 3]], { pal: T.far, haze: 12, jag: 2 });
+        s.ridge = hillsArt(s, 98, [[0.011, 5], [0.04, 2]], { pal: T.hill });
         const gap = 130 + (r() * 340 | 0), gw = 190;
         wood(s, 0, gap - gw / 2, ['spruce', 'spruce', 'pine'], 0.85, 1.15);
         wood(s, gap + gw / 2, s.W, ['spruce', 'pine', 'spruce', 'birch'], 0.85, 1.15);
@@ -960,26 +1471,26 @@ const LAND_ART = {
         groundArt(s);
         if (r() < 0.6)
             water(s, gap - 50, gap + 120, s.HZ + 8, s.HZ + 20);
-        streaks(s, 24, mixHex(T.ground, INK, 0.2));
-        scatter(s, 40, (x, y, k) => PROPS.tuft(s, x, y, k));
+        scatter(s, 20, (x, y, k) => PROPS.tuft(s, x, y, k));
         scatter(s, 30, (x, y, k) => PROPS.fern(s, x, y, k), 14);
         scatter(s, 8, (x, y, k) => PROPS.boulder(s, x, y, k * 0.55), 14);
         scatter(s, 4, (x, y, k) => PROPS.birch(s, x, y, k * 0.8), 10);
     },
     front(s) {
         const T = s.T, r = s.r;
-        skyArt(s, { clouds: 3 });
-        hillsArt(s, 92, [[0.007, 5], [0.025, 2.5]], { fill: T.far, hatch: false, edge: mixHex(T.far, INK, 0.4) });
-        s.ridge = hillsArt(s, 100, [[0.01, 3], [0.032, 1.6]], { fill: T.hill });
+        skyArt(s, { clouds: 3, sun: [250, 84], sunK: 0.9 });
+        hillsArt(s, 92, [[0.007, 5], [0.025, 2.5]], { pal: T.far, haze: 12 });
+        s.ridge = hillsArt(s, 100, [[0.01, 3], [0.032, 1.6]], { pal: T.hill });
         place(s, [
             [240, x => { const t = mound(s, x, 230, 14); PROPS.cityWall(s, x, t + 6, 0.8); PROPS.smoke(s, x + 150, s.HZ - 4, 0.8); }],
             [120, x => { for (let i = 0; i < 3; i++)
                     PROPS.gabions(s, x - 50 + i * 30, s.ridge(x) + 3, 0.7); PROPS.cannon(s, x + 44, s.ridge(x) + 4, 0.8); }],
             [96, x => along(s, 'tent', x - 33, 4, 22, 0.75, 4)], [40, x => { PROPS.dead(s, x, s.ridge(x) + 3, 0.9); PROPS.smoke(s, x + 24, s.HZ - 4, 0.65); }]
         ], 10, s.W - 10);
-        groundArt(s);
-        streaks(s, 34, mixHex(T.ground, INK, 0.22));
-        scatter(s, 50, (x, y, k) => PROPS.tuft(s, x, y, k * 0.8));
+        groundArt(s, { dark: 12, light: 5, dry: 2, green: 3 });
+        track(s, 26, 56, 2);
+        scatter(s, 6, (x, y, k) => puddle(s, x, y, k * 0.8), 22);
+        scatter(s, 14, (x, y, k) => PROPS.tuft(s, x, y, k * 0.8));
         scatter(s, 6, (x, y, k) => PROPS.dead(s, x, y, k * 0.55), 14);
         scatter(s, 10, (x, y, k) => PROPS.rock(s, x, y, k * 0.7));
         scatter(s, 2, (x, y, k) => PROPS.wagon(s, x, y, k * 0.6), 22);
@@ -988,29 +1499,28 @@ const LAND_ART = {
     },
     silesia(s) {
         const T = s.T, r = s.r;
-        skyArt(s, { clouds: 3, sun: [280, 34] });
-        hillsArt(s, 78, [[0.01, 9], [0.045, 5], [0.11, 2]], { fill: T.far, hatch: true, edge: mixHex(T.far, INK, 0.45) });
-        s.ridge = hillsArt(s, 98, [[0.012, 8], [0.03, 3]], { fill: T.hill });
+        skyArt(s, { clouds: 3, sun: [280, 72] });
+        hillsArt(s, 78, [[0.01, 9], [0.045, 5], [0.11, 2]], { pal: T.far, haze: 12 });
+        s.ridge = hillsArt(s, 98, [[0.012, 8], [0.03, 3]], { pal: T.hill });
         place(s, [
             [140, x => { const t = mound(s, x, 130, 16); PROPS.castle(s, x, t + 3, 0.8); }],
             [170, x => { PROPS.church(s, x, s.ridge(x) + 2, 0.8); [-44, 38, 66].forEach((dx, i) => (i === 1 ? PROPS.ruin : PROPS.halfTimber)(s, x + dx, s.ridge(x + dx) + 2, 0.66 + (i % 2) * 0.1)); PROPS.smoke(s, x + 44, s.ridge(x + 38) - 8, 0.7); }],
             [70, x => along(s, 'orchard', x - 28, 4, 14, 0.75)]
         ]);
         groundArt(s);
-        field(s, 120 + (r() * 360 | 0), 110, 400, mixHex(T.ground, INK, 0.08));
+        field(s, 140 + (r() * 320 | 0), 60, 170);
         PROPS.gallows(s, 80 + (r() * 420 | 0), s.HZ + 16, 0.9);
-        streaks(s, 30, mixHex(T.ground, INK, 0.2));
-        scatter(s, 70, (x, y, k) => PROPS.tuft(s, x, y, k));
+        scatter(s, 30, (x, y, k) => PROPS.tuft(s, x, y, k));
         scatter(s, 14, (x, y, k) => PROPS.rock(s, x, y, k * 0.8));
     },
     saxony(s) {
         const T = s.T, r = s.r, castle = r() < 0.5;
-        skyArt(s, { clouds: 3, sun: [300, 34] });
-        hillsArt(s, 82, [[0.009, 7], [0.03, 3]], { fill: T.far, hatch: false, edge: mixHex(T.far, INK, 0.4) });
-        s.ridge = hillsArt(s, 96, [[0.014, 7], [0.04, 3]], { fill: T.hill });
+        skyArt(s, { clouds: 3, sun: [300, 76] });
+        hillsArt(s, 82, [[0.009, 7], [0.03, 3]], { pal: T.far, haze: 12 });
+        s.ridge = hillsArt(s, 96, [[0.014, 7], [0.04, 3]], { pal: T.hill });
         const items = [
             [190, x => { hamlet(s, x - 14, 'halfTimber', [-52, -24, 12, 38], 0.66); PROPS.church(s, x + 72, s.ridge(x + 72) + 2, 0.8); }],
-            [120, x => { vines(s, x - 55, x + 55, mixHex(T.hill, T.leafLo, 0.55)); }]
+            [120, x => { vines(s, x - 55, x + 55); }]
         ];
         items.push(castle ? [110, x => { const t = mound(s, x, 100, 14); PROPS.castle(s, x, t + 3, 0.65); }] : [60, x => PROPS.windmill(s, x, s.ridge(x) + 2, 0.85)]);
         place(s, items);
@@ -1019,8 +1529,7 @@ const LAND_ART = {
         PROPS.barge(s, 120 + (r() * 340 | 0), s.HZ + 18, 0.85);
         for (let i = 0; i < 8; i++)
             PROPS.reeds(s, 16 + (r() * (s.W - 32) | 0), s.HZ + 19, 0.45);
-        streaks(s, 24, mixHex(T.ground, INK, 0.2));
-        scatter(s, 70, (x, y, k) => PROPS.tuft(s, x, y, k));
+        scatter(s, 30, (x, y, k) => PROPS.tuft(s, x, y, k));
         scatter(s, 3, (x, y, k) => PROPS.hops(s, x, y, k * 0.6), 28);
     }
 };
@@ -1031,28 +1540,33 @@ const SITE_OF = {
 };
 /** A row of sharpened stakes from x0 to x1 standing on y, k times their size. */
 function palisade(s, x0, x1, y, k) {
-    s.rect(x0, y - 4 * k, x1 - x0, 1, STUFF.timberLo);
+    const b = STUFF.timber;
+    s.rect(x0, y - 4 * k, x1 - x0, 1, b.lo);
     for (let x = x0; x < x1; x += 3 * k) {
-        s.rect(x, y - 9 * k, 2 * k, 9 * k, STUFF.timber);
-        s.rect(x, y - 9 * k, 1, 9 * k, STUFF.timberLo);
-        s.poly([x, y - 9 * k, x + k, y - 12 * k, x + 2 * k, y - 9 * k], STUFF.timber);
+        const st = s.poly([x, y - 9 * k, x + k, y - 12 * k, x + 2 * k, y - 9 * k, x + 2 * k, y, x, y], b.mid, OUT);
+        s.lit(st, b.lit, 1);
+        s.shade(st, b.lo, 1);
     }
 }
 /** A bridge of planks over the water at x, w long, on the ground at y. */
 function bridge(s, x, y, w) {
-    s.rect(x - w / 2, y - 3, w, 3, STUFF.timber);
-    s.rect(x - w / 2, y - 3, w, 1, INK);
-    s.rect(x - w / 2, y - 7, w, 1, STUFF.timberLo);
+    const b = STUFF.timber;
+    s.rect(x - w / 2 - 1, y - 8, w + 2, 9, OUT);
+    s.rect(x - w / 2, y - 3, w, 3, b.mid);
+    s.rect(x - w / 2, y - 3, w, 1, b.lit);
+    s.rect(x - w / 2, y - 7, w, 1, b.lo);
     for (let px = x - w / 2; px <= x + w / 2; px += 8)
-        s.rect(px, y - 7, 1, 7, STUFF.timberLo);
+        s.rect(px, y - 7, 1, 7, b.lo);
 }
 /** A river across the whole picture behind the fight, with reeds on its bank; ford says where it can be waded. */
 function river(s, ford) {
     water(s, 0, s.W, s.HZ + 9, s.HZ + 25);
     if (ford !== undefined) {
-        for (let i = 0; i < 9; i++)
-            s.rect(ford - 36 + i * 8, s.HZ + 12 + (i % 3) * 4, 5, 2, STUFF.stoneLo);
-        s.rect(ford - 40, s.HZ + 16, 80, 1, STUFF.wall);
+        for (let i = 0; i < 9; i++) {
+            const st = s.poly([ford - 36 + i * 8, s.HZ + 12 + (i % 3) * 4 + 2, ford - 35 + i * 8, s.HZ + 12 + (i % 3) * 4, ford - 32 + i * 8, s.HZ + 12 + (i % 3) * 4, ford - 31 + i * 8, s.HZ + 12 + (i % 3) * 4 + 2], STUFF.stone.mid);
+            s.cap(st, STUFF.stone.hi, 1);
+        }
+        s.rect(ford - 40, s.HZ + 16, 80, 1, s.dither(null, rBone[5], 8));
     }
     for (let i = 0; i < 10; i++) {
         const rx = 14 + (s.r() * (s.W - 28) | 0);
@@ -1079,7 +1593,7 @@ const SITE_ART = {
     },
     wagons(s) {
         const y = s.HZ + 30, x = 90 + (s.r() * 120 | 0);
-        track(s, s.HZ + 20, s.HZ + 40, mixHex(s.T.ground, INK, 0.25));
+        track(s, 20, 40, 2);
         for (let i = 0; i < 4; i++)
             PROPS.wagon(s, x + i * 62, y + (i % 2) * 3, 0.9);
         return x + 90;
@@ -1088,7 +1602,7 @@ const SITE_ART = {
         const x = 220 + (s.r() * 160 | 0);
         water(s, x - 90, x + 90, s.HZ + 12, s.HZ + 30);
         PROPS.watermill(s, x - 105, s.HZ + 30, 0.95);
-        s.rect(x + 86, s.HZ + 26, 6, 6, STUFF.stoneLo);
+        s.rect(x + 86, s.HZ + 26, 6, 6, STUFF.stone.mid);
         return x - 20;
     },
     picket(s) {
@@ -1121,8 +1635,8 @@ const SITE_ART = {
     manor(s) {
         const x = 170 + (s.r() * 260 | 0);
         PROPS.manor(s, x, s.HZ + 34, 1);
-        s.rect(x - 60, s.HZ + 33, 30, 2, STUFF.stoneLo);
-        s.rect(x + 30, s.HZ + 33, 30, 2, STUFF.stoneLo);
+        s.rect(x - 60, s.HZ + 33, 30, 2, STUFF.stone.mid);
+        s.rect(x + 30, s.HZ + 33, 30, 2, STUFF.stone.mid);
         PROPS.oak(s, x - 66, s.HZ + 34, 0.7);
         PROPS.oak(s, x + 68, s.HZ + 34, 0.65);
         return x;
@@ -1134,7 +1648,7 @@ const SITE_ART = {
         return x;
     },
     road(s) {
-        track(s, s.HZ + 22, s.HZ + 50, mixHex(s.T.ground, INK, 0.28));
+        track(s, 22, 50, 2);
         PROPS.cross(s, 70 + (s.r() * 460 | 0), s.HZ + 24, 1.1);
         const x = 120 + (s.r() * 260 | 0);
         PROPS.wagon(s, x, s.HZ + 36, 0.9);
@@ -1142,14 +1656,13 @@ const SITE_ART = {
         return x + 35;
     },
     ravine(s) {
-        const x = 170 + (s.r() * 260 | 0), base = s.ridge(x), dark = mixHex(s.T.hill, INK, 0.45), lip = [[-52, -1], [-38, 8], [-28, 15], [-12, 20], [14, 20], [28, 14], [40, 7], [54, -1]];
+        const x = 170 + (s.r() * 260 | 0), base = s.ridge(x), lip = [[-52, -1], [-38, 8], [-28, 15], [-12, 20], [14, 20], [28, 14], [40, 7], [54, -1]], [, , , lee] = s.T.hill;
         const pts = [];
         for (const [dx, dy] of lip)
             pts.push(x + dx, Math.min(s.HZ + 3, base + dy));
-        s.poly(pts, dark);
-        hatchPoly(s, pts, mixHex(dark, INK, 0.35), 3, 1);
-        for (let i = 1; i < lip.length - 1; i++)
-            s.line(x + lip[i - 1][0], Math.min(s.HZ + 3, base + lip[i - 1][1]), x + lip[i][0], Math.min(s.HZ + 3, base + lip[i][1]), INK);
+        const sh = s.poly(pts, lee, OUT);
+        s.cap(sh, s.T.hill[2], 1);
+        s.courses(sh, s.dither(null, rSoot[1], 7), 3, 2);
         for (const dx of [-62, -44, 46, 64])
             PROPS.bush(s, x + dx, s.ridge(x + dx) + 3, 0.9);
         PROPS.rock(s, x + 20, s.HZ + 5, 1);
@@ -1168,25 +1681,35 @@ const SITE_ART = {
 /* ---------- the weather ---------- */
 /** A puddle on the ground at x, y, k times its usual size, with the sky in it. */
 function puddle(s, x, y, k) {
-    s.disc(x, y, 13 * k, 3 * k, mixHex(STUFF.water, s.T.ground, 0.2), mixHex(STUFF.waterLo, INK, 0.3));
-    s.rect(x - 6 * k, y - 1, 8 * k, 1, STUFF.wall);
-    s.rect(x + 3 * k, y + 1, 5 * k, 1, STUFF.wall);
+    const w = 13 * k, h = Math.max(2, 3 * k), sky = s.T.sky, top = sky[Math.max(0, sky.length - 2)], low = sky[Math.max(0, sky.length - 4)];
+    s.plain(() => s.run(x - w, y - h, x + w + 1, y + h + 1, (px, py) => {
+        const d = ((px - x) / w) ** 2 + ((py - y) / h) ** 2;
+        if (d > 1)
+            return undefined;
+        if (d > 0.72)
+            return py > y ? rSoot[3] : s.dither(rSoot[4], low, 8);
+        return py < y - h * 0.3 ? top : s.dither(low, top, 4);
+    }));
 }
 /**
  * What the day's weather does to a finished backdrop. Fog hangs over everything that stands far off, the more so the nearer the horizon, so
- * that the landmarks are ghosts and the hills a pale smear; rain cools the colours and stands in puddles on the ground.
+ * that the landmarks are ghosts and the hills a pale smear; rain stands in puddles on the ground and a sheen of sky on its wet.
  */
 function weatherArt(s) {
-    if (s.weather === 'fog') {
-        const veil = (y0, y1, a) => s.rect(0, y0, s.W, y1 - y0, 'rgba(238,234,222,' + a.toFixed(2) + ')');
-        for (let i = 0; i < 8; i++)
-            veil(i * s.HZ / 8, (i + 1) * s.HZ / 8 + 1, 0.22 + 0.5 * i / 7);
-        for (let i = 0; i < 6; i++)
-            veil(s.HZ + i * 14, s.HZ + (i + 1) * 14 + 1, 0.55 - i * 0.09);
-    }
+    const air = s.T.haze;
+    if (s.weather === 'fog')
+        s.plain(() => {
+            for (let y = 0; y < s.H; y++) {
+                const f = y < s.HZ ? 0.35 + 0.65 * y / s.HZ : Math.max(0.12, 1 - 1.1 * (y - s.HZ) / (s.H - s.HZ)) ** 1.3;
+                s.rect(0, y, s.W, 1, s.dither(null, air, Math.round(f * 13)));
+            }
+        });
     else if (s.weather === 'rain') {
-        s.rect(0, 0, s.W, s.H, 'rgba(60,66,76,.09)');
-        scatter(s, 11, (x, y, k) => puddle(s, x, y, k), 18);
+        s.plain(() => { for (let i = 0; i < 26; i++) {
+            const y = s.HZ + 4 + ((s.r() * s.r() * (s.H - s.HZ - 8)) | 0), w = 20 + ((s.r() * 90) | 0);
+            s.rect(s.r() * s.W, y, w, 1, s.dither(null, s.T.sky[s.T.sky.length - 3], 4));
+        } });
+        scatter(s, 12, (x, y, k) => puddle(s, x, y, k), 18);
     }
 }
 /** The backdrops made so far, kept: the cards and the encyclopedia take their scenery from them. */
@@ -1200,18 +1723,18 @@ function backdropOf(land, seed, weather = 'clear', site) {
     return c;
 }
 const skylines = new Map();
-/** The skyline of a land by night, W scene pixels wide: the field's backdrop without its sky, down to the horizon, as one dark shape for the camp to stand against. */
+/**
+ * The skyline of a land by night, W scene pixels wide: the field's backdrop without its sky, down to the horizon, painted in the moon's light for the camp to
+ * stand against: the far hills pale in the glow, the near ones and the landmarks dark, the lit faces of them touched, a window or two warm.
+ */
 function skylineOf(land, seed, W) {
     const key = land + seed + W;
     let c = skylines.get(key);
     if (!c) {
-        const back = makeBackdrop(seed, 'clear', { land }, { width: W * SS, sky: false });
+        const back = makeBackdrop(seed, 'clear', { land }, { width: W * SS, sky: false, night: true });
         skylines.set(key, c = sceneCanvas(W, HZ));
         const g = c.getContext('2d');
         g.drawImage(back, 0, 0, W * SS, HZ * SS, 0, 0, W, HZ);
-        g.globalCompositeOperation = 'source-atop';
-        g.fillStyle = 'rgba(4,8,16,.96)';
-        g.fillRect(0, 0, W, HZ);
     }
     return c;
 }
@@ -1222,10 +1745,12 @@ function settingOf(st, c) { return { land: c.land || here(st).land, site: SITE_O
 /** The picture behind a fight: this land, under this weather, drawn afresh from the seed. */
 function makeBackdrop(seed, weather, setting, o = {}) {
     const land = setting ? setting.land : Object.keys(LANDS)[seed % 8], W = o.width || LW * SS;
-    const c = sceneCanvas(W / SS, LH), s = makeScene(c.getContext('2d'), seed, weather, weatherTone(TONES[land], weather), W, o.sky !== false);
+    const c = sceneCanvas(W / SS, LH), s = makeScene(c.getContext('2d'), seed, weather, weatherTone(TONES[land], weather), W, o.sky !== false, !!o.night);
     LAND_ART[land](s);
     if (setting && setting.site)
         c.siteX = SITE_ART[setting.site](s);
+    if (s.sky)
+        fringe(s);
     weatherArt(s);
     return c;
 }
