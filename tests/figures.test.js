@@ -204,12 +204,12 @@ test('a nation is told by more than its colours: its cap, its mark, its legs', (
   // the same coat and trim on two nations that differ only in what else they wear is not enough: check the pieces
   const look = (cls, nation) => draw(r, { cls, skin: 'own', nation, arm: 0, wpn: 0, man: 6 });
   const colours = (cls, nation) => new Set(look(cls, nation).map(c => c[4]));
-  assert.ok(colours('pike', 'scot').has('#2f6a45'), 'a Scot wears the green of a tartan');
-  assert.ok(!colours('pike', 'pole').has('#2f6a45'), 'and nobody else does');
-  assert.ok(colours('sabre', 'croat').has('#c0392b'), 'a Croat has his red cravat');
-  assert.ok(colours('pike', 'german').has('#a8232f') && colours('pike', 'german').has(plain(r, 'MAT.hose')), 'a German has one leg red and the other dark');
-  assert.ok(colours('sabre', 'cossack').has('#d2a63a'), 'a Cossack has yellow boots');
-  assert.ok(colours('sabre', 'magyar').has('#f1ece0'), 'a Hungarian has white braid');
+  assert.ok(colours('pike', 'scot').has('#3f5524'), 'a Scot wears the green of a tartan');
+  assert.ok(!colours('pike', 'pole').has('#3f5524'), 'and nobody else does');
+  assert.ok(colours('sabre', 'croat').has('#b2493a'), 'a Croat has his red cravat');
+  assert.ok(colours('pike', 'german').has('#8f3328') && colours('pike', 'german').has('#1d2227'), 'a German has one leg red and the other dark');
+  assert.ok(colours('sabre', 'cossack').has('#cf9f3c'), 'a Cossack has yellow boots');
+  assert.ok(colours('sabre', 'magyar').has('#e7ddbf'), 'a Hungarian has white braid');
   // the heads: a Scot, a Hungarian and a Tatar do not wear what their class wears
   const heads = plain(r, "(['pike', 'shot', 'sabre']).map(c => ['scot', 'magyar', 'tatar', 'cossack', 'pole'].map(n => dressFor({ cls: c, skin: 'own', nation: n }).head))");
   assert.deepEqual(heads[0], ['bonnet', 'kalpak', 'tatar', 'kolpak', 'morion']);

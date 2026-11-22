@@ -2,16 +2,16 @@
 /* ===== SOTNIA interface: drawing (palette, pixel sprites, the woodcut backdrop, the field) ===== */
 const LW = BW, LH = 124, FY = 72, HZ = 56;
 const PAL = {
-    paper: '#d9d1bc', hill: '#d0c7ae', ground: '#cbc2a8', paperHi: '#e6dfcc', ink: '#1c1a17', red: '#9c1f2e', blue: '#2d4b70',
-    ochre: '#b98a2b', green: '#4e6b50', drab: '#77705a', grey: '#8b877c', plum: '#5c2d55', black: '#2a2725', skin: '#d6ad86',
-    wood: '#6a4a2c', fur: '#4b3524', steel: '#3d4144', helm: '#7e8284', white: '#f4f0e4', flash: '#f0b93a', smoke: '#a9a498', russet: '#7a3b26'
+    paper: '#d9d1bc', hill: '#d0c7ae', ground: '#cbc2a8', paperHi: '#e6dfcc', ink: '#1c1a17', red: '#b2493a', blue: '#33507a',
+    ochre: '#a67a27', green: '#587030', drab: '#77705a', grey: '#8b877c', plum: '#5e3158', black: '#2a2018', skin: '#cd9a73',
+    wood: '#6a4a2c', fur: '#4b3524', steel: '#3d4144', helm: '#7e8284', white: '#e7ddbf', flash: '#f0b93a', smoke: '#a9a498', russet: '#6e2420'
 };
 const INK = PAL.ink;
 const SKINS = {
-    own: { coat: PAL.red, trim: PAL.ochre }, bandit: { coat: PAL.drab, trim: PAL.paperHi }, deserter: { coat: PAL.grey, trim: PAL.ink },
-    raider: { coat: PAL.green, trim: PAL.ochre }, imperial: { coat: PAL.ochre, trim: PAL.ink }, swede: { coat: PAL.blue, trim: PAL.ochre },
-    champion: { coat: PAL.plum, trim: PAL.ochre }, black: { coat: PAL.black, trim: PAL.red }, muscovite: { coat: PAL.russet, trim: PAL.ochre },
-    tatar: { coat: '#2b7d78', trim: PAL.paperHi }, croat: { coat: '#7b5a3c', trim: '#c0392b' }
+    own: { coat: '#8f3328', trim: '#cf9f3c' }, bandit: { coat: '#6e6249', trim: PAL.white }, deserter: { coat: '#6b757e', trim: '#1d2227' },
+    raider: { coat: PAL.green, trim: PAL.ochre }, imperial: { coat: PAL.ochre, trim: '#1d2227' }, swede: { coat: PAL.blue, trim: '#cf9f3c' },
+    champion: { coat: PAL.plum, trim: '#cf9f3c' }, black: { coat: '#1d2227', trim: '#8f3328' }, muscovite: { coat: PAL.russet, trim: '#cf9f3c' },
+    tatar: { coat: '#2a625a', trim: PAL.white }, croat: { coat: '#67533b', trim: '#b2493a' }
 };
 /* ---------- the random numbers of the backdrops (the backdrops themselves are in terrain.ts) ---------- */
 function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
@@ -363,7 +363,7 @@ function drawMap(cv, st, plan) {
 const STATION_LOOK = {
     surgeon: { coat: '#5a4630', trim: PAL.white, hat: 'cap', hatCol: '#3b3128', prop: 'razor', apron: true },
     drill: { coat: '#6b6b66', trim: PAL.ochre, hat: 'morion', prop: 'pike' },
-    qm: { coat: '#2b7d78', trim: PAL.ochre, hat: 'cap', hatCol: '#a3222f', prop: 'purse' },
+    qm: { coat: '#2a625a', trim: PAL.ochre, hat: 'cap', hatCol: '#8f3328', prop: 'purse' },
     chaplain: { coat: INK, trim: PAL.white, hat: 'biretta', prop: 'cross', long: true }
 };
 /** How each kind of officer is drawn: his coat, his hat and what he carries say what he is. */
