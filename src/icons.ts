@@ -1,66 +1,115 @@
 "use strict";
-/* ===== SOTNIA interface: icons. One stroke set, drawn on a 24-unit square, used in place of words. ===== */
+/* ===== SOTNIA interface: icons. Small pixel pictures, used in place of words. ===== */
+/**
+ * An icon is eight pixels by eight, drawn as eight rows of eight characters, each character standing for a colour of its pal ('.' is clear). A
+ * dark edge is added round it, so that it stands on any ground: it is ten pixels square in all, and at 20 CSS pixels each of its pixels is two,
+ * the scale of the rest of the game's pixel art. Light comes from the upper left, so the lights sit on the upper left edges and the shade on the lower right.
+ * The colours are the game's own ramps (bone, bronze, iron, madder, woad, moss, ochre, fire, paper), so that an icon looks as if it were drawn by the same hand.
+ */
+interface PixelIcon { rows: readonly string[]; pal: Readonly<Record<string, string>> }
+/** The edge round every icon: the darkest soot of the game. */
+const ICON_EDGE = '#14100c';
 const ICON = {
-  coin: 'M12 3a9 9 0 1 1 0 18a9 9 0 1 1 0-18zM12 7a5 5 0 1 1 0 10a5 5 0 1 1 0-10zM12 9.5v5M9.5 12h5',
-  loaf: 'M3.5 16.5c0-5 3.8-9 8.5-9s8.5 4 8.5 9v1.5h-17zM8.5 10.5l-1.6 3.4M12.6 9.6l-1.2 3.8M16.5 10.6l-1.3 3.3',
-  horn: 'M3 5.5c6 .3 11.5 3.5 14.5 9l-3 2.2C11.8 12.4 8 9.8 3 9zM17.5 14.5l2.7 1.3-1.6 2.9-2.6-1.6M3 5.5v3.5M5 5.6C6 3.8 9 3 12 3.8',
-  barrel: 'M7.5 3h9c1.6 3.4 1.6 14.6 0 18h-9c-1.6-3.4-1.6-14.6 0-18zM6.3 8h11.4M6.3 16h11.4',
-  mace: 'M12 11.5V22M10 22h4M12 11.5a4 4 0 1 1 0-8a4 4 0 1 1 0 8zM12 3.5v8M8 7.5h8',
-  hourglass: 'M6 3h12M6 21h12M7.5 3c0 5.5 9 5.5 9 9s-9 3.5-9 9M16.5 3c0 5.5-9 5.5-9 9s9 3.5 9 9',
-  drop: 'M12 3c3 4.4 6 7.6 6 11.2a6 6 0 0 1-12 0C6 10.6 9 7.4 12 3z',
-  flame: 'M12 2.5c.6 3.6 5.5 5.6 5.5 10.6a5.5 5.5 0 0 1-11 0c0-2.4 1.3-4 2.6-5 .2 2 1.1 3 2.2 3.3-.6-3.1-.2-6.2.7-8.9z',
-  heart: 'M12 20s-7.5-4.6-7.5-10.2A4.2 4.2 0 0 1 12 7.2a4.2 4.2 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z',
-  shield: 'M12 3l7.5 2.8v6c0 4.6-3.1 7.8-7.5 9.2-4.4-1.4-7.5-4.6-7.5-9.2v-6z',
-  sabre: 'M4.5 19.5C11.5 16 17 10 19.5 3c1.2 6.5-3.5 13-12.5 18.5zM3 21l2.5-2.5M3.5 16.5l4 4',
-  shot: 'M2 15.5L17.5 9l4-.8-.6 2.2-3.7 1.5-1.2 2.8-2.2.8-.4-1.8L5.5 17.6 4 20.5 2.3 19.6zM12.5 12.2l1.4 3',
-  pike: 'M12 2l2.2 4.5h-4.4zM12 6.5V22M9 9.5h6',
-  swords: 'M4 3.5l12.5 12.5M20 3.5L7.5 16M13.5 17.5l3.5 3.5M10.5 17.5L7 21M15 13.5l-3.5 3.5M9 13.5l3.5 3.5',
-  star: 'M12 3l2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 16.8l-5.4 2.9 1.1-6.1L3.2 9.4l6.1-.8z',
-  warn: 'M12 3l10 18H2zM12 10v5M12 18h.01',
-  moon: 'M19.5 14.8A8 8 0 1 1 9.2 4.5a6.4 6.4 0 0 0 10.3 10.3z',
-  drill: 'M12 3a9 9 0 1 1 0 18a9 9 0 1 1 0-18zM12 7.5a4.5 4.5 0 1 1 0 9a4.5 4.5 0 1 1 0-9zM12 11.2a.8.8 0 1 1 0 1.6a.8.8 0 1 1 0-1.6z',
-  forage: 'M12 21.5V7M12 7c-1.8-1-2.6-2.7-2.6-4.6 1.8.3 2.6 2 2.6 4.6zM12 7c1.8-1 2.6-2.7 2.6-4.6-1.8.3-2.6 2-2.6 4.6zM12 12c-2.4-.4-3.8-2.2-3.8-4.2 2.4.2 3.8 1.9 3.8 4.2zM12 12c2.4-.4 3.8-2.2 3.8-4.2-2.4.2-3.8 1.9-3.8 4.2zM12 17c-2.4-.4-3.8-2.2-3.8-4.2 2.4.2 3.8 1.9 3.8 4.2zM12 17c2.4-.4 3.8-2.2 3.8-4.2-2.4.2-3.8 1.9-3.8 4.2z',
-  cross: 'M9.5 3.5h5v6h6v5h-6v6h-5v-6h-6v-5h6z',
-  skull: 'M12 3a7 7 0 0 0-7 7c0 2.5 1.2 4 2.5 5v3.5h9V15c1.3-1 2.5-2.5 2.5-5a7 7 0 0 0-7-7zM8.5 11h2M13.5 11h2M10 18.5V21M14 18.5V21',
-  check: 'M5 12.5l4.5 4.5L19 7',
-  plus: 'M12 6v12M6 12h12',
-  up: 'M12 19V6M6.5 11.5L12 6l5.5 5.5',
-  boot: 'M8 3h5.5v8.5l5.2 2.6c1.2.6 1.8 1.6 1.8 2.9V20H4.5v-4.5L8 14.5zM4.5 17.5h16',
-  forced: 'M5 6l6 6-6 6M12 6l6 6-6 6',
-  wall: 'M3 20V9l3-2 3 2v11M9 20V9l3-2 3 2v11M15 20V9l3-2 3 2v11M3 14h18',
-  eye: 'M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12zM12 9a3 3 0 1 1 0 6a3 3 0 1 1 0-6z',
-  lantern: 'M9 3.5h6M12 2v1.5M8 6.5h8l-1 12H9zM8 6.5l1-3h6l1 3M8.5 18.5h7V21h-7zM12 9.5v6',
-  tent: 'M12 4L3 20h18zM12 4v16M9 20l3-6 3 6',
-  scales: 'M12 4v16M8 20h8M4.5 7h15M4.5 7L2 13a2.5 2.5 0 0 0 5 0zM19.5 7L17 13a2.5 2.5 0 0 0 5 0z',
-  men: 'M8 11a3 3 0 1 1 0-6a3 3 0 1 1 0 6zM2.5 20c0-3.3 2.5-6 5.5-6s5.5 2.7 5.5 6M16 11a2.6 2.6 0 1 1 0-5.2M16.5 14c2.8.3 5 2.8 5 6',
-  dice: 'M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM8.5 8.5h.01M15.5 8.5h.01M12 12h.01M8.5 15.5h.01M15.5 15.5h.01',
-  cuirass: 'M7 4h10l2.5 4-2.5 2v9l-5 2-5-2v-9L4.5 8zM9.5 4c0 2 1 3.2 2.5 3.2S14.5 6 14.5 4',
-  map: 'M3 6.5l6-2.5 6 2.5 6-2.5v13.5l-6 2.5-6-2.5-6 2.5zM9 4v13.5M15 6.5V20',
-  scroll: 'M6 4h12v16H6zM6 4c-1.5 0-2.5 1-2.5 2.5S4.5 9 6 9M18 20c1.5 0 2.5-1 2.5-2.5S19.5 15 18 15M9 8.5h6M9 12h6M9 15.5h4',
-  book: 'M4 5.5C6.5 4 9.5 4 12 5.5v14C9.5 18 6.5 18 4 19.5zM20 5.5C17.5 4 14.5 4 12 5.5v14c2.5-1.5 5.5-1.5 8 0z',
-  wagon: 'M3 14h15l2-6H5zM6 17.5a2 2 0 1 0 4 0a2 2 0 1 0-4 0zM14 17.5a2 2 0 1 0 4 0a2 2 0 1 0-4 0zM20 8l2-2',
-  note: 'M9 18V5.5l10-2v12.5M9 18a2.8 2.8 0 1 1-5.6 0a2.8 2.8 0 1 1 5.6 0zM19 16a2.8 2.8 0 1 1-5.6 0a2.8 2.8 0 1 1 5.6 0z',
-  speaker: 'M4 9.5h3.5L12.5 5.5v13l-5-4H4zM16 9a4.5 4.5 0 0 1 0 6M18.8 6.5a8 8 0 0 1 0 11',
-  sun: 'M12 8a4 4 0 1 1 0 8a4 4 0 1 1 0-8zM12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8',
-  rain: 'M7 15a4 4 0 0 1-.5-8A5.5 5.5 0 0 1 17 6.5a4 4 0 0 1 .5 8.5zM8 18l-1 3M12 18l-1 3M16 18l-1 3',
-  fog: 'M3 8h14M6 12h15M3 16h13M8 20h10',
-  flag: 'M6 21V3M6 4h12l-3 4 3 4H6',
-  road: 'M8 21L11 3M16 21L13 3M12 7v2M12 12v2M12 17v2',
-  pause: 'M8 5v14M16 5v14',
-  play: 'M7 4.5l12 7.5-12 7.5z',
-  retreat: 'M10 6L4 12l6 6M4 12h11a5 5 0 0 1 0 10',
-  run: 'M14 4.5a1.8 1.8 0 1 1 0 3.6a1.8 1.8 0 1 1 0-3.6zM6 12l4-3 4 2 2 4M10 9l-2 6-4 5M12 15l3 2-1 4M16 15h3',
-  white: 'M6 21V4M6 4h11v8H6',
-  calendar: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4',
-  limp: 'M10 3.5a1.8 1.8 0 1 1 0 3.6a1.8 1.8 0 1 1 0-3.6zM10 8.5v6l-3 6.5M10 14.5l4 2 1 4M10 10.5l4.5 1.5M17.5 8v13',
-  surgeon: 'M6 18L18 6M14.5 4.5l5 5M4 20l3-3',
-  qm: 'M5 3.5h14v17H5zM8.5 8h7M8.5 12h7M8.5 16h4',
-  chaplain: 'M12 3v18M7 8h10',
-  x: 'M6 6l12 12M18 6L6 18'
-};
+  coin: { rows: ['..llll..', '.lwaaas.', 'laassaas', 'lasaasas', 'lasaasas', 'laassaas', '.aaaaas.', '..ssss..'], pal: { a: '#cba34f', l: '#e8c874', s: '#a78039', w: '#f7e2a0' } },
+  loaf: { rows: ['........', '..llll..', '.lawaws.', 'lawawaas', 'laaaaass', 'lsssssss', '.dddddd.', '........'], pal: { a: '#cf9f3c', l: '#e6c15f', s: '#a67a27', d: '#7e571b', w: '#f2dc92' } },
+  horn: { rows: ['.....lxy', '...lasxy', '..laas..', '.las....', 'laas....', 'laas....', 'laas....', '.ss.....'], pal: { a: '#d1c5a1', l: '#e7ddbf', s: '#b3a784', x: '#939ca3', y: '#48515a' } },
+  barrel: { rows: ['.lllaas.', 'llaaaass', 'xxxxxxxy', 'llaaaass', 'llaaaass', 'xxxxxxxy', 'llaaaass', '.lalaas.'], pal: { a: '#a67a27', l: '#cf9f3c', s: '#7e571b', x: '#939ca3', y: '#48515a' } },
+  mace: { rows: ['.....la.', '....lxas', '....laxs', '.....ss.', '....y...', '...y....', '..y.....', 'ay......'], pal: { a: '#cba34f', l: '#e8c874', s: '#a78039', x: '#bec4c6', y: '#846c4c' } },
+  hourglass: { rows: ['xxxxxxxy', '.l....s.', '..lwws..', '...ls...', '...ls...', '..l..s..', '.lwwwws.', 'xxxxxxxy'], pal: { l: '#e7ddbf', s: '#b3a784', w: '#e6c15f', x: '#cba34f', y: '#a78039' } },
+  drop: { rows: ['...la...', '...la...', '..llaa..', '..laas..', '.lwaaas.', '.lwaaas.', '.laaass.', '..asss..'], pal: { a: '#b2493a', l: '#d0705a', s: '#8f3328', w: '#e9a58b' } },
+  flame: { rows: ['.....s..', '....ss..', '...ssa..', '..sssas.', '.ssaaaas', '.saallas', '.saalwas', '..ssaas.'], pal: { a: '#e8862c', l: '#f6b73e', s: '#c4521a', w: '#fcdc7c' } },
+  heart: { rows: ['........', '.lw..aa.', 'lwaaaaas', 'laaaaaas', 'laaaaass', '.laaass.', '..assa..', '...ss...'], pal: { a: '#b2493a', l: '#d0705a', s: '#8f3328', w: '#e9a58b' } },
+  shield: { rows: ['llllllla', 'laaaaaas', 'laayxaas', 'laaxxaas', '.laaaas.', '.saaaas.', '..saas..', '...ss...'], pal: { a: '#6b757e', l: '#939ca3', s: '#48515a', x: '#cba34f', y: '#f7e2a0' } },
+  sabre: { rows: ['.......l', '....lla.', '..lla...', '..la....', '..la....', '.xxxx...', '..y.....', '.xx.....'], pal: { a: '#bec4c6', l: '#e3e6e2', x: '#cba34f', y: '#a78039' } },
+  shot: { rows: ['.......l', '......la', '.....la.', '...wla..', '..xwa...', '.xxxy...', 'xxxy....', 'wxy.....'], pal: { a: '#6b757e', l: '#939ca3', w: '#e8c874', x: '#846c4c', y: '#67533b' } },  // drawn as musket
+  pike: { rows: ['....l...', '...lls..', '..llass.', '...las..', '....y...', '....x...', '....x...', '....x...'], pal: { a: '#bec4c6', l: '#e3e6e2', s: '#6b757e', x: '#846c4c', y: '#cba34f' } },
+  swords: { rows: ['l......l', '.l....l.', '..a..a..', '...aa...', '.x.aa.x.', '..x..x..', '.x.yy.x.', 'y......y'], pal: { a: '#bec4c6', l: '#e3e6e2', x: '#cba34f', y: '#80602a' } },
+  star: { rows: ['...ll...', '...la...', 'llaaaaas', '.laaaas.', '..laas..', '..laas..', '.las.as.', '.l....s.'], pal: { a: '#cba34f', l: '#e8c874', s: '#a78039' } },
+  warn: { rows: ['...l....', '..las...', '..lds...', '.ladas..', '.ladas..', 'laaaaas.', 'laadaas.', 'sssssss.'], pal: { a: '#cf9f3c', l: '#e6c15f', s: '#a67a27', d: '#14100c' } },
+  moon: { rows: ['...llas.', '..las...', '.las....', '.las....', '.las....', '.las....', '..lss...', '...asss.'], pal: { a: '#d1c5a1', l: '#e7ddbf', s: '#b3a784' } },
+  drill: { rows: ['..llll..', '.lxxxxs.', 'lxaaaaxs', 'lxaxxaxs', 'lxaxxaxs', 'lxaaaaxs', '.lxxxxs.', '..asss..'], pal: { a: '#d1c5a1', l: '#e7ddbf', s: '#b3a784', x: '#b2493a' } },  // drawn as target
+  forage: { rows: ['....a...', '...lal..', '..lalas.', '...lal..', '..lalas.', '....as..', '....x...', '....x...'], pal: { a: '#cf9f3c', l: '#e6c15f', s: '#a67a27', x: '#7e571b' } },  // drawn as wheat
+  cross: { rows: ['...la...', '...la...', 'llllaaaa', 'lllaaaas', '...as...', '...as...', '...as...', '...as...'], pal: { a: '#d1c5a1', l: '#e7ddbf', s: '#b3a784' } },
+  skull: { rows: ['..llll..', '.llaaaa.', 'laaaaaas', 'lddaadds', 'lddaadds', '.laddas.', '..aaas..', '..adas..'], pal: { a: '#d1c5a1', l: '#e7ddbf', s: '#b3a784', d: '#1d1711' } },
+  check: { rows: ['......ll', '.....lls', '....lls.', 'll.lls..', 'llllas..', '.llas...', '..ls....', '........'], pal: { a: '#a0ae60', l: '#c6cf8c', s: '#7a8e42' } },
+  plus: { rows: ['...la...', '...la...', '...la...', 'llllaaaa', 'laaaaaas', '...as...', '...as...', '...as...'], pal: { a: '#d1c5a1', l: '#e7ddbf', s: '#b3a784' } },
+  up: { rows: ['...ll...', '..llas..', '.llaaas.', 'llaaaaas', '..laas..', '..laas..', '..laas..', '..laas..'], pal: { a: '#d1c5a1', l: '#e7ddbf', s: '#b3a784' } },
+  boot: { rows: ['.lllll..', '.laaas..', '.laaas..', '.laaas..', '.laaaas.', '.laaaaas', '.laaaaas', 'sssssss.'], pal: { a: '#7a4d36', l: '#a5714f', s: '#67533b' } },
+  forced: { rows: ['ll.ll...', '.ll.ll..', '..ll.ll.', '...ll.ll', '...as.as', '..as.as.', '.as.as..', 'as.as...'], pal: { a: '#d1c5a1', l: '#e7ddbf', s: '#b3a784' } },  // drawn as chevrons
+  wall: { rows: ['ll.ll.ll', 'ls.ls.ls', 'llllllls', 'aaadaaad', 'aaaaaaas', 'adaaadaa', 'aaaaaaas', 'ssssssss'], pal: { a: '#b3a784', l: '#d1c5a1', s: '#8f8467', d: '#6e6249' } },
+  eye: { rows: ['........', '..llll..', '.laxxas.', 'laxldxas', '.laxxas.', '..asss..', '........', '........'], pal: { a: '#e7ddbf', l: '#f4edd6', s: '#b3a784', x: '#4b6f98', d: '#14100c' } },
+  lantern: { rows: ['...ll...', '..laas..', '.lllaas.', '.lyyyas.', '.lyyyas.', '.lxyyas.', '.laaaas.', '.ssssss.'], pal: { a: '#6b757e', l: '#939ca3', s: '#48515a', x: '#f6b73e', y: '#fcdc7c' } },
+  tent: { rows: ['...la...', '..llas..', '..llas..', '.llaaas.', '.llaaas.', 'lladdaas', 'lladdaas', 'lladdaas'], pal: { a: '#d1c5a1', l: '#e7ddbf', s: '#b3a784', d: '#1d1711' } },
+  scales: { rows: ['...ll...', '..l..a..', 'llaaaaas', '.s.aa.s.', '.s....s.', '.s....s.', 'lll..lll', '.a....a.'], pal: { a: '#cba34f', l: '#f7e2a0', s: '#a78039' } },
+  men: { rows: ['..yy....', '.yyyy.yy', '.llll.xx', '.llls...', '..aa..xx', '.laaasxx', 'laaaassx', 'laaaassx'], pal: { a: '#d1c5a1', l: '#e7ddbf', s: '#b3a784', x: '#8f8467', y: '#846c4c' } },
+  dice: { rows: ['lllllll.', 'ldaaadas', 'laaaaaas', 'laadaaas', 'laaaaaas', 'ldaaadas', 'laaaaaas', '.sssssss'], pal: { a: '#d1c5a1', l: '#e7ddbf', s: '#b3a784', d: '#1d1711' } },
+  cuirass: { rows: ['.ll..ll.', 'llaaaaas', 'llalaaas', '.lalaas.', '.lalaas.', '.xxxxxx.', '.lalaas.', '..ssss..'], pal: { a: '#939ca3', l: '#bec4c6', s: '#6b757e', x: '#cba34f' } },
+  map: { rows: ['........', 'lll..lll', 'axxllaay', 'xxxllyya', 'xxayyaaa', 'xyyllaaa', 'sssllsss', '...ss...'], pal: { a: '#e4d8b3', l: '#f4edd6', s: '#bfae82', x: '#7a8e42', y: '#6d5f3f' } },
+  scroll: { rows: ['.llllll.', 'lssssssl', '.aaaaas.', '.adddas.', '.aaaaas.', '.adddas.', 'lssssssl', '.llllll.'], pal: { a: '#e4d8b3', l: '#f4edd6', s: '#bfae82', d: '#8d7b52' } },
+  book: { rows: ['........', 'lll..lll', 'laayyaas', 'lssyysss', 'laayyaas', 'lssyysss', 'xxxxxxxx', '.yyyyyy.'], pal: { a: '#e7ddbf', l: '#f4edd6', s: '#b3a784', x: '#4b6f98', y: '#33507a' } },
+  wagon: { rows: ['........', '..llllll', 'yaaaaaas', '.aaaaaas', '..ssssss', '.xx..xx.', 'xyyx.xyx', '.xx..xx.'], pal: { a: '#a67a27', l: '#cf9f3c', s: '#7e571b', x: '#846c4c', y: '#cba34f' } },
+  note: { rows: ['.....la.', '.....laa', '.....a.s', '.....a..', '.....a..', '..llaa..', '.laaas..', '..sss...'], pal: { a: '#d1c5a1', l: '#e7ddbf', s: '#b3a784' } },
+  speaker: { rows: ['....l...', '...ll.x.', 'lllaa..x', 'aaaaa.x.', 'aaaaa.x.', 'sssss..x', '...as.x.', '....s...'], pal: { a: '#939ca3', l: '#bec4c6', s: '#6b757e', x: '#d1c5a1' } },
+  sun: { rows: ['...xx...', '.x.xx.x.', '..llaa..', 'xxllaaxx', 'xxlaaaxx', '..aass..', '.x.xx.x.', '...xx...'], pal: { a: '#e6c15f', l: '#f2dc92', s: '#cf9f3c', x: '#cba34f' } },
+  rain: { rows: ['..lll...', '.llaaas.', 'laaaaaas', '.ssssss.', '.x..x..x', 'x..x..x.', '.x..x..x', 'x..x..x.'], pal: { a: '#939ca3', l: '#bec4c6', s: '#6b757e', x: '#6f94b4' } },
+  fog: { rows: ['..lll...', '.llaaas.', 'laaaaaas', '.sssss..', '........', 'aaaaaa..', '........', '..ssssss'], pal: { a: '#b3a784', l: '#d1c5a1', s: '#8f8467' } },
+  flag: { rows: ['.x......', '.yllllll', '.yaaaa..', '.yaaaa..', '.yssssss', '.y......', '.y......', '.y......'], pal: { a: '#b2493a', l: '#d0705a', s: '#8f3328', x: '#e8c874', y: '#846c4c' } },  // drawn as banner
+  road: { rows: ['..llll..', '.laaaals', '..ssss..', '...y....', '...y....', '...y....', '...y....', '..yyy...'], pal: { a: '#d1c5a1', l: '#e7ddbf', s: '#8f8467', y: '#846c4c' } },
+  pause: { rows: ['........', '.la..la.', '.la..la.', '.la..la.', '.la..la.', '.la..la.', '.ss..ss.', '........'], pal: { a: '#d1c5a1', l: '#e7ddbf', s: '#b3a784' } },
+  play: { rows: ['l.......', 'lla.....', 'llaa....', 'llaas...', 'laaas...', 'laas....', 'las.....', 's.......'], pal: { a: '#d1c5a1', l: '#e7ddbf', s: '#b3a784' } },
+  retreat: { rows: ['...l....', '..ll....', '.lllllll', 'laaaaaas', '.assssss', '..as....', '...s....', '........'], pal: { a: '#d1c5a1', l: '#e7ddbf', s: '#b3a784' } },
+  run: { rows: ['....la..', '....as..', '........', '..lllas.', '.l.laas.', '...las..', '..las.s.', '.las..as'], pal: { a: '#d1c5a1', l: '#e7ddbf', s: '#b3a784' } },
+  white: { rows: ['.x......', '.yllllll', '.yaaaaas', '.yaaaas.', '.yssss..', '.y......', '.y......', '.y......'], pal: { a: '#e7ddbf', l: '#f4edd6', s: '#b3a784', x: '#e8c874', y: '#846c4c' } },
+  calendar: { rows: ['.llllll.', 'lxxxxxxs', 'laaaaaas', 'ladaadas', 'laaaaaas', 'ladaadas', 'laaaaaas', '.ssssss.'], pal: { a: '#e7ddbf', l: '#f4edd6', s: '#b3a784', x: '#b2493a', d: '#4e3d2c' } },
+  limp: { rows: ['ll......', 'lal.....', '.lal....', '..lxx...', '...xxs..', '....las.', '.....las', '......as'], pal: { a: '#d1c5a1', l: '#e7ddbf', s: '#b3a784', x: '#b2493a' } },  // drawn as bandage
+  surgeon: { rows: ['........', '.yy.....', 'yyyllll.', 'yyyaaaas', '.y.x.x.x', '........', '........', '........'], pal: { a: '#bec4c6', l: '#e3e6e2', s: '#939ca3', x: '#6b757e', y: '#846c4c' } },
+  qm: { rows: ['.lla....', 'l..a....', 'a..s....', '.ass....', '....a...', '.....a..', '.....as.', '.....ass'], pal: { a: '#cba34f', l: '#e8c874', s: '#a78039' } },  // drawn as key
+  chaplain: { rows: ['..llla..', '...la...', 'llllaaaa', '...la...', '...la...', '..lllas.', '...as...', '...as...'], pal: { a: '#cba34f', l: '#e8c874', s: '#a78039' } },
+  x: { rows: ['la....as', '.la..as.', '..laas..', '...ls...', '...ls...', '..lass..', '.las.as.', 'la....as'], pal: { a: '#d1c5a1', l: '#e7ddbf', s: '#b3a784' } },
+} as const satisfies Record<string, PixelIcon>;
 // The name of an icon, which is what ic() takes: each is a key of ICON, so a misspelt one is a type error.
 type IconName = keyof typeof ICON;
-// An icon as markup: decorative unless given a label, and sized by the font around it.
+
+/** The pixels of an icon on its ten by ten square, as the colour of each in rows: the edge (every clear pixel that touches a drawn one) and the picture. */
+function iconPixels(def: PixelIcon): { x: number; y: number; c: string }[] {
+  const solid: Record<string, string> = {}, out: { x: number; y: number; c: string }[] = [];
+  def.rows.forEach((row, y) => { for (let x = 0; x < row.length; x++) if (row[x] !== '.') solid[(x + 1) + ',' + (y + 1)] = def.pal[row[x]]; });
+  for (let y = 0; y < 10; y++) for (let x = 0; x < 10; x++) {
+    const k = x + ',' + y;
+    if (solid[k]) out.push({ x, y, c: solid[k] });
+    else if (solid[(x - 1) + ',' + y] || solid[(x + 1) + ',' + y] || solid[x + ',' + (y - 1)] || solid[x + ',' + (y + 1)]) out.push({ x, y, c: ICON_EDGE });
+  }
+  return out;
+}
+/** An icon as the paths of an SVG: one for each colour, each a run of pixels along a row at a time. */
+function iconPaths(def: PixelIcon): string {
+  const byColour: Record<string, string> = {}, px = iconPixels(def);
+  for (let i = 0; i < px.length;) {
+    let w = 1;
+    while (i + w < px.length && px[i + w].y === px[i].y && px[i + w].x === px[i].x + w && px[i + w].c === px[i].c) w++;
+    byColour[px[i].c] = (byColour[px[i].c] || '') + 'M' + px[i].x + ' ' + px[i].y + 'h' + w + 'v1h-' + w + 'z';
+    i += w;
+  }
+  const colours = Object.keys(byColour).sort((a, b) => (a === ICON_EDGE ? -1 : b === ICON_EDGE ? 1 : 0));
+  return colours.map(c => '<path fill="' + c + '" d="' + byColour[c] + '"/>').join('');
+}
+/** Every icon, as a symbol of one hidden SVG that the page holds: ic() points at the symbol, so that a page of a hundred icons does not carry a hundred drawings. */
+function iconSprite(): string {
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" focusable="false">' +
+    (Object.keys(ICON) as IconName[]).map(n => '<symbol id="i-' + n + '" viewBox="0 0 10 10">' + iconPaths(ICON[n]) + '</symbol>').join('') + '</svg>';
+}
+/** Puts the sprite in the page, once. It waits for the page's body if the script was loaded before it, and does nothing where there is no page. */
+function installIcons() {
+  if (typeof document === 'undefined') return;
+  if (!document.body) { if (typeof document.addEventListener === 'function') document.addEventListener('DOMContentLoaded', installIcons); return; }
+  if (typeof document.getElementById === 'function' && document.getElementById('icons')) return;
+  const host = document.createElement('div');
+  host.id = 'icons'; host.setAttribute('aria-hidden', 'true'); host.setAttribute('style', 'position:absolute;width:0;height:0;overflow:hidden');
+  host.innerHTML = iconSprite();
+  document.body.appendChild(host);
+}
+installIcons();
+// An icon as markup: decorative unless given a label, and drawn at 20 pixels (see .i in the stylesheet).
 function ic(name: IconName, label?: string): string {
-  return '<svg class="i" viewBox="0 0 24 24"' + (label ? ' role="img" aria-label="' + label + '"' : ' aria-hidden="true"') + '><path d="' + (ICON[name] || '') + '"/></svg>';
+  return '<svg class="i" viewBox="0 0 10 10"' + (label ? ' role="img" aria-label="' + label + '"' : ' aria-hidden="true"') + '><use href="#i-' + name + '"/></svg>';
 }
