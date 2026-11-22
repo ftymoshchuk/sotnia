@@ -68,6 +68,30 @@ test('the sprite is put in the page once, where there is a page, and the stylesh
   assert.ok(/shape-rendering: crispEdges/.test(css), 'and is not smoothed');
 });
 
+/* ---------- the markup the stylesheet is written for ---------- */
+const screens = () => load(['core', 'journey', 'command', 'geo', 'art', 'figures', 'terrain', 'icons', 'screens']);
+
+test('a card carries its kind after its own classes, so that the rule under its name has a colour', () => {
+  const r = screens();
+  const card = r("cardHTML({ cls: 'soldier', title: 'Ostap', type: { look: 'madder', text: 'Sabreur', coin: 8, coinLabel: 'Wage', lvl: 'II' } })");
+  assert.ok(card.startsWith('<article class="card soldier k-madder"'), card.slice(0, 60));
+  assert.ok(card.includes('<span class="coin" title="Wage"><svg class="i"') && card.includes('<use href="#i-coin"/>'), 'a price has its coin');
+  assert.ok(/class="type [a-z ]*levelled/.test(card) && card.includes('<span class="lvl" title="Level">II'), 'a level is in the foot, for the stylesheet to lift to the top of the card');
+  const plain_ = r("cardHTML({ title: 'T' })");
+  assert.ok(!/ k-/.test(plain_), 'a card with no foot has no kind');
+  const nation = r("cardHTML({ cls: 'cxnation', title: 'Polish', type: { look: 'nation', style: '--n:#8f3328;--nt:#f4edd6', text: 'Pikemen' } })");
+  assert.ok(nation.startsWith('<article class="card cxnation k-nation" style="--n:#8f3328;--nt:#f4edd6"'), 'a nation lends its colours to the card as well as to its foot');
+  assert.ok(nation.includes('<span class="type nation" style="--n:#8f3328;--nt:#f4edd6">'), 'and the foot keeps them');
+});
+
+test('a meter says its fill as a percentage the stylesheet can round to a whole segment', () => {
+  const r = screens();
+  assert.equal(r("meter('hp', 30, 60)"), '<span class="meter hp"><i style="--v:50"></i></span>');
+  assert.equal(r("meter('mo', 99, 100)"), '<span class="meter mo"><i style="--v:99"></i></span>');
+  assert.ok(/\.meter i \{[^}]*width: calc\(var\(--v, 0\) \* 1%\)/.test(css), 'a width from --v');
+  assert.ok(/@supports \(width: round\(nearest[^)]*\)[^{]*\{[^}]*round\(nearest, calc\(var\(--v, 0\) \* 1%\), 8px\)/.test(css), 'and, where the browser can, a whole number of segments');
+});
+
 /* ---------- the stylesheet ---------- */
 const tokens = (() => { const root = css.slice(css.indexOf(':root'), css.indexOf('}', css.indexOf(':root'))); return Object.fromEntries([...root.matchAll(/--([a-z0-9-]+):\s*([^;]+);/g)].map(m => [m[1], m[2].trim()])); })();
 // custom properties the page sets as it draws (see the styles built in src/screens.ts and src/encyclopedia.ts), and ones a rule sets for the things inside it
