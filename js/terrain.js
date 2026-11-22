@@ -106,7 +106,7 @@ function landPattern(g, a, b, n) {
         p = g.createPattern(tile, 'repeat');
         if (p) {
             try {
-                p.setTransform({ a: 1 / SS, b: 0, c: 0, d: 1 / SS, e: 0, f: 0 });
+                p.setTransform(typeof DOMMatrix === 'function' ? new DOMMatrix([1 / SS, 0, 0, 1 / SS, 0, 0]) : { a: 1 / SS, b: 0, c: 0, d: 1 / SS, e: 0, f: 0 });
             }
             catch (e) {
                 p = null;

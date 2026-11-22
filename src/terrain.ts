@@ -141,7 +141,7 @@ function landPattern(g: CanvasRenderingContext2D, a: string | null, b: string, n
     const t = tile.getContext('2d')!;
     for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) { const c = LAND_BAYER[y][x] < n ? b : a; if (c) { t.fillStyle = c; t.fillRect(x, y, 1, 1); } }
     p = g.createPattern(tile, 'repeat');
-    if (p) { try { p.setTransform({ a: 1 / SS, b: 0, c: 0, d: 1 / SS, e: 0, f: 0 }); } catch (e) { p = null; } } // the picture's context is scaled SS times: this undoes it
+    if (p) { try { p.setTransform(typeof DOMMatrix === 'function' ? new DOMMatrix([1 / SS, 0, 0, 1 / SS, 0, 0]) : { a: 1 / SS, b: 0, c: 0, d: 1 / SS, e: 0, f: 0 }); } catch (e) { p = null; } } // the picture's context is scaled SS times: this undoes it
     if (!p) p = a === null ? null : mixHex(a, b, n / 16);
     landPatterns.set(key, p);
   }
