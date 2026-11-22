@@ -1362,20 +1362,22 @@ function wood(s, from, to, kinds, kLo, kHi) {
         }
     }
 }
-/** A ploughed field centred on cx, wTop wide at its far end and wBot at its near one, between the rows y0 and y1 below the horizon: furrows of earth, pale and dark by turns, in bands that widen as they come near, its edges wavering and feathered into the grass. */
+/** Ploughed land centred on cx, as strips of the common field: three ploughed bands side by side with grass left between, which together are wTop wide at their far end and wBot at their near one, between the rows y0 and y1 below the horizon; furrows of earth, pale and dark by turns, in bands that widen as they come near, the edges wavering and feathered into the grass. */
 function field(s, cx, wTop, wBot, y0 = 14, y1 = 92) {
-    const [dk, mid, lit] = s.T.earth, n = 9, top = s.HZ + y0, bot = s.HZ + y1, f = s.r() * 6, half = (y) => (wTop + (wBot - wTop) * (y - top) / (bot - top)) / 2;
-    s.run(cx - wBot / 2 - 10, top, cx + wBot / 2 + 10, bot, (x, y) => {
-        const hw = half(y) + 4 * Math.sin(y * 0.11 + f), d = Math.abs(x - cx) - hw, e = Math.min(y - top, bot - y);
-        if (d > 3 || e < 0)
-            return undefined;
-        const u = (y - top) / (bot - top), band = Math.pow(u, 0.7) * n, fr = band - Math.floor(band);
-        if (d > 0)
-            return d < 2 ? s.dither(null, mid, 2) : undefined;
-        if (d > -3 || e < 2)
-            return s.dither(null, mid, 3);
-        return fr < 0.18 ? s.dither(null, dk, 4) : Math.floor(band) % 2 ? s.dither(null, lit, 3) : s.dither(null, mid, 4);
-    });
+    const [dk, mid, lit] = s.T.earth, n = 9, top = s.HZ + y0, bot = s.HZ + y1, f = s.r() * 6, wide = (y) => wTop + (wBot - wTop) * (y - top) / (bot - top);
+    for (const [at, share, phase] of [[-0.34, 0.27, 0], [0.02, 0.31, 2], [0.37, 0.22, 4]]) {
+        s.run(cx + Math.min(at * wTop, at * wBot) - wBot * 0.25, top, cx + Math.max(at * wTop, at * wBot) + wBot * 0.25, bot, (x, y) => {
+            const W = wide(y), hw = W * share / 2 + 3 * Math.sin(y * 0.11 + f + phase), d = Math.abs(x - cx - at * W) - hw, e = Math.min(y - top, bot - y);
+            if (d > 3 || e < 0)
+                return undefined;
+            const u = (y - top) / (bot - top), band = Math.pow(u, 0.7) * n + phase * 0.3, fr = band - Math.floor(band);
+            if (d > 0)
+                return d < 2 ? s.dither(null, mid, 2) : undefined;
+            if (d > -3 || e < 2)
+                return s.dither(null, mid, 3);
+            return fr < 0.18 ? s.dither(null, dk, 4) : Math.floor(band) % 2 ? s.dither(null, lit, 3) : s.dither(null, mid, 4);
+        });
+    }
 }
 /** The rows of a vineyard on the slope between x0 and x1, from the skyline down to the foot of the hill. */
 function vines(s, x0, x1) {
@@ -1735,7 +1737,7 @@ const SITE_ART = {
 /* ---------- the weather ---------- */
 /** A puddle on the ground at x, y, k times its usual size, with the sky in it. */
 function puddle(s, x, y, k) {
-    const w = 13 * k, h = Math.max(2, 3 * k), sky = s.T.sky, top = sky[Math.max(0, sky.length - 2)], low = sky[Math.max(0, sky.length - 4)];
+    const w = 13 * k, h = Math.max(2, 3 * k), sky = s.T.sky, top = s.weather === 'clear' ? rSky[3] : sky[Math.max(0, sky.length - 2)], low = s.weather === 'clear' ? rSky[1] : sky[Math.max(0, sky.length - 4)];
     s.plain(() => s.run(x - w, y - h, x + w + 1, y + h + 1, (px, py) => {
         const d = ((px - x) / w) ** 2 + ((py - y) / h) ** 2;
         if (d > 1)
