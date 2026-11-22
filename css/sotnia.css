@@ -46,7 +46,7 @@ img { max-width: 100%; }
 .num { font-variant-numeric: lining-nums tabular-nums; }
 .grow, .spacer { flex: 1; }
 
-.sheet { max-width: 1280px; min-height: 100%; margin: 0 auto; padding-bottom: 26px; display: flex; flex-direction: column; gap: 18px; }
+.sheet { max-width: 1280px; min-height: 100%; margin: 0 auto; padding-bottom: calc(26px + var(--coach-h, 0px)); display: flex; flex-direction: column; gap: 18px; }
 .sheet > :not(.bar) { margin-inline: var(--gutter); }
 
 /* ---------- the bar ---------- */
@@ -306,7 +306,7 @@ button.alert:hover { background: rgba(74, 22, 18, .96); }
 .deliver { display: grid; justify-items: center; gap: 6px; padding-top: 10px; line-height: 1.2; }
 .deliver .warn, .deliver .meta { padding: 3px 12px 4px; border-radius: 999px; background: rgba(18, 13, 8, .86); }
 @media (min-width: 880px) and (min-height: 600px) {
-  body.hubmode .sheet { height: 100dvh; min-height: 0; max-width: 1800px; padding-bottom: 12px; gap: 12px; }
+  body.hubmode .sheet { height: 100dvh; min-height: 0; max-width: 1800px; padding-bottom: calc(12px + var(--coach-h, 0px)); gap: 12px; }
   .hub { display: grid; grid-template-rows: minmax(0, 1fr); }
   .stage { min-height: 0; container-type: size; display: grid; place-items: center; }
   .scene { width: min(100cqw, calc(100cqh * 320 / 151)); }
@@ -360,7 +360,7 @@ button.alert:hover { background: rgba(74, 22, 18, .96); }
 .dawn .x { width: 26px; height: 26px; font-size: 14px; flex: none; }
 .empty-card .line { padding: 10px 6px; }
 body.passing .spot, body.passing .camper .plate { visibility: hidden; }
-.passveil { position: fixed; inset: 0; z-index: 40; cursor: progress; display: grid; align-items: end; justify-items: center; padding-bottom: 7vh; }
+.passveil { position: fixed; inset: 0; z-index: 40; cursor: progress; display: grid; align-items: end; justify-items: center; padding-bottom: calc(7vh + var(--coach-h, 0px)); }
 .passtag { display: inline-flex; align-items: center; gap: 9px; padding: 7px 16px 8px; border-radius: 999px; background: rgba(18, 13, 8, .82); border: 1px solid var(--weld); color: var(--parchment); font: 16px/1 var(--caps); letter-spacing: .1em; animation: tagIn .5s ease-out both; }
 .passtag .i { color: var(--gilt); font-size: 18px; }
 .passtag small { font: italic 13px/1 var(--body); letter-spacing: 0; color: var(--mute); }
@@ -378,7 +378,7 @@ body.passing .spot, body.passing .camper .plate { visibility: hidden; }
 .x { width: 36px; height: 36px; display: grid; place-items: center; padding: 0; border: 1px solid var(--walnut-line); border-radius: 8px; background: transparent; color: var(--gilt); font-size: 19px; cursor: pointer; }
 .x:hover { background: #3a2a1b; color: var(--gilt-hi); }
 /* a page of the company's business, open over the camp and under the bar */
-.pveil { position: fixed; left: 0; right: 0; bottom: 0; top: var(--bar-h, 0px); z-index: 18; display: grid; place-items: center; padding: 14px var(--gutter) 16px; background: rgba(8, 6, 4, .68); }
+.pveil { position: fixed; left: 0; right: 0; bottom: var(--coach-h, 0px); top: var(--bar-h, 0px); z-index: 18; display: grid; place-items: center; padding: 14px var(--gutter) 16px; background: rgba(8, 6, 4, .68); }
 .drawer { width: min(1180px, 100%); max-height: 100%; display: flex; flex-direction: column; background: var(--table); border: 3px solid var(--weld); border-radius: 14px; box-shadow: 0 0 0 1px #120c07, 0 24px 60px rgba(0, 0, 0, .7); overflow: hidden; }
 .dhead { display: flex; align-items: center; gap: 14px; padding: 9px 12px 9px 18px; background: var(--walnut); border-bottom: 1px solid var(--walnut-line); }
 .dhead h2 { display: flex; align-items: center; gap: 10px; font: 700 26px/1 var(--display); color: var(--gilt); }
@@ -572,7 +572,7 @@ kbd { font: 11px/1 var(--body); padding: 2px 4px; border: 1px solid currentColor
 .how .disc { width: 42px; height: 42px; flex: none; background: var(--gilt); color: var(--ink); border: 0; box-shadow: none; font-size: 20px; }
 
 /* ---------- dialogs ---------- */
-.veil { position: fixed; inset: 0; background: rgba(8, 6, 4, .74); display: grid; place-items: center; padding: 16px; z-index: 20; overflow: auto; }
+.veil { position: fixed; inset: 0 0 var(--coach-h, 0px); background: rgba(8, 6, 4, .74); display: grid; place-items: center; padding: 16px; z-index: 20; overflow: auto; }
 .dialog { width: 100%; max-width: 620px; display: grid; gap: 12px; padding: 14px; background: var(--parchment); color: var(--ink); border-radius: 14px; border: 7px solid var(--ink); box-shadow: 0 0 0 1px var(--gilt-lo), 0 30px 60px rgba(0, 0, 0, .7); }
 .dialog .banner { padding: 4px 14px 7px; text-align: center; background: var(--parchment-hi); border: 1.5px solid var(--ink); border-radius: 999px; font: 700 30px/1.05 var(--display); text-wrap: balance; }
 .strip-head { display: flex; align-items: center; justify-content: center; gap: 7px; padding: 6px 10px 7px; border-radius: 4px; color: var(--parchment-hi); font: 13.5px/1 var(--caps); letter-spacing: .12em; }
@@ -606,12 +606,59 @@ kbd { font: 11px/1 var(--body); padding: 2px 4px; border: 1px solid currentColor
 #tip .w .i { flex: none; margin-top: 2px; }
 @keyframes tipIn { from { opacity: 0; } }
 
+/* ---------- the training's guide: a strip at the foot of the page, and a ring on what it points at (see src/training.ts) ---------- */
+/* The pages and the dialogs stop above the strip (see --coach-h), so that it is always in reach and never covers what it is about. */
+#coach { position: fixed; left: 0; right: 0; bottom: 0; z-index: 17; }
+.coach { background: var(--walnut); border-top: 2px solid var(--weld); box-shadow: 0 -10px 26px rgba(0, 0, 0, .5); color: var(--cream); }
+.coach .cin { max-width: 1280px; margin: 0 auto; padding: 8px var(--gutter) 11px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 24px; align-items: start; }
+.coach .chead { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; min-width: 0; }
+.coach .chap { display: inline-flex; align-items: center; gap: 7px; font: 500 13px/1 var(--caps); letter-spacing: .14em; color: var(--gilt); white-space: nowrap; }
+.coach .ctitle { display: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 18px/1.1 var(--display); color: var(--gilt-hi); }
+.coach.min .ctitle { display: block; }
+.coach .prog { flex: 0 0 110px; height: 6px; background: #3b2a1c; border: 1px solid #120c07; }
+.coach .prog i { display: block; height: 100%; background: var(--madder); }
+.coach .count { font: 700 15px/1 var(--body); color: var(--cream); }
+.coach .count small { font-size: 12px; font-weight: 400; color: var(--mute); }
+.coach .fold { flex: none; width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 1px solid var(--walnut-line); border-radius: 8px; background: transparent; color: var(--gilt); font-size: 16px; cursor: pointer; }
+.coach .fold:hover { background: #3a2a1b; color: var(--gilt-hi); }
+.coach .fold .i { transition: transform .15s; }
+.coach:not(.min) .fold .i { transform: rotate(180deg); }
+.coach .cbody { min-width: 0; display: grid; gap: 4px; }
+.coach h2 { font: 700 24px/1.05 var(--display); color: var(--gilt-hi); }
+.coach p { font: 16.5px/1.4 var(--body); text-wrap: pretty; }
+.coach p b { font-weight: 700; color: var(--gilt-hi); }
+.coach p .i { font-size: 1.05em; color: var(--gilt); }
+.coach .cacts { display: flex; flex-direction: column; align-items: stretch; gap: 7px; min-width: 170px; padding-top: 3px; }
+.coach .cacts .btn { justify-content: center; }
+.coach .cacts .link { align-self: center; color: var(--mute); }
+.coach .cacts .link:hover { color: var(--gilt-hi); }
+.coach .todo { display: inline-flex; align-items: center; gap: 7px; font: italic 14.5px/1.25 var(--body); color: var(--gilt); }
+.coach.min .cbody, .coach.min .cacts { display: none; }
+/* on the title, the training's card with what it covers beside it */
+.lessonrow { display: grid; grid-template-columns: minmax(0, 330px) minmax(0, 1fr); gap: 24px; align-items: start; }
+.syllabus { display: grid; gap: 12px; align-content: start; }
+.syllabus > p { max-width: 62ch; font: italic 17px/1.4 var(--body); color: var(--mute); }
+/* what the guide points at: a gilt ring that pulses, drawn over whatever it is (a thing in the camp, a button, a figure of the ledger). It has a dark line inside it,
+   since gilt on parchment (the cards) does not show: the gilt is for the dark of the camp and the bar, the ink for the cards. */
+.aim { outline: 3px solid var(--gilt-hi); outline-offset: 2px; box-shadow: 0 0 0 2px var(--ink), 0 0 0 2px rgba(246, 220, 151, 0); animation: aim 1.5s ease-in-out infinite; }
+.spot.aim { outline-offset: -3px; background: rgba(232, 196, 106, .16); }
+.stats.aim { border-radius: 8px; }
+@keyframes aim { 0%, 100% { box-shadow: 0 0 0 2px var(--ink), 0 0 0 2px rgba(246, 220, 151, .8); } 55% { box-shadow: 0 0 0 2px var(--ink), 0 0 0 13px rgba(246, 220, 151, 0); } }
+@media (max-width: 760px) {
+  .coach { max-height: 52vh; overflow-y: auto; overscroll-behavior: contain; }
+  .coach .cin { grid-template-columns: minmax(0, 1fr); gap: 4px; padding-bottom: 9px; }
+  .coach .cacts { flex-direction: row; flex-wrap: wrap; align-items: center; min-width: 0; gap: 6px 14px; }
+  .coach h2 { font-size: 20px; }
+  .coach p { font-size: 15.5px; line-height: 1.35; }
+  .coach .prog { flex-basis: 64px; }
+}
+
 @media (max-width: 1100px) {
   .muster { grid-template-columns: 280px minmax(0, 1fr); }
   .verdict-box { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); justify-items: center; }
 }
 @media (max-width: 900px) {
-  .hero, .mapgrid, .muster, .command, .duo { grid-template-columns: minmax(0, 1fr); }
+  .hero, .mapgrid, .muster, .command, .duo, .lessonrow { grid-template-columns: minmax(0, 1fr); }
   .rail { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
   .sides { grid-template-columns: 1fr; }
 }
