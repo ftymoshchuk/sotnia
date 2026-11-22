@@ -32,7 +32,7 @@
 <body>
 <header>
   <h1>Lands</h1>
-  <p>The scenery behind a fight, drawn by the scripts the game loads: each land in each weather, another day in the same land, the places a piece of work can put a fight at, and the camp&rsquo;s skyline by night. Backdrops are drawn at twice the pixels of the scene, as the figures are; <code>?zoom=2</code> shows them larger.</p>
+  <p>The scenery behind a fight, drawn by the scripts the game loads: each land in each weather, another day in the same land, the places a piece of work can put a fight at, and the camp&rsquo;s skyline by night. It is painted, not inked: every colour is a step of the master palette, the skies, the haze and the ground are ordered (Bayer) dither, and a low sun lights each land from the upper left, warm where it falls and cool in the lee. Backdrops are drawn at twice the pixels of the scene, as the figures are; <code>?zoom=2</code> shows them larger.</p>
 </header>
 <main id="sheet"></main>
 
@@ -68,7 +68,7 @@ const LANDS_ALL = Object.keys(LANDS), W = 600 * ZOOM, H = 248 * ZOOM;
 
 // 1. Each land, in each weather
 {
-  const d = section('The lands', 'Each land on a clear day, a wet one and a foggy one. In rain the colours cool and puddles stand; in fog the far country goes and the landmarks are ghosts. Rain itself and the moving banks of fog are drawn over the field as it is played.');
+  const d = section('The lands', 'Each land on a clear day, a wet one and a foggy one, in the light that is its own: the steppe&rsquo;s warm and long, Ukraine&rsquo;s golden hour, the Crown&rsquo;s pale gold under cloud, the grey-blue of the Baltic, a forest dusk in Lithuania, a smoky dawn before Smolensk, the cooler light of the hills in Silesia and Saxony. In rain the sky closes in, the colours go a step darker and puddles stand with the sky in them; in fog the far country goes and the landmarks are ghosts. The men stand on the mid-value ground of the lower half. Rain itself and the moving banks of fog are drawn over the field as it is played.');
   for (const land of LANDS_ALL) {
     const r = row(d, LANDS[land].name);
     for (const w of ['clear', 'rain', 'fog']) cell(r, w, WEATHER[w], makeBackdrop(7, w, { land }), W, H);
@@ -94,10 +94,10 @@ const LANDS_ALL = Object.keys(LANDS), W = 600 * ZOOM, H = 248 * ZOOM;
 }
 // 4. The camp by night
 {
-  const d = section('The camp by night', 'The skyline a camp stands against: the land&rsquo;s own hills and landmarks, without the sky, as one dark shape.');
+  const d = section('The camp by night', 'The skyline a camp stands against: the land&rsquo;s own hills and landmarks, without the sky, in the moon&rsquo;s blues, the far hills pale in the glow of the horizon and the near ones and the landmarks dark, with a window or two lit and the gold of a cross or a dome.');
   for (const land of LANDS_ALL) {
     const night = document.createElement('canvas'); night.width = 640; night.height = 140;
-    const g = night.getContext('2d'); g.fillStyle = '#0f1520'; g.fillRect(0, 0, 640, 140); g.fillStyle = '#141c2b'; g.fillRect(0, 40, 640, 40); g.fillStyle = '#1e2a42'; g.fillRect(0, 68, 640, 72);
+    const g = night.getContext('2d'); g.fillStyle = '#0a0f1c'; g.fillRect(0, 0, 640, 140); g.fillStyle = '#101a2e'; g.fillRect(0, 40, 640, 40); g.fillStyle = '#182742'; g.fillRect(0, 68, 640, 72);
     g.drawImage(skylineOf(land, 1, 320), 0, 28, 640, 112); g.fillStyle = '#221c15'; g.fillRect(0, 132, 640, 8);
     cell(d, LANDS[land].name, '', night, 640 * ZOOM, 140 * ZOOM);
   }
