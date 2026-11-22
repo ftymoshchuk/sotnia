@@ -143,3 +143,28 @@ test('the fonts the stylesheet names are the ones the page loads', () => {
     assert.ok(first && link.includes('family=' + first), `--${k} starts with ${first}, which the page loads`);
   }
 });
+
+test('the colours of the stylesheet are the ramps the pictures are painted from', () => {
+  const r = load(['core', 'journey', 'command', 'geo', 'art']), ramps = plain(r, 'RAMPS');
+  const NAMES = { s: 'soot', b: 'bone', p: 'paper', br: 'bronze', md: 'madder', wd: 'woad', ms: 'moss', oc: 'ochre', ir: 'iron' };
+  let checked = 0;
+  for (const [k, v] of Object.entries(tokens)) {
+    const m = /^(s|b|p|br|md|wd|ms|oc|ir)(\d)$/.exec(k);
+    if (!m) continue;
+    const step = ramps[NAMES[m[1]]][+m[2]];
+    assert.equal(v.toLowerCase(), step.toLowerCase(), `--${k} is ${v}, and ${NAMES[m[1]]} ${m[2]} is ${step}`);
+    checked++;
+  }
+  assert.ok(checked >= 50, 'most of the ramps are tokens');
+  // and the dyes of the figures are steps of them too
+  const dyes = new Set(Object.values(ramps).flat().map(h => h.toLowerCase()));
+  for (const skin of ['own', 'tatar', 'croat', 'muscovite', 'swede', 'raider', 'champion']) {
+    const { coat } = plain(r, `SKINS.${skin}`);
+    assert.ok(dyes.has(coat.toLowerCase()), `the coat of ${skin} (${coat}) is a dye of the ramps`);
+  }
+  for (const id of ['cossack', 'pole', 'german', 'swede', 'scot', 'magyar']) {
+    const r2 = load(['core', 'journey', 'command', 'geo', 'art', 'figures']);
+    const coat = plain(r2, `NATIONS.${id}.coat`);
+    assert.ok(dyes.has(coat.toLowerCase()), `the coat of the ${id} (${coat}) is a dye of the ramps`);
+  }
+});
