@@ -1323,7 +1323,7 @@ function herd(s, x, y, len) {
         s.rect(hx, hy - 3, 4, 1, rSoot[5]);
     }
 }
-/** A track across the ground from y0 at the left to y1 at the right: dusty earth worn into ruts with the grass between, lit along its upper edge and feathered into the grass, broader as it comes near. */
+/** A track across the ground from y0 at the left to y1 at the right: dusty earth worn into ruts with the grass between, lit along its upper edge and feathered into the grass, broader as it comes near (bare widens it, and a negative bare makes a fainter, narrower cart-track). */
 function track(s, y0, y1, bare = 0) {
     const f = s.r() * 6, [dk, mid, lit] = s.T.earth, ctr = [], hw = [];
     for (let x = 0; x < s.W; x++) {
@@ -1344,7 +1344,7 @@ function track(s, y0, y1, bare = 0) {
         if (u < 0.22)
             return h < 3 ? s.dither(mid, s.T.leaf[1], 8) : mid;
         if (u > 0.3 && u < 0.52 && h !== 0)
-            return d > 0 ? dk : mid;
+            return d > 0 && bare >= 0 ? dk : mid;
         return h === 1 && u > 0.55 ? mid : lit;
     });
 }
@@ -1475,6 +1475,7 @@ const LAND_ART = {
             items.push([56, x => PROPS.windmill(s, x, s.ridge(x) + 2, 0.85)]);
         place(s, items);
         groundArt(s);
+        track(s, 30, 58, -0.5);
         field(s, 140 + (r() * 320 | 0), 70, 190);
         scatter(s, 36, (x, y, k) => PROPS.tuft(s, x, y, k));
         scatter(s, 3, (x, y, k) => PROPS.hay(s, x, y, k * 0.9), 20);
@@ -1492,6 +1493,7 @@ const LAND_ART = {
             [76, x => along(s, 'birch', x - 30, 5, 13, 0.85)]
         ]);
         groundArt(s);
+        track(s, 26, 50, -0.5);
         field(s, 140 + (r() * 320 | 0), 60, 170);
         PROPS.cross(s, 90 + (r() * 420 | 0), s.HZ + 18, 0.9);
         scatter(s, 34, (x, y, k) => PROPS.tuft(s, x, y, k));

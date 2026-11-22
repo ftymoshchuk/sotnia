@@ -934,7 +934,7 @@ function herd(s: Scene, x: number, y: number, len: number) {
   const c = rSoot[3];
   for (let i = 0; i < 8; i++) { const hx = x + (i * len / 7 | 0) + (s.r() * 6 | 0), hy = y + (s.r() * 4 | 0); s.rect(hx, hy - 3, 4, 2, c); s.rect(hx, hy - 1, 1, 2, c); s.rect(hx + 3, hy - 1, 1, 2, c); s.rect(hx + 4, hy - 5, 1, 3, c); s.rect(hx, hy - 3, 4, 1, rSoot[5]); }
 }
-/** A track across the ground from y0 at the left to y1 at the right: dusty earth worn into ruts with the grass between, lit along its upper edge and feathered into the grass, broader as it comes near. */
+/** A track across the ground from y0 at the left to y1 at the right: dusty earth worn into ruts with the grass between, lit along its upper edge and feathered into the grass, broader as it comes near (bare widens it, and a negative bare makes a fainter, narrower cart-track). */
 function track(s: Scene, y0: number, y1: number, bare = 0) {
   const f = s.r() * 6, [dk, mid, lit] = s.T.earth, ctr: number[] = [], hw: number[] = [];
   for (let x = 0; x < s.W; x++) { const y = s.HZ + y0 + (y1 - y0) * x / s.W + 3 * Math.sin(x * 0.02 + f); ctr.push(y); hw.push(2.5 + 0.075 * (y - s.HZ) + bare); }
@@ -945,7 +945,7 @@ function track(s: Scene, y0: number, y1: number, bare = 0) {
     if (u > 1) return s.dither(lit, mid, 8);
     if (d < 0 && u > 0.78) return s.dither(lit, mid, 5);
     if (u < 0.22) return h < 3 ? s.dither(mid, s.T.leaf[1], 8) : mid;
-    if (u > 0.3 && u < 0.52 && h !== 0) return d > 0 ? dk : mid;
+    if (u > 0.3 && u < 0.52 && h !== 0) return d > 0 && bare >= 0 ? dk : mid;
     return h === 1 && u > 0.55 ? mid : lit;
   });
 }
@@ -1050,6 +1050,7 @@ const LAND_ART: Record<LandId, LandArt> = {
     if (mill) items.push([56, x => PROPS.windmill(s, x, s.ridge(x) + 2, 0.85)]);
     place(s, items);
     groundArt(s);
+    track(s, 30, 58, -0.5);
     field(s, 140 + (r() * 320 | 0), 70, 190);
     scatter(s, 36, (x, y, k) => PROPS.tuft(s, x, y, k));
     scatter(s, 3, (x, y, k) => PROPS.hay(s, x, y, k * 0.9), 20);
@@ -1067,6 +1068,7 @@ const LAND_ART: Record<LandId, LandArt> = {
       [76, x => along(s, 'birch', x - 30, 5, 13, 0.85)]
     ]);
     groundArt(s);
+    track(s, 26, 50, -0.5);
     field(s, 140 + (r() * 320 | 0), 60, 170);
     PROPS.cross(s, 90 + (r() * 420 | 0), s.HZ + 18, 0.9);
     scatter(s, 34, (x, y, k) => PROPS.tuft(s, x, y, k));

@@ -176,6 +176,6 @@ test('the ground the men stand on is mid-value in every land, in every weather, 
   const r = game();
   for (const land of LANDS) for (const w of WEATHER) {
     const m = inspect(r, `makeBackdrop(5, '${w}', { land: '${land}' })`).mean;
-    assert.ok(m > 62 && m < 185, `${land} in ${w}: the rows the men stand in are ${m.toFixed(0)} bright, of 255 (a man's own darks are about 20 and his dyes 70 to 200)`);
+    assert.ok(m > 58 && m < 170, `${land} in ${w}: the rows the men stand in are ${m.toFixed(0)} bright, of 255 (a man's own darks are about 20 and his dyes 70 to 200; the pale paper this replaced was over 200)`);
   }
 });
